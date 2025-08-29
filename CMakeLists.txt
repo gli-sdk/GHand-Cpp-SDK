@@ -34,6 +34,9 @@ set_target_properties(xiaoyao PROPERTIES
 # 链接依赖库（如果需要）
 # target_link_libraries(xiaoyao_sdk PRIVATE some_dependency)
 
+# 添加示例子目录
+add_subdirectory(examples)
+
 # 安装规则
 install(TARGETS xiaoyao
     ARCHIVE DESTINATION lib
