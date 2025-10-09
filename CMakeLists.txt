@@ -8,11 +8,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # 设置Windows特定的编译选型
 if(WIN32)
     add_compile_definitions(_WIN32)
+    add_compile_definitions(_WINSOCKAPI_) 
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
 # 添加头文件目录
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/wpcap)
+# 链接 SOEM 的库文件
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
 # 查找源文件
 file(GLOB_RECURSE SOURCES 
@@ -32,7 +36,9 @@ set_target_properties(xiaoyao PROPERTIES
 )
 
 # 链接依赖库（如果需要）
-# target_link_libraries(xiaoyao_sdk PRIVATE some_dependency)
+target_link_libraries(xiaoyao PRIVATE soem)
+target_link_libraries(xiaoyao PRIVATE winmm ws2_32)
+target_link_libraries(xiaoyao PRIVATE Packet wpcap)
 
 # 添加示例子目录
 add_subdirectory(examples)
