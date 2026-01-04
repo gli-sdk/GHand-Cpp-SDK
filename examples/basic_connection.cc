@@ -13,7 +13,8 @@ int main() {
         std::cout << "Successfully connected to the dexterous hand!" << std::endl;
 
         // 获取手部类型
-        HandType type = hand.GetHandType();
+        hand.GetHandType(1);
+        HandType type = hand.hand_type_;
         if (type == HandType::LEFT) {
             std::cout << "Hand type: Left hand" << std::endl;
         } else if (type == HandType::RIGHT) {
@@ -23,7 +24,8 @@ int main() {
         }
 
         // 获取固件版本
-        std::string version = hand.GetFirmwareVersion();
+        hand.GetDeviceInfo(1);
+        std::string version = hand.device_info_.software_version;
         if (!version.empty()) {
             std::cout << "Firmware version: " << version << std::endl;
         }
