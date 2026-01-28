@@ -19,11 +19,14 @@ int EtherCATComm::inOP = 0;
 int EtherCATComm::dowkccheck = 0;
 int EtherCATComm::currentgroup = 0;
 int EtherCATComm::cycle = 0;
-int64_t EtherCATComm::cycletime = 50000000;
+int64_t EtherCATComm::cycletime = 10000000;
 ecx_contextt EtherCATComm::ctx_;
+ecx_contextt EtherCATComm::ctx_shadow_;  // 影子上下文初始化
 uint8 EtherCATComm::IOmap_[4096] = {0};
 bool EtherCATComm::threads_started_ = false;
 std::mutex EtherCATComm::context_mutex_;
+std::mutex EtherCATComm::rt_context_mutex_;
+std::atomic<bool> EtherCATComm::ctx_dirty_{false};
 std::function<void(int)> EtherCATComm::state_update_callback_ = nullptr;
 std::function<void(int)> EtherCATComm::progress_callback_ = nullptr;
 
@@ -89,20 +92,25 @@ int EtherCATComm::Connect(std::string device_name) {
     std::lock_guard<std::mutex> lock(context_mutex_);
 
     ResetContext();
+
+    // 初始化实时上下文
     if (ecx_init(&ctx_, device_name.c_str()) <= 0) {
         return -1;
     }
 
     int config_result = ecx_config_init(&ctx_);
     if (config_result <= 0 || ctx_.slavecount <= 0) {
+        ecx_close(&ctx_);
         return -2;
     }
 
     ec_groupt* group = &ctx_.grouplist[0];
     int map_result = ecx_config_map_group(&ctx_, &IOmap_, 0);
     if (map_result <= 0) {
+        ecx_close(&ctx_);
         return -3;
     }
+
     mappingdone = 1;
     dorun = 1;
     expectedWKC = (group->outputsWKC * 2) + group->inputsWKC;
@@ -119,18 +127,23 @@ int EtherCATComm::Connect(std::string device_name) {
     uint16_t safe_op_state = ecx_statecheck(&ctx_, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
 
     if (safe_op_state != EC_STATE_SAFE_OP) {
+        ecx_close(&ctx_);
         return -4;
     }
 
     ctx_.slavelist[0].state = EC_STATE_OPERATIONAL;
     ecx_writestate(&ctx_, 0);
+
     StartThreads();
+
     uint16_t op_state = ecx_statecheck(&ctx_, 0, EC_STATE_OPERATIONAL, EC_TIMEOUTSTATE);
     if (op_state != EC_STATE_OPERATIONAL) {
-        // Disconnect();
+        ecx_close(&ctx_);
         return -5;
     }
+
     inOP = 1;
+
     return 0;
 }
 
@@ -140,22 +153,29 @@ int EtherCATComm::Disconnect() {
     inOP = 0;
     dorun = 0;
 
-    if (ctx_.slavelist[1].state == EC_STATE_OPERATIONAL) {
-        ctx_.slavelist[0].state = EC_STATE_SAFE_OP;
-        ecx_writestate(&ctx_, 0);
-        ecx_statecheck(&ctx_, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
+    if (ctx_.slavecount > 0) {
+        if (ctx_.slavelist[1].state == EC_STATE_OPERATIONAL) {
+            ctx_.slavelist[0].state = EC_STATE_SAFE_OP;
+            ecx_writestate(&ctx_, 0);
+            ecx_statecheck(&ctx_, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
+        }
+
+        if (ctx_.slavelist[1].state == EC_STATE_SAFE_OP ||
+            ctx_.slavelist[1].state == EC_STATE_PRE_OP) {
+            ctx_.slavelist[0].state = EC_STATE_INIT;
+            ecx_writestate(&ctx_, 0);
+        }
     }
 
-    if (ctx_.slavelist[1].state == EC_STATE_SAFE_OP || ctx_.slavelist[1].state == EC_STATE_PRE_OP) {
-        ctx_.slavelist[0].state = EC_STATE_INIT;
-        ecx_writestate(&ctx_, 0);
-    }
+    // 关闭实时上下文
     ecx_close(&ctx_);
+
     return 0;
 }
 
 void EtherCATComm::ResetContext() {
     memset(&ctx_, 0, sizeof(ecx_contextt));
+    memset(&ctx_shadow_, 0, sizeof(ecx_contextt));
     memset(&IOmap_, 0, 4096);
 
     mappingdone = 0;
@@ -174,15 +194,19 @@ int EtherCATComm::SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t
         return -1;
     }
 
-    std::lock_guard<std::mutex> lock(context_mutex_);
     int retries = 3;
     int result = -1;
 
     while (retries-- > 0) {
+        // 只在 SDO 调用时持有锁，允许实时线程在重试期间运行
+        std::lock_guard<std::mutex> lock(rt_context_mutex_);
         result = ecx_SDOread(&ctx_, slave, index, subindex, FALSE, size, data, timeout);
         if (result > 0) {
             break;
         }
+
+        // 释放锁后等待，让实时线程有机会运行
+        lock.~lock_guard();
         osal_usleep(10000);
     }
 
@@ -195,7 +219,10 @@ int EtherCATComm::SDOWrite(std::uint16_t slave, std::uint16_t index, std::uint8_
         return -1;
     }
 
-    std::lock_guard<std::mutex> lock(context_mutex_);
+    // 直接使用实时上下文进行 SDO 写操作
+    // 使用互斥锁保护
+    std::lock_guard<std::mutex> lock(rt_context_mutex_);
+
     int retries = 3;
     int result = -1;
 
@@ -211,7 +238,10 @@ int EtherCATComm::SDOWrite(std::uint16_t slave, std::uint16_t index, std::uint8_
 }
 
 int EtherCATComm::SendRxPDO(uint16 slave, uint16 pdo_index, uint32 data_size, uint8* data) {
-    // std::lock_guard<std::mutex> lock(context_mutex_);
+    // SendRxPDO 使用无锁队列，不需要加锁
+    // 使用 rt_context_mutex_ 验证参数
+    std::lock_guard<std::mutex> lock(rt_context_mutex_);
+
     if (!data || data_size <= 0 || slave <= 0 || slave > ctx_.slavecount) {
         return -1;
     }
@@ -219,6 +249,7 @@ int EtherCATComm::SendRxPDO(uint16 slave, uint16 pdo_index, uint32 data_size, ui
     if (ctx_.slavelist[slave].Obytes < data_size) {
         return -1;
     }
+
     std::vector<uint8> data_copy(data, data + data_size);
     std::pair<std::vector<uint8>, uint16> pdo_item(data_copy, slave);
     if (data[1] == 1) {
@@ -236,7 +267,9 @@ int EtherCATComm::SendRxPDO(uint16 slave, uint16 pdo_index, uint32 data_size, ui
 }
 
 uint8_t* EtherCATComm::ReadTxPDO(uint16 slave) {
-    // std::lock_guard<std::mutex> lock(context_mutex_);
+    // 使用 rt_context_mutex_ 读取，避免与实时线程冲突
+    std::lock_guard<std::mutex> lock(rt_context_mutex_);
+
     if (slave > 0 && slave <= ctx_.slavecount) {
         return ctx_.slavelist[slave].inputs;
     }
@@ -266,6 +299,9 @@ void EtherCATComm::ProcessPendingPDOs() {
         const auto& data = pdo_item.first;
         uint16 slave = pdo_item.second;
 
+        // 保护实时上下文的访问
+        std::lock_guard<std::mutex> lock(rt_context_mutex_);
+
         if (data.size() <= ctx_.slavelist[slave].Obytes) {
             memcpy(ctx_.slavelist[slave].outputs, data.data(), data.size());
         }
@@ -285,42 +321,34 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
     ht = (ts.tv_nsec / 1000000) + 1;
     ts.tv_nsec = ht * 1000000;
 
-    char buffer[80] = {0};
-    buffer[1] = 1;
-    memcpy(ctx_.slavelist[1].outputs, buffer, 80);
-
-    ecx_send_processdata(&ctx_);
+    // 初始化 - 需要锁保护
+    {
+        std::lock_guard<std::mutex> lock(rt_context_mutex_);
+        char buffer[80] = {0};
+        buffer[1] = 1;
+        memcpy(ctx_.slavelist[1].outputs, buffer, 80);
+        ecx_send_processdata(&ctx_);
+    }
 
     while (threads_started_) {
-        // auto now = std::chrono::system_clock::now();
-        // auto time_t = std::chrono::system_clock::to_time_t(now);
-        // auto ms =
-        //     std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-        // std::ostringstream timeStream;
-        // timeStream << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-        // timeStream << '.' << std::setfill('0') << std::setw(3) << ms.count();
-        // // 添加带时间戳的日志
-        // log_file_->WriteLog("[" + timeStream.str() + "] :");
-
-        // log_file_->WriteLog("Slave state0" + std::to_string(ctx_.slavelist[0].state));
-        // log_file_->WriteLog("Slave state1" + std::to_string(ctx_.slavelist[1].state));
-
         add_time_ns(&ts, cycletime + toff);
         osal_monotonic_sleep(&ts);
 
         if (dorun > 0) {
             cycle++;
-            wkc = ecx_receive_processdata(&ctx_, EC_TIMEOUTRET);
-            // std::ostringstream hexStream;
-            // for (size_t i = 0; i < 208; ++i) {
-            //     hexStream << std::hex << std::setw(2) << std::setfill('0')
-            //               << static_cast<int>(ctx_.slavelist[1].inputs[i]);
-            //     if (i % 8 == 3)
-            //         hexStream << "\n";
-            //     else
-            //         hexStream << " ";
-            // }
-            // hexStream << "\n";
+
+            // 接收过程数据 - 需要锁保护
+            {
+                std::lock_guard<std::mutex> lock(rt_context_mutex_);
+                wkc = ecx_receive_processdata(&ctx_, EC_TIMEOUTRET);
+
+                if (ctx_.slavelist[0].hasdc && (wkc > 0)) {
+                    ec_sync(ctx_.DCtime, cycletime, &toff);
+                }
+
+                ecx_mbxhandler(&ctx_, 0, 4);
+            }
+
             osal_usleep(500);
             if (wkc != expectedWKC) {
                 dowkccheck++;
@@ -328,42 +356,38 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
                 dowkccheck = 0;
             }
 
-            if (ctx_.slavelist[0].hasdc && (wkc > 0)) {
-                ec_sync(ctx_.DCtime, cycletime, &toff);
+            ProcessPendingPDOs();
+
+            // 发送过程数据 - 需要锁保护
+            {
+                std::lock_guard<std::mutex> lock(rt_context_mutex_);
+                ecx_send_processdata(&ctx_);
             }
 
-            ecx_mbxhandler(&ctx_, 0, 4);
-
-            ProcessPendingPDOs();
-            ecx_send_processdata(&ctx_);
-            // for (size_t i = 0; i < 80; ++i) {
-            //     hexStream << std::hex << std::setw(2) << std::setfill('0')
-            //               << static_cast<int>(ctx_.slavelist[1].outputs[i]);
-            //     if (i % 6 == 1)
-            //         hexStream << "\n";
-            //     else
-            //         hexStream << " ";
-            // }
-
-            // log_file_->WriteLog(hexStream.str());
+            // 标记影子上下文需要更新
+            ctx_dirty_.store(true, std::memory_order_release);
         }
     }
 }
 
 OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
-    // std::lock_guard<std::mutex> lock(context_mutex_);
     int slaveix;
     while (threads_started_) {
         osal_usleep(50000);
+
+        // 使用 try_lock 避免阻塞实时线程
         if (inOP && ((dowkccheck > 2) || ctx_.grouplist[currentgroup].docheckstate)) {
+            std::unique_lock<std::mutex> lock(rt_context_mutex_, std::try_to_lock);
+
+            if (!lock.owns_lock()) {
+                // 实时线程正在运行，跳过本次检查
+                continue;
+            }
+
             ctx_.grouplist[currentgroup].docheckstate = FALSE;
             ecx_readstate(&ctx_);
             for (slaveix = 1; slaveix <= ctx_.slavecount; slaveix++) {
                 ec_slavet* slave = &ctx_.slavelist[slaveix];
-
-                // if (slaveix > ctx_.slavecount || slaveix <= 0) {
-                //     continue;
-                // }
 
                 NotifySlaveState(slaveix, slave->state);
 

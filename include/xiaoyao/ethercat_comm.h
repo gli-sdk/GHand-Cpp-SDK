@@ -36,8 +36,11 @@ class EtherCATComm {
                    std::function<void(int)> progressCallback);
 
    private:
-    static std::mutex context_mutex_;
-    static ecx_contextt ctx_;
+    static std::mutex context_mutex_;     // 保护 SDO 操作和配置变更
+    static std::mutex rt_context_mutex_;  // 保护实时上下文访问
+    static ecx_contextt ctx_;             // 实时线程专用上下文
+    static ecx_contextt ctx_shadow_;      // SDO 操作专用影子上下文
+    static std::atomic<bool> ctx_dirty_;  // 标记影子上下文是否需要同步
     static std::function<void(int)> progress_callback_;
 
     void ResetContext();

@@ -506,7 +506,7 @@ int DexHand::GetResultantForce(FingerType finger_type, std::vector<Force>* resul
         resultant_forces->push_back(force);
         return 0;
     }
-    return -1;
+    return 0;
 }
 // 获取单个手指分布力
 int DexHand::GetSampleForce(FingerType finger_type, std::vector<Force>* sample_forces) {
