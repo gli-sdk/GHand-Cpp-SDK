@@ -82,6 +82,7 @@ int DexHand::Open(CommType comm_type, std::string device_name) {
 int DexHand::Close() {
     ethercat_comm_->Disconnect();
     connect_state_ = DISCONNECT;
+    InitializeAllJoints();
     return 0;
 }
 
@@ -334,9 +335,11 @@ void DexHand::GetDeviceInfo(std::uint16_t slave) {
     }
 
     memset(value, 0, sizeof(value));
-    result = ethercat_comm_->SDORead(1, 0x100A, 0x00, &size, &value, EC_TIMEOUTRXM);
-    if (result == 1) {
-        device_info_.software_version = std::string(reinterpret_cast<char*>(value));
+    for (int i = 0; i < 3; i++) {
+        result = ethercat_comm_->SDORead(1, 0x100A, 0x00, &size, &value, EC_TIMEOUTRXM);
+        if (result == 1) {
+            device_info_.software_version = std::string(reinterpret_cast<char*>(value));
+        }
     }
 
     memset(value, 0, sizeof(value));

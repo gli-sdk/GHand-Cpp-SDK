@@ -19,7 +19,7 @@ int EtherCATComm::inOP = 0;
 int EtherCATComm::dowkccheck = 0;
 int EtherCATComm::currentgroup = 0;
 int EtherCATComm::cycle = 0;
-int64_t EtherCATComm::cycletime = 10000000;
+int64_t EtherCATComm::cycletime = 50000000;
 ecx_contextt EtherCATComm::ctx_;
 ecx_contextt EtherCATComm::ctx_shadow_;  // 影子上下文初始化
 uint8 EtherCATComm::IOmap_[4096] = {0};
@@ -169,7 +169,11 @@ int EtherCATComm::Disconnect() {
 
     // 关闭实时上下文
     ecx_close(&ctx_);
-
+    // 清空 PDO 队列
+    std::pair<std::vector<uint8>, uint16> temp_item;
+    while (pdo_queue_.Pop(temp_item)) {
+        // 继续弹出元素直到队列为空
+    }
     return 0;
 }
 
@@ -197,18 +201,18 @@ int EtherCATComm::SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t
     int retries = 3;
     int result = -1;
 
-    while (retries-- > 0) {
-        // 只在 SDO 调用时持有锁，允许实时线程在重试期间运行
-        std::lock_guard<std::mutex> lock(rt_context_mutex_);
-        result = ecx_SDOread(&ctx_, slave, index, subindex, FALSE, size, data, timeout);
-        if (result > 0) {
-            break;
-        }
+    // while (retries-- > 0) {
+    // 只在 SDO 调用时持有锁，允许实时线程在重试期间运行
+    std::lock_guard<std::mutex> lock(rt_context_mutex_);
+    result = ecx_SDOread(&ctx_, slave, index, subindex, FALSE, size, data, timeout);
+    //     if (result > 0) {
+    //         break;
+    //     }
 
-        // 释放锁后等待，让实时线程有机会运行
-        lock.~lock_guard();
-        osal_usleep(10000);
-    }
+    //     // 释放锁后等待，让实时线程有机会运行
+    //     lock.~lock_guard();
+    //     osal_usleep(10000);
+    // }
 
     return result;
 }
@@ -226,13 +230,13 @@ int EtherCATComm::SDOWrite(std::uint16_t slave, std::uint16_t index, std::uint8_
     int retries = 3;
     int result = -1;
 
-    while (retries-- > 0) {
-        result = ecx_SDOwrite(&ctx_, slave, index, subindex, FALSE, size, data, timeout);
-        if (result > 0) {
-            break;
-        }
-        osal_usleep(10000);
-    }
+    // while (retries-- > 0) {
+    result = ecx_SDOwrite(&ctx_, slave, index, subindex, FALSE, size, data, timeout);
+    //     if (result > 0) {
+    //         break;
+    //     }
+    //     osal_usleep(10000);
+    // }
 
     return result;
 }
