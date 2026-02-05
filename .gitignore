@@ -1,2 +1,6 @@
 .vscode
 build
+.claude/
+openspec/config.yaml
+nul
+openspec/changes/

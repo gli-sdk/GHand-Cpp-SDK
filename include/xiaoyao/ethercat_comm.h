@@ -39,8 +39,6 @@ class EtherCATComm {
     static std::mutex context_mutex_;     // 保护 SDO 操作和配置变更
     static std::mutex rt_context_mutex_;  // 保护实时上下文访问
     static ecx_contextt ctx_;             // 实时线程专用上下文
-    static ecx_contextt ctx_shadow_;      // SDO 操作专用影子上下文
-    static std::atomic<bool> ctx_dirty_;  // 标记影子上下文是否需要同步
     static std::function<void(int)> progress_callback_;
 
     void ResetContext();
@@ -88,49 +86,49 @@ class EtherCATComm {
 };
 #endif
 
-template <typename T, size_t Capacity>
-class LockFreeQueue {
-   private:
-    struct Node {
-        T data;
-        std::atomic<size_t> next;
+// template <typename T, size_t Capacity>
+// class LockFreeQueue {
+//    private:
+//     struct Node {
+//         T data;
+//         std::atomic<size_t> next;
 
-        Node() : next(0) {}
-    };
+//         Node() : next(0) {}
+//     };
 
-    typedef char Cacheline[64];
-    Cacheline pad0;
-    std::atomic<size_t> head;
-    Cacheline pad1;
-    std::atomic<size_t> tail;
-    Cacheline pad2;
-    std::vector<Node> nodes;
+//     typedef char Cacheline[64];
+//     Cacheline pad0;
+//     std::atomic<size_t> head;
+//     Cacheline pad1;
+//     std::atomic<size_t> tail;
+//     Cacheline pad2;
+//     std::vector<Node> nodes;
 
-   public:
-    LockFreeQueue() : head(0), tail(0), nodes(Capacity + 1) {}
+//    public:
+//     LockFreeQueue() : head(0), tail(0), nodes(Capacity + 1) {}
 
-    bool Push(const T& item) {
-        size_t current_tail = tail.load(std::memory_order_relaxed);
-        size_t next_tail = (current_tail + 1) % (Capacity + 1);
+//     bool Push(const T& item) {
+//         size_t current_tail = tail.load(std::memory_order_relaxed);
+//         size_t next_tail = (current_tail + 1) % (Capacity + 1);
 
-        if (next_tail == head.load(std::memory_order_acquire)) {
-            return false;  // 队列满
-        }
+//         if (next_tail == head.load(std::memory_order_acquire)) {
+//             return false;  // 队列满
+//         }
 
-        nodes[current_tail].data = item;
-        tail.store(next_tail, std::memory_order_release);
-        return true;
-    }
+//         nodes[current_tail].data = item;
+//         tail.store(next_tail, std::memory_order_release);
+//         return true;
+//     }
 
-    bool Pop(T& item) {
-        size_t current_head = head.load(std::memory_order_relaxed);
+//     bool Pop(T& item) {
+//         size_t current_head = head.load(std::memory_order_relaxed);
 
-        if (current_head == tail.load(std::memory_order_acquire)) {
-            return false;  // 队列空
-        }
+//         if (current_head == tail.load(std::memory_order_acquire)) {
+//             return false;  // 队列空
+//         }
 
-        item = std::move(nodes[current_head].data);
-        head.store((current_head + 1) % (Capacity + 1), std::memory_order_release);
-        return true;
-    }
-};
+//         item = std::move(nodes[current_head].data);
+//         head.store((current_head + 1) % (Capacity + 1), std::memory_order_release);
+//         return true;
+//     }
+// };

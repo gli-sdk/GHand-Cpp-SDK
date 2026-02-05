@@ -54,8 +54,8 @@ int DexHand::Open(CommType comm_type, std::string device_name) {
     // log_file_ = new LogFile(ss.str());
     // log_file_->WriteLog("Connect to the hand...");
     int result = -1;
-    // log_file_->WriteLog("comm_type: " + std::to_string(comm_type) +
-    //                     "   Device name: " + device_name);
+    //     log_file_->WriteLog("comm_type: " + std::to_string(comm_type) +
+    //                                             "   Device name: " + device_name);
     switch (comm_type) {
         case COMM_ETHERCAT:
             if (device_name == "auto") {
@@ -96,6 +96,7 @@ int DexHand::AutoConnectDevices() {
     int index = 0;
     // log_file_->WriteLog("Adapter count: " + std::to_string(adapter_names_.size()));
     for (const auto& adapter_pair : adapter_names_) {
+        // log_file_->WriteLog("Adapter: " + adapter_pair.first + " " + adapter_pair.second);
         if (ConnectDevice(adapter_pair.first) == 0) {
             return index;
         }
@@ -335,11 +336,9 @@ void DexHand::GetDeviceInfo(std::uint16_t slave) {
     }
 
     memset(value, 0, sizeof(value));
-    for (int i = 0; i < 3; i++) {
-        result = ethercat_comm_->SDORead(1, 0x100A, 0x00, &size, &value, EC_TIMEOUTRXM);
-        if (result == 1) {
-            device_info_.software_version = std::string(reinterpret_cast<char*>(value));
-        }
+    result = ethercat_comm_->SDORead(1, 0x100A, 0x00, &size, &value, EC_TIMEOUTRXM);
+    if (result == 1) {
+        device_info_.software_version = std::string(reinterpret_cast<char*>(value));
     }
 
     memset(value, 0, sizeof(value));
