@@ -27,7 +27,7 @@ void DexHand::InitializeAllJoints() {
         Joint joint;
         joint.id = static_cast<JointId>(i);
         joint.target.angle = 0.0f;
-        joint.target.velocity = 50;
+        joint.target.velocity = 100;
         joint.target.torque = 100;
 
         joint.state.state = 0;
