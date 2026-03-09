@@ -76,7 +76,6 @@ class DexHand {
     explicit DexHand();
     ~DexHand();
 
-    ConnectState connect_state_ = DISCONNECT;
     OperationMode operation_mode_ = MODE_NONE;
     int is_move_joints_ = 0;  // 1:点击开始；2:点击停止
     std::vector<Joint> joints_;
@@ -89,6 +88,7 @@ class DexHand {
     int GetJoints();
     HandType GetHandType();
     DeviceInfo GetDeviceInfo();
+    ConnectState GetConnectionState() const;
     int ReleaseProtection();
     int InitJoint();
     // int ResetTactile();
@@ -114,6 +114,7 @@ class DexHand {
 
     HandType hand_type_ = HandType::NONE;
     DeviceInfo device_info_;
+    ConnectState connect_state_ = DISCONNECT;
 
    private:
     Thumb thumb_;

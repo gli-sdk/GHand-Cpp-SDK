@@ -388,6 +388,10 @@ HandType DexHand::GetHandType() {
     return hand_type_;
 }
 
+ConnectState DexHand::GetConnectionState() const {
+    return connect_state_;
+}
+
 /**
  * @brief Release protection
  *
