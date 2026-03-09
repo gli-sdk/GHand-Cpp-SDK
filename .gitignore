@@ -4,3 +4,6 @@ build
 openspec/config.yaml
 nul
 openspec/changes/
+IMPLEMENTATION_COMPLETE.md
+CRITICAL_FIX.md
+LOCK_MUTEX_TEST.md

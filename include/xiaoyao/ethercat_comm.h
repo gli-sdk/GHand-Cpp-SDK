@@ -16,6 +16,7 @@
 using namespace std;
 
 #include "log_file.h"
+#include "xiaoyao/file_lock.h"
 
 class EtherCATComm {
    public:
@@ -38,6 +39,7 @@ class EtherCATComm {
    private:
     static std::mutex context_mutex_;     // 保护 SDO 操作和配置变更
     static std::mutex rt_context_mutex_;  // 保护实时上下文访问
+    static xiaoyao::FileLock device_lock_; // 设备锁，确保进程间互斥访问网卡
     static ecx_contextt ctx_;             // 实时线程专用上下文
     static std::function<void(int)> progress_callback_;
 

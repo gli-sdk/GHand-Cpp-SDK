@@ -28,6 +28,7 @@ uint8 EtherCATComm::IOmap_[4096] = {0};
 bool EtherCATComm::threads_started_ = false;
 std::mutex EtherCATComm::context_mutex_;
 std::mutex EtherCATComm::rt_context_mutex_;
+xiaoyao::FileLock EtherCATComm::device_lock_;  // 设备锁静态成员定义
 std::function<void(int)> EtherCATComm::state_update_callback_ = nullptr;
 std::function<void(int)> EtherCATComm::progress_callback_ = nullptr;
 
@@ -100,23 +101,35 @@ map<string, string> EtherCATComm::ListAdapters() {
 
 int EtherCATComm::Connect(std::string device_name) {
     std::lock_guard<std::mutex> lock(context_mutex_);
+
+    // 步骤1：尝试获取设备锁（防止多进程同时访问）
+    std::string lock_path = xiaoyao::GetAdapterLockPath(device_name);
+    if (!device_lock_.Acquire(lock_path)) {
+        std::cerr << "Failed to connect: adapter " << device_name
+                  << " is already locked by another process" << std::endl;
+        return -1;  // 设备已被占用
+    }
+
     memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
     rxpdo_buffer_[1] = {0x01};
 
     ResetContext();
     if (ecx_init(&ctx_, device_name.c_str()) <= 0) {
-        return -1;
+        device_lock_.Release();
+        return -2;
     }
 
     int config_result = ecx_config_init(&ctx_);
     if (config_result <= 0 || ctx_.slavecount <= 0) {
-        return -2;
+        device_lock_.Release();
+        return -3;
     }
 
     ec_groupt* group = &ctx_.grouplist[0];
     int map_result = ecx_config_map_group(&ctx_, &IOmap_, 0);
     if (map_result <= 0) {
-        return -3;
+        device_lock_.Release();
+        return -4;
     }
 
     mappingdone = 1;
@@ -137,7 +150,8 @@ int EtherCATComm::Connect(std::string device_name) {
     uint16_t safe_op_state = ecx_statecheck(&ctx_, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
 
     if (safe_op_state != EC_STATE_SAFE_OP) {
-        return -4;
+        device_lock_.Release();
+        return -5;
     }
 
     ctx_.slavelist[0].state = EC_STATE_OPERATIONAL;
@@ -147,7 +161,8 @@ int EtherCATComm::Connect(std::string device_name) {
 
     uint16_t op_state = ecx_statecheck(&ctx_, 0, EC_STATE_OPERATIONAL, EC_TIMEOUTSTATE);
     if (op_state != EC_STATE_OPERATIONAL) {
-        return -5;
+        device_lock_.Release();
+        return -6;
     }
 
     inOP = 1;
@@ -167,6 +182,9 @@ int EtherCATComm::Disconnect() {
         ctx_.slavelist[0].state = EC_STATE_INIT;
         ecx_writestate(&ctx_, 0);
     }
+
+    // 释放设备锁
+    device_lock_.Release();
 
     return 0;
 }
