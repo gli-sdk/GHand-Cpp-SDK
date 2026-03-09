@@ -80,6 +80,8 @@ int DexHand::Open(CommType comm_type, std::string device_name) {
  * @return int 0
  */
 int DexHand::Close() {
+    hand_type_ = HandType::NONE;
+    device_info_ = DeviceInfo();
     ethercat_comm_->Disconnect();
     connect_state_ = DISCONNECT;
     InitializeAllJoints();
@@ -92,10 +94,10 @@ int DexHand::Close() {
  * @return int i: success, -1: fail
  */
 int DexHand::AutoConnectDevices() {
-    ListAdapters();
+    std::map<std::string, std::string> adapter_names = ListAdapters();
     int index = 0;
     // log_file_->WriteLog("Adapter count: " + std::to_string(adapter_names_.size()));
-    for (const auto& adapter_pair : adapter_names_) {
+    for (const auto& adapter_pair : adapter_names) {
         // log_file_->WriteLog("Adapter: " + adapter_pair.first + " " + adapter_pair.second);
         if (ConnectDevice(adapter_pair.first) == 0) {
             return index;
@@ -109,9 +111,8 @@ int DexHand::AutoConnectDevices() {
  * @brief List the adapters
  *
  */
-void DexHand::ListAdapters() {
-    adapter_names_.clear();
-    adapter_names_ = ethercat_comm_->ListAdapters();
+map<string, string> DexHand::ListAdapters() {
+    return ethercat_comm_->ListAdapters();
 }
 
 /**
@@ -126,8 +127,8 @@ int DexHand::ConnectDevice(std::string device_name) {
     if (result == 0) {
         connect_state_ = CONNECT;
         operation_mode_ = MODE_NORMAL;
-        GetDeviceInfo(1);
-        GetHandType(1);
+        GetDeviceInfo();
+        GetHandType();
         // log_file_->WriteLog("Connected");
         // log_file_->WriteLog("Hand type: " + std::to_string(hand_type_));
     }
@@ -314,12 +315,13 @@ int DexHand::GetJoints() {
 
     return result;
 }
-void DexHand::GetDeviceInfo(std::uint16_t slave) {
-    device_info_.device_name = "";
-    device_info_.hardware_version = "";
-    device_info_.serial_number = "";
-    device_info_.software_version = "";
+DeviceInfo DexHand::GetDeviceInfo() {
+    // 如果软件版本已读取（非空），说明已缓存
+    if (!device_info_.software_version.empty()) {
+        return device_info_;
+    }
 
+    // 从硬件读取
     std::uint8_t value[255] = {0};
     int size = sizeof(value);
     int result = -1;
@@ -346,6 +348,8 @@ void DexHand::GetDeviceInfo(std::uint16_t slave) {
     if (result == 1) {
         device_info_.serial_number = std::string(reinterpret_cast<char*>(value));
     }
+
+    return device_info_;
 }
 
 /**
@@ -353,11 +357,17 @@ void DexHand::GetDeviceInfo(std::uint16_t slave) {
  *
  * @param slave Slave ID
  */
-void DexHand::GetHandType(std::uint16_t slave) {
+HandType DexHand::GetHandType() {
+    // 如果已识别，直接返回缓存
+    if (hand_type_ != HandType::NONE) {
+        return hand_type_;
+    }
+
+    // 从硬件读取
     std::uint8_t value = 0;
     int size = sizeof(value);
-    int result = -1;
-    result = ethercat_comm_->SDORead(1, 0x2001, 0x00, &size, &value, EC_TIMEOUTRXM);
+    int result = ethercat_comm_->SDORead(1, 0x2001, 0x00, &size, &value, EC_TIMEOUTRXM);
+
     if (result == 1) {
         switch (value) {
             case 0:
@@ -373,9 +383,9 @@ void DexHand::GetHandType(std::uint16_t slave) {
                 hand_type_ = HandType::NONE;
                 break;
         }
-    } else {
-        hand_type_ = HandType::NONE;
     }
+
+    return hand_type_;
 }
 
 /**

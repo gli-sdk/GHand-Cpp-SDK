@@ -76,22 +76,19 @@ class DexHand {
     explicit DexHand();
     ~DexHand();
 
-    HandType hand_type_ = HandType::NONE;
     ConnectState connect_state_ = DISCONNECT;
     OperationMode operation_mode_ = MODE_NONE;
-    map<string, string> adapter_names_;
-    DeviceInfo device_info_;
     int is_move_joints_ = 0;  // 1:点击开始；2:点击停止
     std::vector<Joint> joints_;
     HandTemperature hand_temperature_;
 
     int Open(CommType comm_type = COMM_ETHERCAT, std::string device_name = "auto");
     int Close();
-    void ListAdapters();
+    map<string, string> ListAdapters();
     int MoveJoints();
     int GetJoints();
-    void GetHandType(std::uint16_t slave);
-    void GetDeviceInfo(std::uint16_t slave);
+    HandType GetHandType();
+    DeviceInfo GetDeviceInfo();
     int ReleaseProtection();
     int InitJoint();
     // int ResetTactile();
@@ -114,6 +111,9 @@ class DexHand {
     std::unique_ptr<EtherCATComm> ethercat_comm_;
     int AutoConnectDevices();
     int ConnectDevice(std::string device_name);
+
+    HandType hand_type_ = HandType::NONE;
+    DeviceInfo device_info_;
 
    private:
     Thumb thumb_;
