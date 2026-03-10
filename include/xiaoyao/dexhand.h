@@ -77,18 +77,18 @@ class DexHand {
     ~DexHand();
 
     OperationMode operation_mode_ = MODE_NONE;
-    int is_move_joints_ = 0;  // 1:点击开始；2:点击停止
     std::vector<Joint> joints_;
     HandTemperature hand_temperature_;
 
     int Open(CommType comm_type = COMM_ETHERCAT, std::string device_name = "auto");
     int Close();
     map<string, string> ListAdapters();
-    int MoveJoints();
+    void MoveJoints();  // 改为void
+    void Stop();        // 新增停止方法
     int GetJoints();
     HandType GetHandType();
     DeviceInfo GetDeviceInfo();
-    ConnectState GetConnectionState() const;
+    bool IsConnected() const;
     int ReleaseProtection();
     int InitJoint();
     // int ResetTactile();

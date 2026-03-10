@@ -141,12 +141,8 @@ int DexHand::ConnectDevice(std::string device_name) {
  *
  * @return int 0: success
  */
-int DexHand::MoveJoints() {
-    if (is_move_joints_ == 0) {
-        return 0;
-    }
-
-    // auto now = std::chrono::system_clock::now();
+void DexHand::MoveJoints() {
+    // 直接执行运动逻辑
     // auto time_t = std::chrono::system_clock::to_time_t(now);
     // auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) %
     // 1000;
@@ -209,7 +205,17 @@ int DexHand::MoveJoints() {
     // }
     // log_file_->WriteLog(hexStream.str());
     int wkc = ethercat_comm_->SendRxPDO(1, ECT_SDO_RXPDOASSIGN, sizeof(buffer), buffer);
-    return 0;
+}
+
+/**
+ * @brief Stop the joints
+ *
+ */
+void DexHand::Stop() {
+    // 构造停止命令
+    uint8_t buffer[80] = {0};
+    buffer[1] = 1;
+    ethercat_comm_->SendRxPDO(1, ECT_SDO_RXPDOASSIGN, sizeof(buffer), buffer);
 }
 
 /**
@@ -388,8 +394,8 @@ HandType DexHand::GetHandType() {
     return hand_type_;
 }
 
-ConnectState DexHand::GetConnectionState() const {
-    return connect_state_;
+bool DexHand::IsConnected() const {
+    return connect_state_ == CONNECT;
 }
 
 /**
