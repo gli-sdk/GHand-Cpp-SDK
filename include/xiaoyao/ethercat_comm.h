@@ -75,6 +75,8 @@ class EtherCATComm {
 
    private:
     static std::function<void(int)> state_update_callback_;
+    static std::function<void(const uint8_t*, size_t)> data_callback_;
+    static std::mutex data_callback_mutex_;
 
    public:
     static void SetStateUpdateCallback(std::function<void(int)> callback) {
@@ -85,52 +87,17 @@ class EtherCATComm {
             state_update_callback_(state);
         }
     }
+
+    // 数据回调：在接收到PDO数据后触发
+    static void SetDataCallback(std::function<void(const uint8_t*, size_t)> callback) {
+        std::lock_guard<std::mutex> lock(data_callback_mutex_);
+        data_callback_ = callback;
+    }
+    static void NotifyDataReceived(const uint8_t* data, size_t size) {
+        std::lock_guard<std::mutex> lock(data_callback_mutex_);
+        if (data_callback_) {
+            data_callback_(data, size);
+        }
+    }
 };
 #endif
-
-// template <typename T, size_t Capacity>
-// class LockFreeQueue {
-//    private:
-//     struct Node {
-//         T data;
-//         std::atomic<size_t> next;
-
-//         Node() : next(0) {}
-//     };
-
-//     typedef char Cacheline[64];
-//     Cacheline pad0;
-//     std::atomic<size_t> head;
-//     Cacheline pad1;
-//     std::atomic<size_t> tail;
-//     Cacheline pad2;
-//     std::vector<Node> nodes;
-
-//    public:
-//     LockFreeQueue() : head(0), tail(0), nodes(Capacity + 1) {}
-
-//     bool Push(const T& item) {
-//         size_t current_tail = tail.load(std::memory_order_relaxed);
-//         size_t next_tail = (current_tail + 1) % (Capacity + 1);
-
-//         if (next_tail == head.load(std::memory_order_acquire)) {
-//             return false;  // 队列满
-//         }
-
-//         nodes[current_tail].data = item;
-//         tail.store(next_tail, std::memory_order_release);
-//         return true;
-//     }
-
-//     bool Pop(T& item) {
-//         size_t current_head = head.load(std::memory_order_relaxed);
-
-//         if (current_head == tail.load(std::memory_order_acquire)) {
-//             return false;  // 队列空
-//         }
-
-//         item = std::move(nodes[current_head].data);
-//         head.store((current_head + 1) % (Capacity + 1), std::memory_order_release);
-//         return true;
-//     }
-// };

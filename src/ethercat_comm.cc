@@ -31,6 +31,8 @@ std::mutex EtherCATComm::rt_context_mutex_;
 xiaoyao::FileLock EtherCATComm::device_lock_;  // 设备锁静态成员定义
 std::function<void(int)> EtherCATComm::state_update_callback_ = nullptr;
 std::function<void(int)> EtherCATComm::progress_callback_ = nullptr;
+std::function<void(const uint8_t*, size_t)> EtherCATComm::data_callback_ = nullptr;
+std::mutex EtherCATComm::data_callback_mutex_;
 
 // static LockFreeQueue<std::pair<std::vector<uint8>, uint16>, 32> pdo_queue_;
 static uint8 rxpdo_buffer_[80];
@@ -354,9 +356,31 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
             cycle++;
 
             // 接收过程数据 - 需要锁保护
+            uint8_t* pdo_copy = nullptr;
+            size_t pdo_size = 0;
+
             {
                 std::lock_guard<std::mutex> lock(rt_context_mutex_);
                 wkc = ecx_receive_processdata(&ctx_, EC_TIMEOUTRET);
+
+                // 快速复制PDO数据用于回调
+                if (wkc >= expectedWKC && data_callback_) {
+                    // 获取slave 1的输入数据（PDO）
+                    uint8_t* inputs = ctx_.slavelist[1].inputs;
+                    pdo_size = ctx_.slavelist[1].Ibytes;
+
+                    // 创建数据副本（避免在锁中调用回调）
+                    if (pdo_size > 0) {
+                        pdo_copy = new uint8_t[pdo_size];
+                        memcpy(pdo_copy, inputs, pdo_size);
+                    }
+                }
+            }
+
+            // 在锁外调用回调（避免阻塞实时线程）
+            if (pdo_copy != nullptr && data_callback_) {
+                NotifyDataReceived(pdo_copy, pdo_size);
+                delete[] pdo_copy;
             }
 
             if (wkc != expectedWKC) {

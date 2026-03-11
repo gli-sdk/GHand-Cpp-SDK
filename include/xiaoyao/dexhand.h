@@ -2,13 +2,17 @@
 #define XIAOYAO_DEXHAND_H_
 
 #include <cstdint>
+#include <functional>
 #include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 
+#include "dexhand_callback_manager.h"
 #include "ethercat_comm.h"
 #include "finger.h"
 #include "log_file.h"
+#include "types.h"
 
 enum HandType { NONE, LEFT, RIGHT, NUM_HANDS };
 
@@ -19,59 +23,6 @@ struct DeviceInfo {
     std::string serial_number;
 };
 
-enum JointId {
-    THUMB_DIP,
-    THUMB_PIP,
-    THUMB_MCP,
-    THUMB_SWING,
-    THUMB_ROTATION,
-    FF_DIP,
-    FF_PIP,
-    FF_MCP,
-    FF_SWING,
-    MF_DIP,
-    MF_PIP,
-    MF_MCP,
-    RF_DIP,
-    RF_PIP,
-    RF_MCP,
-    LF_DIP,
-    LF_PIP,
-    LF_MCP,
-    NUM_JOINTS
-};
-
-struct MotionParam {
-    float angle;
-    uint8_t velocity;
-    uint8_t torque;
-};
-
-struct JointState {
-    uint8_t state;
-    uint8_t error;
-    float angle;
-    uint8_t velocity;
-    uint8_t torque;
-};
-
-struct Joint {
-    JointId id;
-    MotionParam target;
-    JointState state;
-};
-
-// 关节命令结构体，用于参数化关节控制
-struct JointCommand {
-    JointId id;              // 关节标识符
-    MotionParam target;      // 目标参数（angle, velocity, torque）
-};
-
-struct HandTemperature {
-    uint8_t state;
-    uint8_t error;
-    int16_t temperature;
-};
 
 enum CommType { COMM_ETHERCAT, COMM_CANFD, COMM_RS485 };
 enum ConnectState { DISCONNECT, CONNECT };
@@ -89,9 +40,18 @@ class DexHand {
     explicit DexHand();
     ~DexHand();
 
+    // 回调注册方法（委托给回调管理器）
+    void SetJointsCallback(DexHandCallbackManager::JointsCallback cb) {
+        callback_manager_.SetJointsCallback(cb);
+    }
+    void SetTemperatureCallback(DexHandCallbackManager::TemperatureCallback cb) {
+        callback_manager_.SetTemperatureCallback(cb);
+    }
+    void SetForceCallback(DexHandCallbackManager::ForceCallback cb) {
+        callback_manager_.SetForceCallback(cb);
+    }
+
     OperationMode operation_mode_ = MODE_NONE;
-    std::vector<Joint> joints_;
-    HandTemperature hand_temperature_;
 
     int Open(CommType comm_type = COMM_ETHERCAT, std::string device_name = "auto");
     int Close();
@@ -101,7 +61,6 @@ class DexHand {
     bool MoveJoints(const std::vector<JointCommand>& commands);
     void SetControlMode(ControlMode mode);
     void Stop();
-    int GetJoints();
     HandType GetHandType();
     DeviceInfo GetDeviceInfo();
     bool IsConnected() const;
@@ -111,7 +70,6 @@ class DexHand {
     int BootUpdate(char* ifname, uint16_t slave, char* filename,
                    std::function<void(int)> progressCallback);
 
-    void InitializeAllJoints();
     // 触觉
     bool OpenTactile();
     bool CloseTactile();
@@ -147,6 +105,12 @@ class DexHand {
 
    private:
     LogFile* log_file_;  // 日志文件对象
+
+    // 回调管理器（负责数据变化检测和回调触发）
+    DexHandCallbackManager callback_manager_;
+
+    // PDO数据回调处理方法
+    void OnRawDataReceived(const uint8_t* data, size_t size);
 
     //    private:
     //     std::mutex state_mutex_;

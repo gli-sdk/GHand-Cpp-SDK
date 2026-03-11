@@ -14,31 +14,17 @@ std::string FormatFieldWithBytes(const uint8_t* buffer, size_t offset,
                                  const std::string& field_name, T value);
 DexHand::DexHand() {
     ethercat_comm_ = std::unique_ptr<EtherCATComm>(new EtherCATComm());
-    InitializeAllJoints();
     EtherCATComm::SetStateUpdateCallback(
         std::bind(&DexHand::OnSlaveStateUpdate, this, std::placeholders::_1));
+
+    // 注册PDO数据回调
+    EtherCATComm::SetDataCallback(
+        std::bind(&DexHand::OnRawDataReceived, this,
+                  std::placeholders::_1, std::placeholders::_2));
 }
 
 DexHand::~DexHand() {}
 
-void DexHand::InitializeAllJoints() {
-    joints_.clear();
-    for (int i = 0; i < NUM_JOINTS; i++) {
-        Joint joint;
-        joint.id = static_cast<JointId>(i);
-        joint.target.angle = 0.0f;
-        joint.target.velocity = 100;
-        joint.target.torque = 100;
-
-        joint.state.state = 0;
-        joint.state.error = 0;
-        joint.state.angle = 0.0f;
-        joint.state.velocity = 0;
-        joint.state.torque = 0;
-
-        joints_.push_back(joint);
-    }
-}
 /**
  * @brief Open the hand
  *
@@ -84,7 +70,6 @@ int DexHand::Close() {
     device_info_ = DeviceInfo();
     ethercat_comm_->Disconnect();
     connect_state_ = DISCONNECT;
-    InitializeAllJoints();
     return 0;
 }
 
@@ -254,104 +239,6 @@ void DexHand::Stop() {
  *
  * @return int 0: success other:fail
  */
-int DexHand::GetJoints() {
-    uint8_t* inputs = ethercat_comm_->ReadTxPDO(1);
-    if (inputs == nullptr) {
-        return -1;
-    }
-    int result = 0;
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-
-    // 格式化时间戳
-    // std::ostringstream timeStream;
-    // timeStream << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-    // timeStream << '.' << std::setfill('0') << std::setw(3) << ms.count();
-
-    // 添加带时间戳的日志
-    // log_file_->WriteLog("[" + timeStream.str() + "] ReadTxPDO:");
-    // std::ostringstream hexStream;
-    // hexStream << "RecvBuffer: ";
-    // for (size_t i = 0; i < 208; ++i) {
-    //     hexStream << std::hex << std::setw(2) << std::setfill('0') <<
-    //     static_cast<int>(inputs[i]); if (i % 8 == 3)
-    //         hexStream << "\n";
-    //     else
-    //         hexStream << " ";
-    // }
-    // log_file_->WriteLog(hexStream.str());
-
-    size_t offset = 0;
-    uint8_t hand_state, hand_error;
-    int16_t temperature;
-
-    memcpy(&hand_state, inputs + offset, sizeof(hand_state));
-    offset += sizeof(hand_state);
-
-    memcpy(&hand_error, inputs + offset, sizeof(hand_error));
-    offset += sizeof(hand_error);
-
-    if ((hand_state == 2 || hand_state == 3) && hand_error != 0) {
-        result = -2;
-        // return hand_error;
-    }
-
-    memcpy(&temperature, inputs + offset, sizeof(temperature));
-    offset += sizeof(temperature);
-
-    hand_temperature_.state = hand_state;
-    hand_temperature_.error = hand_error;
-    hand_temperature_.temperature = temperature;
-
-    // log_file_->WriteLog("State: " + std::to_string(hand_state) +
-    //                     "   Error:" + std::to_string(hand_error) +
-    //                     "   Temperature: " + std::to_string(temperature));
-
-    for (int i = 0; i < NUM_JOINTS; i++) {
-        uint8_t joint_state, joint_error;
-        float joint_angle;
-        uint8_t joint_velocity, joint_torque;
-
-        memcpy(&joint_state, inputs + offset, sizeof(joint_state));
-        offset += sizeof(joint_state);
-
-        memcpy(&joint_error, inputs + offset, sizeof(joint_error));
-        offset += sizeof(joint_error);
-
-        if ((joint_state == 2 || joint_state == 3) && joint_error != 0) {
-            // return joint_error;
-            result = -2;
-        }
-
-        memcpy(&joint_angle, inputs + offset, sizeof(joint_angle));
-        offset += sizeof(joint_angle);
-
-        memcpy(&joint_velocity, inputs + offset, sizeof(joint_velocity));
-        offset += sizeof(joint_velocity);
-
-        memcpy(&joint_torque, inputs + offset, sizeof(joint_torque));
-        offset += sizeof(joint_torque);
-
-        joints_[i].state.state = joint_state;
-        joints_[i].state.error = joint_error;
-        joint_angle = joint_angle * (180.0f / M_PI);
-        if (i == THUMB_ROTATION) {
-            joint_angle = joint_angle - 30;
-        }
-        joints_[i].state.angle = joint_angle;
-        joints_[i].state.velocity = joint_velocity;
-        joints_[i].state.torque = joint_torque;
-
-        // log_file_->WriteLog("State: " + std::to_string(joint_state) +
-        //                     "   error:" + std::to_string(joint_error) +
-        //                     "   Angle: " + std::to_string(joint_angle) +
-        //                     "   Speed:" + std::to_string(joint_velocity) +
-        //                     "   Torque:" + std::to_string(joint_torque));
-    }
-
-    return result;
-}
 DeviceInfo DexHand::GetDeviceInfo() {
     // 如果软件版本已读取（非空），说明已缓存
     if (!device_info_.software_version.empty()) {
@@ -656,4 +543,71 @@ std::string FormatFieldWithBytes(const uint8_t* buffer, size_t offset,
     // 输出解析值
     oss << "-> " << value;
     return oss.str();
+}
+
+// PDO数据回调处理方法
+void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
+    // 直接解析PDO数据（与GetJoints()相同的解析逻辑）
+    std::vector<Joint> parsed_joints;
+    HandTemperature parsed_temperature;
+
+    if (data == nullptr || size == 0) {
+        return;  // 无效数据
+    }
+
+    size_t offset = 0;
+    uint8_t hand_state, hand_error;
+    int16_t temperature;
+
+    // 解析手部状态和温度
+    memcpy(&hand_state, data + offset, sizeof(hand_state));
+    offset += sizeof(hand_state);
+
+    memcpy(&hand_error, data + offset, sizeof(hand_error));
+    offset += sizeof(hand_error);
+
+    memcpy(&temperature, data + offset, sizeof(temperature));
+    offset += sizeof(temperature);
+
+    parsed_temperature.state = hand_state;
+    parsed_temperature.error = hand_error;
+    parsed_temperature.temperature = temperature;
+
+    // 解析关节数据
+    parsed_joints.resize(NUM_JOINTS);
+    for (int i = 0; i < NUM_JOINTS; i++) {
+        uint8_t joint_state, joint_error;
+        float joint_angle;
+        uint8_t joint_velocity, joint_torque;
+
+        memcpy(&joint_state, data + offset, sizeof(joint_state));
+        offset += sizeof(joint_state);
+
+        memcpy(&joint_error, data + offset, sizeof(joint_error));
+        offset += sizeof(joint_error);
+
+        memcpy(&joint_angle, data + offset, sizeof(joint_angle));
+        offset += sizeof(joint_angle);
+
+        memcpy(&joint_velocity, data + offset, sizeof(joint_velocity));
+        offset += sizeof(joint_velocity);
+
+        memcpy(&joint_torque, data + offset, sizeof(joint_torque));
+        offset += sizeof(joint_torque);
+
+        parsed_joints[i].id = static_cast<JointId>(i);
+        parsed_joints[i].state.state = joint_state;
+        parsed_joints[i].state.error = joint_error;
+        joint_angle = joint_angle * (180.0f / M_PI);
+        if (i == THUMB_ROTATION) {
+            joint_angle = joint_angle - 30;
+        }
+        parsed_joints[i].state.angle = joint_angle;
+        parsed_joints[i].state.velocity = joint_velocity;
+        parsed_joints[i].state.torque = joint_torque;
+    }
+
+    // 触发回调（纯回调模式，SDK不保存缓存）
+    callback_manager_.UpdateJoints(parsed_joints);
+    callback_manager_.UpdateTemperature(parsed_temperature);
 }
