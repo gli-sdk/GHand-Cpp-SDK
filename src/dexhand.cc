@@ -136,12 +136,24 @@ int DexHand::ConnectDevice(std::string device_name) {
     return result;
 }
 
+
+
 /**
- * @brief Move the joints
+ * @brief Move the joints with parameterized commands
  *
- * @return int 0: success
+ * @param joints Vector of joint commands
+ * @return bool true: success, false: fail
  */
-void DexHand::MoveJoints() {
+bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
+    // 检查设备连接状态
+    if (!IsConnected()) {
+        return false;
+    }
+
+    // 检查命令是否为空
+    if (joints.empty()) {
+        return false;
+    }
     // 直接执行运动逻辑
     // auto time_t = std::chrono::system_clock::to_time_t(now);
     // auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) %
@@ -154,40 +166,48 @@ void DexHand::MoveJoints() {
 
     // 添加带时间戳的日志
     // log_file_->WriteLog("[" + timeStream.str() + "] SendRxPDO:");
+
+
+    // 构建发送缓冲区
     uint8_t buffer[80] = {0};
     size_t offset = 0;
 
-    uint8_t mode = 0;
-    uint8_t stop = 0;
-    // log_file_->WriteLog("Mode: " + std::to_string(mode) + "Stop: " + std::to_string(stop));
-
+    // 写入控制模式
+    uint8_t mode = static_cast<uint8_t>(control_mode_);
     memcpy(buffer + offset, &mode, sizeof(mode));
     offset += sizeof(mode);
 
+    // 写入停止标志
+    uint8_t stop = 0;
     memcpy(buffer + offset, &stop, sizeof(stop));
     offset += sizeof(stop);
 
-    for (const auto& joint : joints_) {
+    for (const auto& joint : joints) {
         if (joint.id >= NUM_JOINTS || joint.id == THUMB_DIP || joint.id == FF_DIP ||
             joint.id == MF_DIP || joint.id == RF_DIP || joint.id == LF_DIP) {
             continue;
         }
-        float angle = 0.0;
+
+        // 转换角度（与原实现保持一致）
+        float angle = 0.0f;
         if (joint.id == THUMB_ROTATION) {
             angle = (joint.target.angle + 30) * (M_PI / 180.0f);
         } else {
-            angle = (joint.target.angle) * (M_PI / 180.0f);
+            angle = joint.target.angle * (M_PI / 180.0f);
         }
 
         uint8_t velocity = joint.target.velocity;
         uint8_t torque = joint.target.torque;
 
+        // 写入角度（4字节）
         memcpy(buffer + offset, &angle, sizeof(angle));
         offset += sizeof(angle);
 
+        // 写入速度（1字节）
         memcpy(buffer + offset, &velocity, sizeof(velocity));
         offset += sizeof(velocity);
 
+        // 写入力矩（1字节）
         memcpy(buffer + offset, &torque, sizeof(torque));
         offset += sizeof(torque);
 
@@ -205,6 +225,17 @@ void DexHand::MoveJoints() {
     // }
     // log_file_->WriteLog(hexStream.str());
     int wkc = ethercat_comm_->SendRxPDO(1, ECT_SDO_RXPDOASSIGN, sizeof(buffer), buffer);
+
+    return true;  // 返回成功或失败
+}
+
+/**
+ * @brief Set the control mode
+ *
+ * @param mode Control mode (POSITION, TORQUE, SPEED)
+ */
+void DexHand::SetControlMode(ControlMode mode) {
+    control_mode_ = mode;
 }
 
 /**

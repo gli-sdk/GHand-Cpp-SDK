@@ -61,6 +61,12 @@ struct Joint {
     JointState state;
 };
 
+// 关节命令结构体，用于参数化关节控制
+struct JointCommand {
+    JointId id;              // 关节标识符
+    MotionParam target;      // 目标参数（angle, velocity, torque）
+};
+
 struct HandTemperature {
     uint8_t state;
     uint8_t error;
@@ -70,6 +76,13 @@ struct HandTemperature {
 enum CommType { COMM_ETHERCAT, COMM_CANFD, COMM_RS485 };
 enum ConnectState { DISCONNECT, CONNECT };
 enum OperationMode { MODE_NONE, MODE_INIT, MODE_NORMAL, MODE_BOOT, MODE_ERROR };
+
+// 参数化关节控制模式
+enum class ControlMode : uint8_t {
+    POSITION = 0,  // 位置控制模式
+    TORQUE = 1,    // 力矩控制模式
+    SPEED = 2      // 速度控制模式
+};
 
 class DexHand {
    public:
@@ -83,8 +96,11 @@ class DexHand {
     int Open(CommType comm_type = COMM_ETHERCAT, std::string device_name = "auto");
     int Close();
     map<string, string> ListAdapters();
-    void MoveJoints();  // 改为void
-    void Stop();        // 新增停止方法
+
+    // 参数化关节控制API
+    bool MoveJoints(const std::vector<JointCommand>& commands);
+    void SetControlMode(ControlMode mode);
+    void Stop();
     int GetJoints();
     HandType GetHandType();
     DeviceInfo GetDeviceInfo();
@@ -115,6 +131,7 @@ class DexHand {
     HandType hand_type_ = HandType::NONE;
     DeviceInfo device_info_;
     ConnectState connect_state_ = DISCONNECT;
+    ControlMode control_mode_ = ControlMode::POSITION;  // 当前控制模式
 
    private:
     Thumb thumb_;
