@@ -342,7 +342,7 @@ bool DexHand::IsConnected() const {
  *
  * @return int 1: success, other: fail
  */
-int DexHand::ReleaseProtection() {
+int DexHand::ClearFault() {
     std::uint8_t command = 0x01;
     std::uint8_t state = 0xFF;
     int size = sizeof(std::uint8_t);
@@ -417,7 +417,7 @@ bool DexHand::CloseTactile() {
  *
  * @return int 1: success, other: fail
  */
-bool DexHand::ResetToZero() {
+bool DexHand::ZeroTactile() {
     std::uint8_t command = 0x04;
     int size = sizeof(std::uint8_t);
     int result = -1;

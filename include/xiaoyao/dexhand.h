@@ -50,16 +50,15 @@ class DexHand {
     bool AutoConnect(CommType comm_type = COMM_ETHERCAT);
     bool Connect(CommType comm_type = COMM_ETHERCAT, const std::string& device_name = "auto");
     bool Disconnect();
+    bool IsConnected() const;
     std::map<std::string, std::string> SearchAdapters();
-
-    // 参数化关节控制API
-    bool MoveJoints(const std::vector<JointCommand>& commands);
-    void SetControlMode(ControlMode mode);
-    void Stop();
     HandType GetHandType();
     DeviceInfo GetDeviceInfo();
-    bool IsConnected() const;
-    int ReleaseProtection();
+    
+    void SetControlMode(ControlMode mode);
+    bool MoveJoints(const std::vector<JointCommand>& commands);
+    void Stop();
+    int ClearFault();
     int InitJoint();
     int BootUpdate(char* ifname, uint16_t slave, char* filename,
                    std::function<void(int)> progressCallback);
@@ -67,8 +66,7 @@ class DexHand {
     // 触觉
     bool OpenTactile();
     bool CloseTactile();
-    // 归零：单个手指和整手
-    bool ResetToZero();
+    bool ZeroTactile();
 
    private:
     std::unique_ptr<EtherCATComm> ethercat_comm_;
