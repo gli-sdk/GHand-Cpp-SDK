@@ -56,7 +56,7 @@ class DexHand {
     DeviceInfo GetDeviceInfo();
     
     void SetControlMode(ControlMode mode);
-    bool MoveJoints(const std::vector<JointCommand>& commands);
+    bool MoveJoints(const std::vector<JointCommand>& joints);
     void Stop();
     int ClearFault();
     int InitJoint();

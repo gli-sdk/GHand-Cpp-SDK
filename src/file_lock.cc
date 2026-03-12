@@ -68,7 +68,7 @@ std::string MD5Hash(const std::string& input) {
     }
 
     // 计算哈希值
-    if (!CryptHashData(hHash, (BYTE*)input.c_str(), input.length(), 0)) {
+    if (!CryptHashData(hHash, (BYTE*)input.c_str(), static_cast<DWORD>(input.length()), 0)) {
         CryptDestroyHash(hHash);
         CryptReleaseContext(hProv, 0);
         std::cerr << "Failed to hash data" << std::endl;
@@ -139,9 +139,10 @@ bool FileLock::Acquire(const std::string& lock_file) {
     // Windows 实现：完全模拟 Python SDK 的方式
     // 直接使用 _open() + _locking()，与 Python 的 open() + msvcrt.locking() 一致
 
-    // 1. 使用 _open() 打开文件（与 Python 的 open() 一致）
-    int fd = _open(lock_file.c_str(), _O_RDWR | _O_CREAT, _S_IREAD | _S_IWRITE);
-    if (fd < 0) {
+    // 1. 使用 _sopen_s() 打开文件（与 Python 的 open() 一致）
+    int fd = -1;
+    errno_t err = _sopen_s(&fd, lock_file.c_str(), _O_RDWR | _O_CREAT, _SH_DENYNO, _S_IREAD | _S_IWRITE);
+    if (err != 0 || fd < 0) {
         std::cerr << "Failed to open lock file: " << lock_file << std::endl;
         return false;
     }
@@ -157,7 +158,7 @@ bool FileLock::Acquire(const std::string& lock_file) {
     // 3. 写入当前进程 ID 和网卡名（与 Python SDK 格式一致）
     DWORD pid = GetCurrentProcessId();
     std::string content = std::to_string(pid) + "\n" + lock_file + "\n";
-    _write(fd, content.c_str(), content.size());
+    _write(fd, content.c_str(), static_cast<unsigned int>(content.size()));
 
     // 保存文件描述符用于后续释放
     fd_ = fd;

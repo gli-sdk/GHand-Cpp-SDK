@@ -13,6 +13,11 @@ if(WIN32)
     # 设置UTF-8编码以支持中文字符串
     if(MSVC)
         add_compile_options("/utf-8")
+        # 设置运行时库为动态链接 (Multi-threaded DLL)
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD")
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MDd")
+        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MD")
+        set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MDd")
     endif()
 endif()
 

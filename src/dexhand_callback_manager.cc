@@ -79,7 +79,7 @@ bool DexHandCallbackManager::HasTemperatureChanged(const HandTemperature& temper
     }
 
     // 2. 温度变化触发（>1°C）
-    float temp_diff = std::abs(temperature.temperature - last_temperature_.temperature);
+    int temp_diff = std::abs(temperature.temperature - last_temperature_.temperature);
     if (temp_diff > TEMPERATURE_THRESHOLD) {
         return true;
     }

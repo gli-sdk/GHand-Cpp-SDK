@@ -21,25 +21,18 @@ int main() {
 
     // 尝试通过ETHERCAT连接灵巧手
     std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
-    bool success = hand.Connect(xiaoyao::COMM_ETHERCAT, "auto");
+    bool success = hand.AutoConnect(xiaoyao::COMM_ETHERCAT);
 
     if (success) {
         std::cout << "Successfully connected to the dexterous hand!" << std::endl;
 
-        // 获取手部类型
-        xiaoyao::HandType type = hand.GetHandType();
-        std::cout << "Hand type: " << xiaoyao::ToString(type) << std::endl;
-
-        // 获取固件版本
-        xiaoyao::DeviceInfo device_info = hand.GetDeviceInfo();
-        std::string version = device_info.software_version;
-        if (!version.empty()) {
-            std::cout << "Firmware version: " << version << std::endl;
-        }
+        // 打开触觉
+        hand.OpenTactile();
 
         // 数据自动推送，无需轮询
         std::this_thread::sleep_for(std::chrono::seconds(30));
 
+        hand.CloseTactile();
         hand.Disconnect();
         std::cout << "Connection closed." << std::endl;
     } else {

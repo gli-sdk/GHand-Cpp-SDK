@@ -63,7 +63,7 @@ enum class ForceType : uint8_t {
     SAMPLE = 1      // 分布力
 };
 
-enum JointId {
+enum class JointId : uint8_t {
     THUMB_DIP,
     THUMB_PIP,
     THUMB_MCP,

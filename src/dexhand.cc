@@ -7,6 +7,7 @@
 #include <iostream>
 #include <sstream>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace xiaoyao {
@@ -186,6 +187,14 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
         return false;
     }
 
+    // 将用户传入的joints转为unordered_map，按id索引（方便快速查找）
+    std::unordered_map<int, JointCommand> joint_map;
+    for (const auto& joint : joints) {
+        if (static_cast<int>(joint.id) < static_cast<int>(JointId::NUM_JOINTS)) {
+            joint_map[static_cast<int>(joint.id)] = joint;
+        }
+    }
+
     // 构建发送缓冲区
     uint8_t buffer[80] = {0};
     size_t offset = 0;
@@ -200,22 +209,42 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
     memcpy(buffer + offset, &stop, sizeof(stop));
     offset += sizeof(stop);
 
-    for (const auto& joint : joints) {
-        if (joint.id >= NUM_JOINTS || joint.id == THUMB_DIP || joint.id == FF_DIP ||
-            joint.id == MF_DIP || joint.id == RF_DIP || joint.id == LF_DIP) {
+    // 按照JointId枚举顺序（0-17）遍历所有关节
+    // 硬件期望按固定顺序接收数据
+    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); i++) {
+        // 跳过所有DIP关节（硬件不支持控制）
+        if (i == static_cast<int>(JointId::THUMB_DIP) ||
+            i == static_cast<int>(JointId::FF_DIP) ||
+            i == static_cast<int>(JointId::MF_DIP) ||
+            i == static_cast<int>(JointId::RF_DIP) ||
+            i == static_cast<int>(JointId::LF_DIP)) {
             continue;
         }
 
-        // 转换角度（与原实现保持一致）
+        // 从map中查找当前关节的数据
         float angle = 0.0f;
-        if (joint.id == THUMB_ROTATION) {
-            angle = (joint.angle + 30) * (M_PI / 180.0f);
+        uint8_t velocity = 0;
+        uint8_t torque = 0;
+
+        auto it = joint_map.find(i);
+        if (it != joint_map.end()) {
+            // 找到了用户传入的数据
+            angle = it->second.angle;
+            velocity = it->second.velocity;
+            torque = it->second.torque;
         } else {
-            angle = joint.angle * (M_PI / 180.0f);
+            // 未找到，使用默认值0
+            angle = 0.0f;
+            velocity = 0;
+            torque = 0;
         }
 
-        uint8_t velocity = joint.velocity;
-        uint8_t torque = joint.torque;
+        // 转换角度（与原实现保持一致）
+        if (i == static_cast<int>(JointId::THUMB_ROTATION)) {
+            angle = (angle + 30) * (static_cast<float>(M_PI) / 180.0f);
+        } else {
+            angle = angle * (static_cast<float>(M_PI) / 180.0f);
+        }
 
         // 写入角度（4字节）
         memcpy(buffer + offset, &angle, sizeof(angle));
@@ -346,7 +375,7 @@ int DexHand::ClearFault() {
     std::uint8_t command = 0x01;
     std::uint8_t state = 0xFF;
     int size = sizeof(std::uint8_t);
-    std::uint8_t result = -1;
+    std::uint8_t result = 0;  // 初始化为0
     int ret = -1;
     int times = 100;
     ret = ethercat_comm_->SDOWrite(1, 0x2002, 0x01, size, &command, EC_TIMEOUTRXM);
@@ -371,7 +400,7 @@ int DexHand::InitJoint() {
     std::uint8_t command = 0x01;
     std::uint8_t state = 0xFF;
     int size = sizeof(std::uint8_t);
-    std::uint8_t result = -1;
+    std::uint8_t result = 0;  // 初始化为0
     int ret = -1;
     int times = 100;
     ret = ethercat_comm_->SDOWrite(1, 0x2003, 0x01, size, &command, EC_TIMEOUTRXM);
@@ -515,8 +544,8 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
     parsed_temperature.temperature = temperature;
 
     // 解析关节数据
-    parsed_joints.resize(NUM_JOINTS);
-    for (int i = 0; i < NUM_JOINTS; i++) {
+    parsed_joints.resize(static_cast<int>(JointId::NUM_JOINTS));
+    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); i++) {
         uint8_t joint_state, joint_error;
         float joint_angle;
         uint8_t joint_velocity, joint_torque;
@@ -539,8 +568,8 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
         parsed_joints[i].id = static_cast<JointId>(i);
         parsed_joints[i].state = static_cast<State>(joint_state);
         parsed_joints[i].error = static_cast<ErrorCode>(joint_error);
-        joint_angle = joint_angle * (180.0f / M_PI);
-        if (i == THUMB_ROTATION) {
+        joint_angle = joint_angle * (180.0f / static_cast<float>(M_PI));
+        if (i == static_cast<int>(JointId::THUMB_ROTATION)) {
             joint_angle = joint_angle - 30;
         }
         parsed_joints[i].angle = joint_angle;
