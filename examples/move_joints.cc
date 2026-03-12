@@ -12,7 +12,7 @@ using namespace xiaoyao;
 void DisplayJoints(const std::vector<xiaoyao::Joint>& joints) {
     std::cout << "\n========== Joint Status ==========" << std::endl;
     std::cout << std::left << std::setw(20) << "Joint"
-              << std::setw(10) << "Angle(°)"
+              << std::setw(10) << "Angle(deg)"
               << std::setw(10) << "Velocity"
               << std::setw(10) << "Torque"
               << std::setw(15) << "State"
