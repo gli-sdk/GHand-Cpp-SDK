@@ -38,12 +38,6 @@ public:
     bool ClearFault();
     bool InitJoint();
 
-    // Firmware update
-    int BootUpdate(const std::string& ifname,
-                   uint16_t slave,
-                   const std::string& filename,
-                   std::function<void(int)> progressCallback);
-
     // Tactile sensor control
     bool OpenTactile();
     bool CloseTactile();

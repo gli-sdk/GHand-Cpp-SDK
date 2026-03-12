@@ -48,25 +48,10 @@ public:
                   uint8_t* data);
 
     uint8_t* ReadTxPDO(uint16_t slave);
-
-    int BootUpdate(const std::string& ifname,
-                   uint16_t slave,
-                   const std::string& filename,
-                   std::function<void(int)> progressCallback);
-
     bool IsConnected() const {
         return ctx_.slavecount > 0;
     }
 
-    static void SetStateUpdateCallback(std::function<void(int)> callback) {
-        state_update_callback_ = callback;
-    }
-
-    static void NotifySlaveState(int slave, int state) {
-        if (state_update_callback_) {
-            state_update_callback_(state);
-        }
-    }
 
     static void SetDataCallback(std::function<void(const uint8_t*, size_t)> callback) {
         std::lock_guard<std::mutex> lock(data_callback_mutex_);
@@ -103,9 +88,7 @@ private:
     static int currentgroup;
     static int cycle;
     static int64_t cycletime;
-
-    static void add_time_ns(ec_timet* ts, int64_t addtime);
-    static void ec_sync(int64_t reftime, int64_t cycletime, int64_t* offsettime);
+    
     static OSAL_THREAD_FUNC_RT Ecatthread(void);
     static OSAL_THREAD_FUNC Ecatcheck(void);
     void StartThreads();

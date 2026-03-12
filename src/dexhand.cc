@@ -454,66 +454,6 @@ bool DexHand::ZeroTactile() {
     return false;
 }
 
-/**
- * @brief Boot update firmware
- *
- * @param ifname Network interface name
- * @param slave Slave station number
- * @param filename Firmware file path
- * @param progressCallback Progress callback function used to report update progress percentage
- * @return int Update result: 1-success, -11-connection timeout, -12-version not updated, other
- * values indicate update failure
- */
-int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
-                        const std::string& filename,
-                        std::function<void(int)> progressCallback) {
-    const int retry_count = 10;
-    const int retry_delay_ms = 1000;
-    std::string last_version = device_info_.software_version;
-    std::uint8_t command = 0x5A;
-    std::uint8_t state = 0xFF;
-    std::uint8_t result = 0xFF;
-    int size = sizeof(std::uint8_t);
-    int ret = -1;
-    ret = ethercat_comm_->SDOWrite(1, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM);
-    if (ret > 0) {
-        ret = ethercat_comm_->SDORead(1, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM);
-        if (ret > 0 && state == 0) {  // 执行完成
-            ret = ethercat_comm_->SDORead(1, 0x2005, 0x03, &size, &result, EC_TIMEOUTRXM);
-        }
-    }
-    if (result == 1)  // 1成功,2失败
-    {
-        ret = ethercat_comm_->BootUpdate(ifname.c_str(), slave, filename.c_str(), progressCallback);
-        if (ret == 1) {
-            for (int i = 0; i < retry_count; i++) {
-                progressCallback(100);
-                std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
-
-                if (Connect(CommType::ETHERCAT, ifname)) {
-                    if (last_version < device_info_.software_version) {
-                        return 1;
-                    } else {
-                        return -12;
-                    }
-                }
-            }
-            return -11;
-        } else {
-            for (int i = 0; i < retry_count; i++) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
-
-                if (Connect(CommType::ETHERCAT, ifname)) {
-                    return ret;
-                }
-            }
-            return ret;
-        }
-    }
-    return 0;
-}
-
-// PDO数据回调处理方法
 void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
     // 直接解析PDO数据（与GetJoints()相同的解析逻辑）
     std::vector<Joint> parsed_joints;
