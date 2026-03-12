@@ -9,13 +9,72 @@
 #include <thread>
 #include <vector>
 
-template <typename T>
-std::string FormatFieldWithBytes(const uint8_t* buffer, size_t offset,
-                                 const std::string& field_name, T value);
+namespace xiaoyao {
+
+// ===== 触觉数据解析辅助函数（内部使用） =====
+namespace {
+
+/**
+ * @brief 解析合力数据
+ * @param data PDO 数据缓冲区（至少 6 字节）
+ * @return 合力向量
+ */
+Force ParseResultantForce(const uint8_t* data) {
+    Force resultant;
+    resultant.x = 0.0f;
+    resultant.y = 0.0f;
+    resultant.z = 0.0f;
+
+    if (data != nullptr) {
+        int16_t raw_x = static_cast<int16_t>(data[0] | (data[1] << 8));
+        resultant.x = static_cast<float>(static_cast<int8_t>(raw_x & 0xFF)) * 0.1f;
+
+        int16_t raw_y = static_cast<int16_t>(data[2] | (data[3] << 8));
+        resultant.y = static_cast<float>(static_cast<int8_t>(raw_y & 0xFF)) * 0.1f;
+
+        uint16_t raw_z = static_cast<uint16_t>(data[4] | (data[5] << 8));
+        resultant.z = static_cast<float>(static_cast<uint8_t>(raw_z & 0xFF)) * 0.1f;
+    }
+
+    return resultant;
+}
+
+/**
+ * @brief 解析分布力数据
+ * @param data PDO 数据缓冲区
+ * @param sensor_count 传感器数量（大拇指 52，其他 31）
+ * @return 分布力向量数组
+ */
+std::vector<Force> ParseSampleForces(const uint8_t* data, int sensor_count) {
+    std::vector<Force> forces;
+    forces.reserve(sensor_count);
+
+    if (data != nullptr && sensor_count > 0) {
+        for (int i = 0; i < sensor_count; i++) {
+            Force sample_force;
+            sample_force.x = static_cast<float>(static_cast<int8_t>(data[i * 3])) * 0.1f;
+            sample_force.y = static_cast<float>(static_cast<int8_t>(data[i * 3 + 1])) * 0.1f;
+            sample_force.z = static_cast<float>(static_cast<uint8_t>(data[i * 3 + 2])) * 0.1f;
+            forces.push_back(sample_force);
+        }
+    }
+
+    return forces;
+}
+
+/**
+ * @brief 获取手指的分布力传感器数量
+ * @param finger 手指类型
+ * @return 传感器数量（大拇指 52，其他 31）
+ */
+int GetTactileSensorCount(FingerType finger) {
+    return (finger == THUMB) ? 52 : 31;
+}
+
+}  // anonymous namespace
+
 DexHand::DexHand() {
     ethercat_comm_ = std::unique_ptr<EtherCATComm>(new EtherCATComm());
-    EtherCATComm::SetStateUpdateCallback(
-        std::bind(&DexHand::OnSlaveStateUpdate, this, std::placeholders::_1));
 
     // 注册PDO数据回调
     EtherCATComm::SetDataCallback(
@@ -33,15 +92,7 @@ DexHand::~DexHand() {}
  * @return int 0: success, -1: fail
  */
 int DexHand::Open(CommType comm_type, std::string device_name) {
-    // auto now = std::chrono::system_clock::now();
-    // auto time_t = std::chrono::system_clock::to_time_t(now);
-    // std::stringstream ss;
-    // ss << "comm_log/log_" << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S") << ".txt";
-    // log_file_ = new LogFile(ss.str());
-    // log_file_->WriteLog("Connect to the hand...");
     int result = -1;
-    //     log_file_->WriteLog("comm_type: " + std::to_string(comm_type) +
-    //                                             "   Device name: " + device_name);
     switch (comm_type) {
         case COMM_ETHERCAT:
             if (device_name == "auto") {
@@ -69,7 +120,6 @@ int DexHand::Close() {
     hand_type_ = HandType::NONE;
     device_info_ = DeviceInfo();
     ethercat_comm_->Disconnect();
-    connect_state_ = DISCONNECT;
     return 0;
 }
 
@@ -79,11 +129,9 @@ int DexHand::Close() {
  * @return int i: success, -1: fail
  */
 int DexHand::AutoConnectDevices() {
-    std::map<std::string, std::string> adapter_names = ListAdapters();
+    std::map<std::string, std::string> adapter_names = SearchAdapters();
     int index = 0;
-    // log_file_->WriteLog("Adapter count: " + std::to_string(adapter_names_.size()));
     for (const auto& adapter_pair : adapter_names) {
-        // log_file_->WriteLog("Adapter: " + adapter_pair.first + " " + adapter_pair.second);
         if (ConnectDevice(adapter_pair.first) == 0) {
             return index;
         }
@@ -96,8 +144,8 @@ int DexHand::AutoConnectDevices() {
  * @brief List the adapters
  *
  */
-map<string, string> DexHand::ListAdapters() {
-    return ethercat_comm_->ListAdapters();
+map<string, string> DexHand::SearchAdapters() {
+    return ethercat_comm_->SearchAdapters();
 }
 
 /**
@@ -107,17 +155,11 @@ map<string, string> DexHand::ListAdapters() {
  * @return int 0: success, -1: fail
  */
 int DexHand::ConnectDevice(std::string device_name) {
-    // log_file_->WriteLog(device_name);
     int result = ethercat_comm_->Connect(device_name);
     if (result == 0) {
-        connect_state_ = CONNECT;
-        operation_mode_ = MODE_NORMAL;
         GetDeviceInfo();
         GetHandType();
-        // log_file_->WriteLog("Connected");
-        // log_file_->WriteLog("Hand type: " + std::to_string(hand_type_));
     }
-    // log_file_->WriteLog("Result:" + std::to_string(result));
     return result;
 }
 
@@ -139,19 +181,6 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
     if (joints.empty()) {
         return false;
     }
-    // 直接执行运动逻辑
-    // auto time_t = std::chrono::system_clock::to_time_t(now);
-    // auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) %
-    // 1000;
-
-    // 格式化时间戳
-    // std::ostringstream timeStream;
-    // timeStream << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-    // timeStream << '.' << std::setfill('0') << std::setw(3) << ms.count();
-
-    // 添加带时间戳的日志
-    // log_file_->WriteLog("[" + timeStream.str() + "] SendRxPDO:");
-
 
     // 构建发送缓冲区
     uint8_t buffer[80] = {0};
@@ -176,13 +205,13 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
         // 转换角度（与原实现保持一致）
         float angle = 0.0f;
         if (joint.id == THUMB_ROTATION) {
-            angle = (joint.target.angle + 30) * (M_PI / 180.0f);
+            angle = (joint.angle + 30) * (M_PI / 180.0f);
         } else {
-            angle = joint.target.angle * (M_PI / 180.0f);
+            angle = joint.angle * (M_PI / 180.0f);
         }
 
-        uint8_t velocity = joint.target.velocity;
-        uint8_t torque = joint.target.torque;
+        uint8_t velocity = joint.velocity;
+        uint8_t torque = joint.torque;
 
         // 写入角度（4字节）
         memcpy(buffer + offset, &angle, sizeof(angle));
@@ -195,20 +224,8 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
         // 写入力矩（1字节）
         memcpy(buffer + offset, &torque, sizeof(torque));
         offset += sizeof(torque);
-
-        // log_file_->WriteLog("Angle: " + std::to_string(angle) + "   Speed:" +
-        //                     std::to_string(velocity) + "   Torque:" + std::to_string(torque));
     }
-    // std::ostringstream hexStream;
-    // hexStream << "SendBuffer: ";
-    // for (size_t i = 0; i < sizeof(buffer); ++i) {
-    //     hexStream << std::hex << std::setw(2) << std::setfill('0') <<
-    //     static_cast<int>(buffer[i]); if (i % 6 == 1)
-    //         hexStream << "\n";
-    //     else
-    //         hexStream << " ";
-    // }
-    // log_file_->WriteLog(hexStream.str());
+
     int wkc = ethercat_comm_->SendRxPDO(1, ECT_SDO_RXPDOASSIGN, sizeof(buffer), buffer);
 
     return true;  // 返回成功或失败
@@ -313,7 +330,7 @@ HandType DexHand::GetHandType() {
 }
 
 bool DexHand::IsConnected() const {
-    return connect_state_ == CONNECT;
+    return ethercat_comm_ && ethercat_comm_->IsConnected();
 }
 
 /**
@@ -396,17 +413,6 @@ bool DexHand::CloseTactile() {
  *
  * @return int 1: success, other: fail
  */
-bool DexHand::ResetTactile() {
-    std::uint8_t command = 0x03;
-    int size = sizeof(std::uint8_t);
-    int result = -1;
-    result = ethercat_comm_->SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
-    if (result > 0) {
-        return true;
-    }
-    return false;
-}
-
 bool DexHand::ResetToZero() {
     std::uint8_t command = 0x04;
     int size = sizeof(std::uint8_t);
@@ -416,55 +422,6 @@ bool DexHand::ResetToZero() {
         return true;
     }
     return false;
-}
-
-int DexHand::GetResultantForce(FingerType finger_type, std::vector<Force>* resultant_forces) {
-    uint8_t* inputs = ethercat_comm_->ReadTxPDO(1);
-    if (inputs == nullptr) {
-        return -1;
-    }
-    uint8_t state, error;
-
-    memcpy(&state, inputs + 148, 1);
-    memcpy(&error, inputs + 149, 1);
-
-    // int offset[5] = {230, 392, 491, 590, 689};
-    if (finger_type == NUM_FINGERS) {
-        for (int finger_idx = THUMB; finger_idx < NUM_FINGERS; finger_idx++) {
-            FingerType current_finger = static_cast<FingerType>(finger_idx);
-            GetResultantForce(current_finger, resultant_forces);
-        }
-    } else {
-        uint8_t extracted_data[6] = {0};
-        Finger* finger = new Finger(finger_type);
-        int offset = finger->GetResultantForceOffset();
-        int size = finger->GetResultantForceSize();
-
-        memcpy(extracted_data, inputs + offset, size);
-        Force force = finger->GetResultantForce(extracted_data, size);
-        delete finger;
-        resultant_forces->push_back(force);
-        return 0;
-    }
-    return 0;
-}
-// 获取单个手指分布力
-int DexHand::GetSampleForce(FingerType finger_type, std::vector<Force>* sample_forces) {
-    uint8_t* inputs = ethercat_comm_->ReadTxPDO(1);
-    if (inputs == nullptr) {
-        return -1;
-    }
-
-    Finger* finger = new Finger(finger_type);
-    int offset = finger->GetSampleForcesOffset();
-    int size = finger->GetSampleForcesSize();
-
-    std::vector<uint8_t> extracted_data(size * 3, 0);
-    memcpy(extracted_data.data(), inputs + offset, size * 3);
-    std::vector<Force> forces = finger->GetSampleForces(extracted_data.data(), size);
-    sample_forces->insert(sample_forces->end(), forces.begin(), forces.end());
-    delete finger;
-    return 0;
 }
 
 /**
@@ -510,39 +467,19 @@ int DexHand::BootUpdate(char* ifname, uint16_t slave, char* filename,
                     }
                 }
             }
-            connect_state_ = DISCONNECT;
             return -11;
         } else {
             for (int i = 0; i < retry_count; i++) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
                 if (Open(COMM_ETHERCAT, ifname) >= 0) {
-                    connect_state_ = CONNECT;
                     return ret;
                 }
             }
-            connect_state_ = DISCONNECT;
             return ret;
         }
     }
     return 0;
-}
-
-template <typename T>
-std::string FormatFieldWithBytes(const uint8_t* buffer, size_t offset,
-                                 const std::string& field_name, T value) {
-    std::ostringstream oss;
-    oss << field_name << ": ";
-
-    // 输出字节内容
-    for (size_t i = 0; i < sizeof(T); ++i) {
-        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buffer[offset + i])
-            << " ";
-    }
-
-    // 输出解析值
-    oss << "-> " << value;
-    return oss.str();
 }
 
 // PDO数据回调处理方法
@@ -569,8 +506,8 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
     memcpy(&temperature, data + offset, sizeof(temperature));
     offset += sizeof(temperature);
 
-    parsed_temperature.state = hand_state;
-    parsed_temperature.error = hand_error;
+    parsed_temperature.state = static_cast<State>(hand_state);
+    parsed_temperature.error = static_cast<ErrorCode>(hand_error);
     parsed_temperature.temperature = temperature;
 
     // 解析关节数据
@@ -596,18 +533,82 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
         offset += sizeof(joint_torque);
 
         parsed_joints[i].id = static_cast<JointId>(i);
-        parsed_joints[i].state.state = joint_state;
-        parsed_joints[i].state.error = joint_error;
+        parsed_joints[i].state = static_cast<State>(joint_state);
+        parsed_joints[i].error = static_cast<ErrorCode>(joint_error);
         joint_angle = joint_angle * (180.0f / M_PI);
         if (i == THUMB_ROTATION) {
             joint_angle = joint_angle - 30;
         }
-        parsed_joints[i].state.angle = joint_angle;
-        parsed_joints[i].state.velocity = joint_velocity;
-        parsed_joints[i].state.torque = joint_torque;
+        parsed_joints[i].angle = joint_angle;
+        parsed_joints[i].velocity = joint_velocity;
+        parsed_joints[i].torque = joint_torque;
     }
 
     // 触发回调（纯回调模式，SDK不保存缓存）
     callback_manager_.UpdateJoints(parsed_joints);
     callback_manager_.UpdateTemperature(parsed_temperature);
+
+    // 解析触觉数据并触发回调
+    // 触觉数据从偏移 150 开始连续存储，无需查表
+    // 格式：[拇指合力6B][拇指分布力156B][食指合力6B][食指分布力93B]...
+    const size_t TACTILE_DATA_OFFSET = 150;
+    if (size > TACTILE_DATA_OFFSET) {
+        size_t offset = TACTILE_DATA_OFFSET;
+
+        for (int finger_idx = THUMB; finger_idx < NUM_FINGERS; finger_idx++) {
+            FingerType finger = static_cast<FingerType>(finger_idx);
+
+            // 1. 解析合力数据（固定 6 字节）
+            if (offset + 6 <= size) {
+                Force resultant_force = ParseResultantForce(data + offset);
+                offset += 6;
+
+                TactileData tactile_data;
+                tactile_data.type = ForceType::RESULTANT;
+                tactile_data.finger = finger;
+                tactile_data.forces.push_back(resultant_force);
+
+                callback_manager_.UpdateTactileData(tactile_data);
+
+#ifdef _DEBUG
+                std::cout << "[Tactile] Parsed resultant force for " << ToString(finger)
+                          << ": Fx=" << resultant_force.x
+                          << ", Fy=" << resultant_force.y
+                          << ", Fz=" << resultant_force.z << std::endl;
+#endif
+            }
+
+            // 2. 解析分布力数据（可变长度）
+            int sensor_count = GetTactileSensorCount(finger);
+            int sample_size = sensor_count * 3;
+
+            if (offset + sample_size <= size) {
+                std::vector<Force> sample_forces = ParseSampleForces(data + offset, sensor_count);
+                offset += sample_size;
+
+                if (!sample_forces.empty()) {
+                    TactileData tactile_data;
+                    tactile_data.type = ForceType::SAMPLE;
+                    tactile_data.finger = finger;
+                    tactile_data.forces = sample_forces;
+
+                    callback_manager_.UpdateTactileData(tactile_data);
+
+#ifdef _DEBUG
+                    std::cout << "[Tactile] Parsed " << sample_forces.size()
+                              << " sample forces for " << ToString(finger) << std::endl;
+#endif
+                }
+            } else {
+#ifdef _DEBUG
+                std::cerr << "[Tactile] Insufficient data for " << ToString(finger)
+                          << " sample forces: need " << sample_size
+                          << " bytes, available " << (size - offset) << std::endl;
+#endif
+                break;  // 数据不足，停止解析
+            }
+        }
+    }
 }
+
+}  // namespace xiaoyao

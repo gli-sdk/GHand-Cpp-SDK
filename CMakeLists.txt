@@ -8,8 +8,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # 设置Windows特定的编译选型
 if(WIN32)
     add_compile_definitions(_WIN32)
-    add_compile_definitions(_WINSOCKAPI_) 
+    add_compile_definitions(_WINSOCKAPI_)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    # 设置UTF-8编码以支持中文字符串
+    if(MSVC)
+        add_compile_options("/utf-8")
+    endif()
 endif()
 
 # 添加头文件目录

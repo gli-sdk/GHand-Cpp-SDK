@@ -15,15 +15,16 @@
 #include <vector>
 using namespace std;
 
-#include "log_file.h"
 #include "xiaoyao/file_lock.h"
+
+namespace xiaoyao {
 
 class EtherCATComm {
    public:
     EtherCATComm();
     ~EtherCATComm();
 
-    static map<string, string> ListAdapters();
+    static map<string, string> SearchAdapters();
     int Connect(std::string device_name);
     int Disconnect();
 
@@ -70,15 +71,17 @@ class EtherCATComm {
     static void FoeProgressHook(uint16 slave, int32 packetnumber, int32 totalsize);
 
    private:
-    static LogFile* log_file_;  // 日志文件流
-    std::mutex log_mutex_;      // 日志互斥锁
-
-   private:
     static std::function<void(int)> state_update_callback_;
     static std::function<void(const uint8_t*, size_t)> data_callback_;
     static std::mutex data_callback_mutex_;
 
    public:
+    /// @brief 检查是否已连接设备
+    /// @return true 表示主站已初始化且检测到从站
+    bool IsConnected() const {
+        return ctx_.slavecount > 0;
+    }
+
     static void SetStateUpdateCallback(std::function<void(int)> callback) {
         state_update_callback_ = callback;
     }
@@ -100,4 +103,7 @@ class EtherCATComm {
         }
     }
 };
-#endif
+
+}  // namespace xiaoyao
+
+#endif  // ETHERCAT_COMM_H_

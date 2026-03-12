@@ -12,6 +12,8 @@
 #define EC_TIMEOUTMON 500
 #define NSEC_PER_SEC 1000000000
 
+namespace xiaoyao {
+
 OSAL_THREAD_HANDLE
 EtherCATComm::threadrt, EtherCATComm::thread1;
 int EtherCATComm::expectedWKC;
@@ -28,7 +30,7 @@ uint8 EtherCATComm::IOmap_[4096] = {0};
 bool EtherCATComm::threads_started_ = false;
 std::mutex EtherCATComm::context_mutex_;
 std::mutex EtherCATComm::rt_context_mutex_;
-xiaoyao::FileLock EtherCATComm::device_lock_;  // 设备锁静态成员定义
+FileLock EtherCATComm::device_lock_;  // 设备锁静态成员定义
 std::function<void(int)> EtherCATComm::state_update_callback_ = nullptr;
 std::function<void(int)> EtherCATComm::progress_callback_ = nullptr;
 std::function<void(const uint8_t*, size_t)> EtherCATComm::data_callback_ = nullptr;
@@ -37,7 +39,6 @@ std::mutex EtherCATComm::data_callback_mutex_;
 // static LockFreeQueue<std::pair<std::vector<uint8>, uint16>, 32> pdo_queue_;
 static uint8 rxpdo_buffer_[80];
 static std::atomic<bool> print_debug_info{false};
-LogFile* EtherCATComm::log_file_ = nullptr;
 EtherCATComm::EtherCATComm() {}
 
 EtherCATComm::~EtherCATComm() {}
@@ -59,13 +60,6 @@ void EtherCATComm::StartThreads() {
         // SetThreadPriority(thread1, THREAD_PRIORITY_ABOVE_NORMAL);
 
         threads_started_ = true;
-        // auto now = std::chrono::system_clock::now();
-        // auto time_t = std::chrono::system_clock::to_time_t(now);
-        // std::stringstream ss;
-        // ss << "ethercatlog/log_" << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S")
-        //    << ".txt";
-        // log_file_ = new LogFile(ss.str());
-        // log_file_->WriteLog("threads_started_");
     }
 }
 
@@ -82,7 +76,7 @@ void EtherCATComm::StopThreads() {
     }
 }
 
-map<string, string> EtherCATComm::ListAdapters() {
+map<string, string> EtherCATComm::SearchAdapters() {
     ec_adaptert* adapter = nullptr;
     ec_adaptert* head = nullptr;
     map<string, string> adapter_names;
@@ -105,7 +99,7 @@ int EtherCATComm::Connect(std::string device_name) {
     std::lock_guard<std::mutex> lock(context_mutex_);
 
     // 步骤1：尝试获取设备锁（防止多进程同时访问）
-    std::string lock_path = xiaoyao::GetAdapterLockPath(device_name);
+    std::string lock_path = GetAdapterLockPath(device_name);
     if (!device_lock_.Acquire(lock_path)) {
         std::cerr << "Failed to connect: adapter " << device_name
                   << " is already locked by another process" << std::endl;
@@ -560,3 +554,5 @@ void EtherCATComm::FoeProgressHook(uint16 slave, int32 packetnumber, int32 total
         }
     }
 }
+
+}  // namespace xiaoyao
