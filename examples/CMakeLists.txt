@@ -7,3 +7,7 @@ target_include_directories(basic_connection PRIVATE ${CMAKE_SOURCE_DIR}/include)
 add_executable(tactile_callback_example tactile_callback_example.cc)
 target_link_libraries(tactile_callback_example xiaoyao)
 target_include_directories(tactile_callback_example PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+add_executable(move_joints_example move_joints_example.cc)
+target_link_libraries(move_joints_example xiaoyao)
+target_include_directories(move_joints_example PRIVATE ${CMAKE_SOURCE_DIR}/include)
