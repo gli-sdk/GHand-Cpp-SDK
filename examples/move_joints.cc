@@ -50,8 +50,8 @@ int main() {
         // 定义关节命令：控制所有13个关节
         // DIP关节会被自动跳过，无需控制
         std::vector<xiaoyao::JointCommand> joints = {
-            {JointId::FF_MCP, 30.0f, 100, 100},           // 食指掌指关节
-            {JointId::FF_PIP, 45.0f, 100, 100},           // 食指近端指间关节
+            {JointId::FF_MCP, 30.0f, 100, 100},
+            {JointId::FF_PIP, 45.0f, 100, 100},
         };
 
         std::cout << "Moving joints..." << std::endl;

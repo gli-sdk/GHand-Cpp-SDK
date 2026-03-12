@@ -305,21 +305,6 @@ void EtherCATComm::ec_sync(int64 reftime, int64 cycletime, int64* offsettime) {
     *offsettime = (int64)((delta * 0.01f) + (integral * 0.00002f));
 }
 
-// void EtherCATComm::ProcessPendingPDOs() {
-//     std::pair<std::vector<uint8>, uint16> pdo_item;
-//     while (pdo_queue_.Pop(pdo_item)) {
-//         const auto& data = pdo_item.first;
-//         uint16 slave = pdo_item.second;
-
-//         // 保护实时上下文的访问
-//         // std::lock_guard<std::mutex> lock(rt_context_mutex_);
-
-//         if (data.size() <= ctx_.slavelist[slave].Obytes) {
-//             memcpy(ctx_.slavelist[slave].outputs, data.data(), data.size());
-//         }
-//     }
-// }
-
 OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
     ec_timet ts;
     int ht;

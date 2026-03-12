@@ -89,7 +89,6 @@ private:
 
     void ResetContext();
     bool InputBin(const char* fname, int* length);
-    static void ProcessPendingPDOs();
 
     static uint8_t IOmap_[4096];
     static OSAL_THREAD_HANDLE threadrt;
