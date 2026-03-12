@@ -23,6 +23,14 @@
    cmake ..
    cmake --build . --config Release
 ```
+
+## 运行示例
+```bash
+.\examples\Debug\basic_connection.exe
+```
+
+> **注意：** 编译时会自动将 `xiaoyao.dll` 复制到示例程序目录，无需手动复制。
+
 ## 快速开始
 ```cpp
 #include "xiaoyao/dexhand.h"
