@@ -9,10 +9,22 @@
 namespace xiaoyao {
 
 // ===== 手部类型定义 =====
-enum HandType { NONE, LEFT, RIGHT, NUM_HANDS };
+enum class HandType : uint8_t {
+    NONE,
+    LEFT,
+    RIGHT,
+    NUM_HANDS  // 仅用于计数，不是有效值
+};
 
 // ===== 手指类型定义 =====
-enum FingerType { THUMB, FF, MF, RF, LF, NUM_FINGERS };
+enum class FingerType : uint8_t {
+    THUMB,
+    FF,
+    MF,
+    RF,
+    LF,
+    NUM_FINGERS  // 仅用于计数，不是有效值
+};
 
 // ===== 力数据结构 =====
 struct Force {
@@ -113,13 +125,13 @@ struct TactileData {
      * @brief 每个手指的合力数据
      * 索引对应 FingerType：0=THUMB, 1=FF, 2=MF, 3=RF, 4=LF
      */
-    std::array<Force, NUM_FINGERS> resultants;
+    std::array<Force, static_cast<int>(FingerType::NUM_FINGERS)> resultants;
 
     /**
      * @brief 每个手指的分布力数据
      * 索引对应 FingerType：0=THUMB, 1=FF, 2=MF, 3=RF, 4=LF
      */
-    std::array<std::vector<Force>, NUM_FINGERS> samples;
+    std::array<std::vector<Force>, static_cast<int>(FingerType::NUM_FINGERS)> samples;
 
     // 便利方法
     /**

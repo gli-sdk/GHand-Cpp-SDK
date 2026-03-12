@@ -69,7 +69,7 @@ std::vector<Force> ParseSampleForces(const uint8_t* data, int sensor_count) {
  * @return 传感器数量（大拇指 52，其他 31）
  */
 int GetTactileSensorCount(FingerType finger) {
-    return (finger == THUMB) ? 52 : 31;
+    return (finger == FingerType::THUMB) ? 52 : 31;
 }
 
 }  // anonymous namespace
@@ -100,7 +100,7 @@ DexHand::~DexHand() {}
  */
 bool DexHand::ConnectToDevice(CommType comm_type, const std::string& device_name) {
     switch (comm_type) {
-        case COMM_ETHERCAT: {
+        case CommType::ETHERCAT: {
             int ec_result = ethercat_comm_->Connect(device_name);
             if (ec_result == 0) {
                 GetDeviceInfo();
@@ -109,8 +109,8 @@ bool DexHand::ConnectToDevice(CommType comm_type, const std::string& device_name
             }
             return false;
         }
-        case COMM_CANFD:
-        case COMM_RS485:
+        case CommType::CANFD:
+        case CommType::RS485:
         default:
             return false;
     }
@@ -123,7 +123,7 @@ bool DexHand::ConnectToDevice(CommType comm_type, const std::string& device_name
  * @return bool true: success, false: fail
  */
 bool DexHand::AutoConnect(CommType comm_type) {
-    if (comm_type == COMM_ETHERCAT) {
+    if (comm_type == CommType::ETHERCAT) {
         std::map<std::string, std::string> adapter_names = SearchAdapters();
         for (const auto& adapter_pair : adapter_names) {
             if (ConnectToDevice(comm_type, adapter_pair.first)) {
@@ -164,7 +164,7 @@ bool DexHand::Disconnect() {
  * @brief List the adapters
  *
  */
-map<string, string> DexHand::SearchAdapters() {
+std::map<std::string, std::string> DexHand::SearchAdapters() const {
     return ethercat_comm_->SearchAdapters();
 }
 
@@ -289,7 +289,7 @@ void DexHand::Stop() {
  *
  * @return int 0: success other:fail
  */
-DeviceInfo DexHand::GetDeviceInfo() {
+DeviceInfo DexHand::GetDeviceInfo() const {
     // 如果软件版本已读取（非空），说明已缓存
     if (!device_info_.software_version.empty()) {
         return device_info_;
@@ -331,7 +331,7 @@ DeviceInfo DexHand::GetDeviceInfo() {
  *
  * @param slave Slave ID
  */
-HandType DexHand::GetHandType() {
+HandType DexHand::GetHandType() const {
     // 如果已识别，直接返回缓存
     if (hand_type_ != HandType::NONE) {
         return hand_type_;
@@ -369,9 +369,9 @@ bool DexHand::IsConnected() const {
 /**
  * @brief Release protection
  *
- * @return int 1: success, other: fail
+ * @return bool true: success, false: fail
  */
-int DexHand::ClearFault() {
+bool DexHand::ClearFault() {
     std::uint8_t command = 0x01;
     std::uint8_t state = 0xFF;
     int size = sizeof(std::uint8_t);
@@ -384,19 +384,19 @@ int DexHand::ClearFault() {
             ret = ethercat_comm_->SDORead(1, 0x2002, 0x02, &size, &state, EC_TIMEOUTRXM);
             if (ret > 0 && state == 0) {  // 执行完成
                 ret = ethercat_comm_->SDORead(1, 0x2002, 0x03, &size, &result, EC_TIMEOUTRXM);
-                return result;  // 1成功,2失败
+                return result == 1;  // true成功, false失败
             }
         }
     }
-    return -1;
+    return false;
 }
 
 /**
  * @brief Initialize joints
  *
- * @return int 1: success, other: fail
+ * @return bool true: success, false: fail
  */
-int DexHand::InitJoint() {
+bool DexHand::InitJoint() {
     std::uint8_t command = 0x01;
     std::uint8_t state = 0xFF;
     int size = sizeof(std::uint8_t);
@@ -409,14 +409,11 @@ int DexHand::InitJoint() {
             ret = ethercat_comm_->SDORead(1, 0x2003, 0x02, &size, &state, EC_TIMEOUTRXM);
             if (ret > 0 && state == 0) {  // 执行完成
                 ret = ethercat_comm_->SDORead(1, 0x2003, 0x03, &size, &result, EC_TIMEOUTRXM);
-                if (result == 1)  // 1成功,2失败
-                    break;
-                else
-                    return result;
+                return result == 1;  // true成功, false失败
             }
         }
     }
-    return -1;
+    return false;
 }
 
 bool DexHand::OpenTactile() {
@@ -467,7 +464,8 @@ bool DexHand::ZeroTactile() {
  * @return int Update result: 1-success, -11-connection timeout, -12-version not updated, other
  * values indicate update failure
  */
-int DexHand::BootUpdate(char* ifname, uint16_t slave, char* filename,
+int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
+                        const std::string& filename,
                         std::function<void(int)> progressCallback) {
     const int retry_count = 10;
     const int retry_delay_ms = 1000;
@@ -486,13 +484,13 @@ int DexHand::BootUpdate(char* ifname, uint16_t slave, char* filename,
     }
     if (result == 1)  // 1成功,2失败
     {
-        ret = ethercat_comm_->BootUpdate(ifname, slave, filename, progressCallback);
+        ret = ethercat_comm_->BootUpdate(ifname.c_str(), slave, filename.c_str(), progressCallback);
         if (ret == 1) {
             for (int i = 0; i < retry_count; i++) {
                 progressCallback(100);
                 std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
-                if (Connect(COMM_ETHERCAT, ifname)) {
+                if (Connect(CommType::ETHERCAT, ifname)) {
                     if (last_version < device_info_.software_version) {
                         return 1;
                     } else {
@@ -505,7 +503,7 @@ int DexHand::BootUpdate(char* ifname, uint16_t slave, char* filename,
             for (int i = 0; i < retry_count; i++) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
-                if (Connect(COMM_ETHERCAT, ifname)) {
+                if (Connect(CommType::ETHERCAT, ifname)) {
                     return ret;
                 }
             }
@@ -587,7 +585,9 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
     if (offset < size) {  // 确保 offset 小于总大小
         TactileData tactile_data;
 
-        for (int finger_idx = THUMB; finger_idx < NUM_FINGERS; finger_idx++) {
+        for (int finger_idx = static_cast<int>(FingerType::THUMB);
+             finger_idx < static_cast<int>(FingerType::NUM_FINGERS);
+             finger_idx++) {
             FingerType finger = static_cast<FingerType>(finger_idx);
 
             // 1. 解析合力数据（固定 6 字节）

@@ -21,24 +21,58 @@ struct DeviceInfo {
     std::string serial_number;
 };
 
-enum CommType { COMM_ETHERCAT, COMM_CANFD, COMM_RS485 };
+enum class CommType : uint8_t {
+    ETHERCAT,
+    CANFD,
+    RS485
+};
 
-// 参数化关节控制模式
 enum class ControlMode : uint8_t {
-    POSITION = 0,  // 位置控制模式
-    TORQUE = 1,    // 力矩控制模式
-    SPEED = 2      // 速度控制模式
+    POSITION = 0,
+    TORQUE = 1,
+    SPEED = 2
 };
 
 class DexHand {
-   public:
+public:
     explicit DexHand();
     ~DexHand();
 
-    // 回调注册方法（委托给回调管理器）
+    // Connection management
+    bool AutoConnect(CommType comm_type = CommType::ETHERCAT);
+    bool Connect(CommType comm_type = CommType::ETHERCAT,
+                const std::string& device_name = "auto");
+    bool Disconnect();
+    bool IsConnected() const;
+
+    // Device information
+    std::map<std::string, std::string> SearchAdapters() const;
+    HandType GetHandType() const;
+    DeviceInfo GetDeviceInfo() const;
+
+    // Control operations
+    void SetControlMode(ControlMode mode);
+    bool MoveJoints(const std::vector<JointCommand>& joints);
+    void Stop();
+    bool ClearFault();
+    bool InitJoint();
+
+    // Firmware update
+    int BootUpdate(const std::string& ifname,
+                   uint16_t slave,
+                   const std::string& filename,
+                   std::function<void(int)> progressCallback);
+
+    // Tactile sensor control
+    bool OpenTactile();
+    bool CloseTactile();
+    bool ZeroTactile();
+
+    // Callback registration
     void SetJointsCallback(DexHandCallbackManager::JointsCallback cb) {
         callback_manager_.SetJointsCallback(cb);
     }
+
     void SetTemperatureCallback(DexHandCallbackManager::TemperatureCallback cb) {
         callback_manager_.SetTemperatureCallback(cb);
     }
@@ -47,39 +81,15 @@ class DexHand {
         callback_manager_.SetTactileDataCallback(cb);
     }
 
-    bool AutoConnect(CommType comm_type = COMM_ETHERCAT);
-    bool Connect(CommType comm_type = COMM_ETHERCAT, const std::string& device_name = "auto");
-    bool Disconnect();
-    bool IsConnected() const;
-    std::map<std::string, std::string> SearchAdapters();
-    HandType GetHandType();
-    DeviceInfo GetDeviceInfo();
-    
-    void SetControlMode(ControlMode mode);
-    bool MoveJoints(const std::vector<JointCommand>& joints);
-    void Stop();
-    int ClearFault();
-    int InitJoint();
-    int BootUpdate(char* ifname, uint16_t slave, char* filename,
-                   std::function<void(int)> progressCallback);
-
-    // 触觉
-    bool OpenTactile();
-    bool CloseTactile();
-    bool ZeroTactile();
-
-   private:
+private:
     std::unique_ptr<EtherCATComm> ethercat_comm_;
     bool ConnectToDevice(CommType comm_type, const std::string& device_name);
 
-    HandType hand_type_ = HandType::NONE;
-    DeviceInfo device_info_;
-    ControlMode control_mode_ = ControlMode::POSITION;  // 当前控制模式
+    mutable HandType hand_type_ = HandType::NONE;
+    mutable DeviceInfo device_info_;
+    ControlMode control_mode_ = ControlMode::POSITION;
 
-    // 回调管理器（负责数据变化检测和回调触发）
     DexHandCallbackManager callback_manager_;
-
-    // PDO数据回调处理方法
     void OnRawDataReceived(const uint8_t* data, size_t size);
 };
 

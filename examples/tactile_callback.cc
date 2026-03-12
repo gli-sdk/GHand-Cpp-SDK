@@ -11,7 +11,9 @@ int main() {
         // 打印所有手指的合力
         std::cout << "All fingers resultant forces:" << std::endl;
         const char* finger_names[] = {"Thumb", "Index", "Middle", "Ring", "Little"};
-        for (int i = xiaoyao::THUMB; i < xiaoyao::NUM_FINGERS; i++) {
+        for (int i = static_cast<int>(xiaoyao::FingerType::THUMB);
+             i < static_cast<int>(xiaoyao::FingerType::NUM_FINGERS);
+             i++) {
             xiaoyao::FingerType finger = static_cast<xiaoyao::FingerType>(i);
             xiaoyao::Force force = data.GetResultant(finger);
             std::cout << "  " << finger_names[i] << ": (x:" << force.x
@@ -21,7 +23,7 @@ int main() {
 
     // 尝试通过ETHERCAT连接灵巧手
     std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
-    bool success = hand.AutoConnect(xiaoyao::COMM_ETHERCAT);
+    bool success = hand.AutoConnect(xiaoyao::CommType::ETHERCAT);
 
     if (success) {
         std::cout << "Successfully connected to the dexterous hand!" << std::endl;

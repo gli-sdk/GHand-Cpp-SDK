@@ -76,10 +76,10 @@ void EtherCATComm::StopThreads() {
     }
 }
 
-map<string, string> EtherCATComm::SearchAdapters() {
+std::map<std::string, std::string> EtherCATComm::SearchAdapters() {
     ec_adaptert* adapter = nullptr;
     ec_adaptert* head = nullptr;
-    map<string, string> adapter_names;
+    std::map<std::string, std::string> adapter_names;
     adapter_names.clear();
 
     head = adapter = ec_find_adapters();
@@ -88,7 +88,7 @@ map<string, string> EtherCATComm::SearchAdapters() {
             adapter = adapter->next;
             continue;
         }
-        adapter_names.emplace(string(adapter->name), string(adapter->desc));
+        adapter_names.emplace(std::string(adapter->name), std::string(adapter->desc));
         adapter = adapter->next;
     }
     ec_free_adapters(head);
@@ -462,7 +462,7 @@ OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
     }
 }
 
-bool EtherCATComm::InputBin(char* fname, int* length) {
+bool EtherCATComm::InputBin(const char* fname, int* length) {
     FILE* fp = nullptr;
     errno_t err;
 
@@ -471,16 +471,19 @@ bool EtherCATComm::InputBin(char* fname, int* length) {
     err = fopen_s(&fp, fname, "rb");
     if (err != 0 || fp == NULL) return false;
 
-    while (((c = fgetc(fp)) != EOF) && (cc < FWBUFSIZE)) {
-        file_buffer[cc++] = (uint8)c;
+    while (((c = fgetc(fp)) != EOF) && (cc < kFirmwareBufferSize)) {
+        file_buffer[cc++] = (uint8_t)c;
     }
 
     *length = cc;
     fclose(fp);
     return true;
 }
-int EtherCATComm::BootUpdate(char* ifname, uint16_t slave, char* file_path,
+int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
+                             const std::string& file_path,
                              std::function<void(int)> progressCallback) {
+    // ifname 参数保留以便将来使用，但当前未使用
+    (void)ifname;  // 抑制未使用参数警告
     // std::lock_guard<std::mutex> lock(context_mutex_);
 
     if (slave <= 0 || slave > ctx_.slavecount) {
@@ -512,7 +515,7 @@ int EtherCATComm::BootUpdate(char* ifname, uint16_t slave, char* file_path,
     if (ecx_statecheck(&ctx_, slave, EC_STATE_BOOT, EC_TIMEOUTSTATE * 10) == EC_STATE_BOOT) {
         NotifySlaveState(1, 3);
 
-        if (InputBin(file_path, &filesize)) {
+        if (InputBin(file_path.c_str(), &filesize)) {
             char file_name[] = "ECATFW__firmware";
             int update_result =
                 ecx_FOEwrite(&ctx_, slave, file_name, 0, filesize, &file_buffer, EC_TIMEOUTSTATE);

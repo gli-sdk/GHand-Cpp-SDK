@@ -8,7 +8,7 @@ int main() {
 
     // 尝试通过ETHERCAT自动连接灵巧手
     std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
-    bool success = hand.AutoConnect(COMM_ETHERCAT);
+    bool success = hand.AutoConnect(CommType::ETHERCAT);
 
     if (success) {
         std::cout << "Successfully connected to the dexterous hand!" << std::endl;
