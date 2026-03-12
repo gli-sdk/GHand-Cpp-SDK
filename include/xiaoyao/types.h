@@ -97,6 +97,28 @@ enum class JointId : uint8_t {
     NUM_JOINTS
 };
 
+// ===== 通信类型定义 =====
+enum class CommType : uint8_t {
+    ETHERCAT,
+    CANFD,
+    RS485
+};
+
+// ===== 控制模式定义 =====
+enum class ControlMode : uint8_t {
+    POSITION = 0,
+    TORQUE = 1,
+    SPEED = 2
+};
+
+// ===== 设备信息结构 =====
+struct DeviceInfo {
+    std::string device_name;
+    std::string hardware_version;
+    std::string software_version;
+    std::string serial_number;
+};
+
 /**
  * @brief 手部温度数据结构
  */

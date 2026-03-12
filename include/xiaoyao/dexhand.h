@@ -14,25 +14,6 @@
 
 namespace xiaoyao {
 
-struct DeviceInfo {
-    std::string device_name;
-    std::string hardware_version;
-    std::string software_version;
-    std::string serial_number;
-};
-
-enum class CommType : uint8_t {
-    ETHERCAT,
-    CANFD,
-    RS485
-};
-
-enum class ControlMode : uint8_t {
-    POSITION = 0,
-    TORQUE = 1,
-    SPEED = 2
-};
-
 class DexHand {
 public:
     explicit DexHand();
