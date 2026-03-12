@@ -42,14 +42,15 @@ class DexHand {
     void SetTemperatureCallback(DexHandCallbackManager::TemperatureCallback cb) {
         callback_manager_.SetTemperatureCallback(cb);
     }
-    
+
     void SetTactileDataCallback(DexHandCallbackManager::TactileDataCallback cb) {
         callback_manager_.SetTactileDataCallback(cb);
     }
 
-    int Open(CommType comm_type = COMM_ETHERCAT, std::string device_name = "auto");
-    int Close();
-    map<string, string> SearchAdapters();
+    bool AutoConnect(CommType comm_type = COMM_ETHERCAT);
+    bool Connect(CommType comm_type = COMM_ETHERCAT, const std::string& device_name = "auto");
+    bool Disconnect();
+    std::map<std::string, std::string> SearchAdapters();
 
     // 参数化关节控制API
     bool MoveJoints(const std::vector<JointCommand>& commands);
@@ -71,8 +72,7 @@ class DexHand {
 
    private:
     std::unique_ptr<EtherCATComm> ethercat_comm_;
-    int AutoConnectDevices();
-    int ConnectDevice(std::string device_name);
+    bool ConnectToDevice(CommType comm_type, const std::string& device_name);
 
     HandType hand_type_ = HandType::NONE;
     DeviceInfo device_info_;

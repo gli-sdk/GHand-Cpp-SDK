@@ -6,16 +6,16 @@ using namespace xiaoyao;
 int main() {
     DexHand hand;
 
-    // 尝试通过ETHERCAT连接灵巧手
+    // 尝试通过ETHERCAT自动连接灵巧手
     std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
-    int result = hand.Open(COMM_ETHERCAT, "auto");
+    bool success = hand.AutoConnect(COMM_ETHERCAT);
 
-    if (result >= 0) {
+    if (success) {
         std::cout << "Successfully connected to the dexterous hand!" << std::endl;
 
         // 获取手部类型
         HandType type = hand.GetHandType();
-        std::cout << "Hand type: " <<ToString(type) << std::endl;
+        std::cout << "Hand type: " << ToString(type) << std::endl;
 
         // 获取固件版本
         DeviceInfo device_info = hand.GetDeviceInfo();
@@ -23,9 +23,9 @@ int main() {
         if (!version.empty()) {
             std::cout << "Firmware version: " << version << std::endl;
         }
-   
-        // 关闭连接
-        hand.Close();
+
+        // 断开连接
+        hand.Disconnect();
         std::cout << "Connection closed." << std::endl;
     } else {
         std::cout << "Failed to connect to the dexterous hand!" << std::endl;

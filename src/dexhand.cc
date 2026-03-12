@@ -85,59 +85,78 @@ DexHand::DexHand() {
 DexHand::~DexHand() {}
 
 /**
- * @brief Open the hand
+ * @brief Auto connect the hand
  *
  * @param comm_type Communication type
- * @param device_name Device name
- * @return int 0: success, -1: fail
+ * @return bool true: success, false: fail
  */
-int DexHand::Open(CommType comm_type, std::string device_name) {
-    int result = -1;
-    switch (comm_type) {
-        case COMM_ETHERCAT:
-            if (device_name == "auto") {
-                result = AutoConnectDevices();
-            } else {
-                result = ConnectDevice(device_name);
-            }
-            break;
-        case COMM_CANFD:
-            break;
-        case COMM_RS485:
-            break;
-        default:
-            break;
-    }
-    return result;
-}
-
 /**
- * @brief Close the hand
+ * @brief 统一的设备连接辅助方法
  *
- * @return int 0
+ * @param comm_type 通信类型
+ * @param device_name 设备名称
+ * @return bool true: 成功，false: 失败
  */
-int DexHand::Close() {
-    hand_type_ = HandType::NONE;
-    device_info_ = DeviceInfo();
-    ethercat_comm_->Disconnect();
-    return 0;
+bool DexHand::ConnectToDevice(CommType comm_type, const std::string& device_name) {
+    switch (comm_type) {
+        case COMM_ETHERCAT: {
+            int ec_result = ethercat_comm_->Connect(device_name);
+            if (ec_result == 0) {
+                GetDeviceInfo();
+                GetHandType();
+                return true;
+            }
+            return false;
+        }
+        case COMM_CANFD:
+        case COMM_RS485:
+        default:
+            return false;
+    }
 }
 
 /**
  * @brief Auto connect the hand
  *
- * @return int i: success, -1: fail
+ * @param comm_type Communication type
+ * @return bool true: success, false: fail
  */
-int DexHand::AutoConnectDevices() {
-    std::map<std::string, std::string> adapter_names = SearchAdapters();
-    int index = 0;
-    for (const auto& adapter_pair : adapter_names) {
-        if (ConnectDevice(adapter_pair.first) == 0) {
-            return index;
+bool DexHand::AutoConnect(CommType comm_type) {
+    if (comm_type == COMM_ETHERCAT) {
+        std::map<std::string, std::string> adapter_names = SearchAdapters();
+        for (const auto& adapter_pair : adapter_names) {
+            if (ConnectToDevice(comm_type, adapter_pair.first)) {
+                return true;
+            }
         }
-        index++;
     }
-    return -1;
+    return false;
+}
+
+/**
+ * @brief Connect to the hand
+ *
+ * @param comm_type Communication type
+ * @param device_name Device name
+ * @return bool true: success, false: fail
+ */
+bool DexHand::Connect(CommType comm_type, const std::string& device_name) {
+    if (device_name == "auto") {
+        return AutoConnect(comm_type);
+    }
+    return ConnectToDevice(comm_type, device_name);
+}
+
+/**
+ * @brief Disconnect from the hand
+ *
+ * @return bool true: success, false: fail
+ */
+bool DexHand::Disconnect() {
+    hand_type_ = HandType::NONE;
+    device_info_ = DeviceInfo();
+    int result = ethercat_comm_->Disconnect();
+    return (result == 0);
 }
 
 /**
@@ -146,21 +165,6 @@ int DexHand::AutoConnectDevices() {
  */
 map<string, string> DexHand::SearchAdapters() {
     return ethercat_comm_->SearchAdapters();
-}
-
-/**
- * @brief Connect the hand
- *
- * @param device_name Device name
- * @return int 0: success, -1: fail
- */
-int DexHand::ConnectDevice(std::string device_name) {
-    int result = ethercat_comm_->Connect(device_name);
-    if (result == 0) {
-        GetDeviceInfo();
-        GetHandType();
-    }
-    return result;
 }
 
 
@@ -459,7 +463,7 @@ int DexHand::BootUpdate(char* ifname, uint16_t slave, char* filename,
                 progressCallback(100);
                 std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
-                if (Open(COMM_ETHERCAT, ifname) >= 0) {
+                if (Connect(COMM_ETHERCAT, ifname)) {
                     if (last_version < device_info_.software_version) {
                         return 1;
                     } else {
@@ -472,7 +476,7 @@ int DexHand::BootUpdate(char* ifname, uint16_t slave, char* filename,
             for (int i = 0; i < retry_count; i++) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
-                if (Open(COMM_ETHERCAT, ifname) >= 0) {
+                if (Connect(COMM_ETHERCAT, ifname)) {
                     return ret;
                 }
             }
@@ -549,11 +553,10 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
     callback_manager_.UpdateTemperature(parsed_temperature);
 
     // 解析触觉数据并触发回调
-    // 触觉数据从偏移 150 开始连续存储，无需查表
+    // 触觉数据紧跟在关节数据后面，无需硬编码偏移量
     // 格式：[拇指合力6B][拇指分布力156B][食指合力6B][食指分布力93B]...
-    const size_t TACTILE_DATA_OFFSET = 150;
-    if (size > TACTILE_DATA_OFFSET) {
-        size_t offset = TACTILE_DATA_OFFSET;
+    if (offset < size) {  // 确保 offset 小于总大小
+        TactileData tactile_data;
 
         for (int finger_idx = THUMB; finger_idx < NUM_FINGERS; finger_idx++) {
             FingerType finger = static_cast<FingerType>(finger_idx);
@@ -562,20 +565,7 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
             if (offset + 6 <= size) {
                 Force resultant_force = ParseResultantForce(data + offset);
                 offset += 6;
-
-                TactileData tactile_data;
-                tactile_data.type = ForceType::RESULTANT;
-                tactile_data.finger = finger;
-                tactile_data.forces.push_back(resultant_force);
-
-                callback_manager_.UpdateTactileData(tactile_data);
-
-#ifdef _DEBUG
-                std::cout << "[Tactile] Parsed resultant force for " << ToString(finger)
-                          << ": Fx=" << resultant_force.x
-                          << ", Fy=" << resultant_force.y
-                          << ", Fz=" << resultant_force.z << std::endl;
-#endif
+                tactile_data.resultants[finger_idx] = resultant_force;
             }
 
             // 2. 解析分布力数据（可变长度）
@@ -585,28 +575,13 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
             if (offset + sample_size <= size) {
                 std::vector<Force> sample_forces = ParseSampleForces(data + offset, sensor_count);
                 offset += sample_size;
-
-                if (!sample_forces.empty()) {
-                    TactileData tactile_data;
-                    tactile_data.type = ForceType::SAMPLE;
-                    tactile_data.finger = finger;
-                    tactile_data.forces = sample_forces;
-
-                    callback_manager_.UpdateTactileData(tactile_data);
-
-#ifdef _DEBUG
-                    std::cout << "[Tactile] Parsed " << sample_forces.size()
-                              << " sample forces for " << ToString(finger) << std::endl;
-#endif
-                }
-            } else {
-#ifdef _DEBUG
-                std::cerr << "[Tactile] Insufficient data for " << ToString(finger)
-                          << " sample forces: need " << sample_size
-                          << " bytes, available " << (size - offset) << std::endl;
-#endif
-                break;  // 数据不足，停止解析
+                tactile_data.samples[finger_idx] = std::move(sample_forces);
             }
+        }
+
+        // 触发一次性回调，包含所有触觉数据
+        if (tactile_data.HasData()) {
+            callback_manager_.UpdateTactileData(tactile_data);
         }
     }
 }

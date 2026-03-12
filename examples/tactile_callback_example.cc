@@ -8,37 +8,27 @@ int main() {
 
     // 注册触觉数据回调（一次性）
     hand.SetTactileDataCallback([](const xiaoyao::TactileData& data) {
-        if (data.type == xiaoyao::ForceType::RESULTANT &&
-            data.finger == xiaoyao::THUMB) {
-
-            if (!data.forces.empty()) {
-                const auto& f = data.forces[0];
-                float mag = std::sqrt(f.x*f.x + f.y*f.y + f.z*f.z);
-                std::cout << "Thumb force: " << mag << " N" << std::endl;
-            }
-
-        } else if (data.type == xiaoyao::ForceType::SAMPLE &&
-                   data.finger == xiaoyao::FF) {
-
-            std::cout << "Index sensors: " << data.SensorCount() << " sensors" << std::endl;
+        // 打印所有手指的合力
+        std::cout << "All fingers resultant forces:" << std::endl;
+        const char* finger_names[] = {"Thumb", "Index", "Middle", "Ring", "Little"};
+        for (int i = xiaoyao::THUMB; i < xiaoyao::NUM_FINGERS; i++) {
+            xiaoyao::FingerType finger = static_cast<xiaoyao::FingerType>(i);
+            xiaoyao::Force force = data.GetResultant(finger);
+            std::cout << "  " << finger_names[i] << ": (x:" << force.x
+                      << ", y:" << force.y << ", z:" << force.z << ") N" << std::endl;
         }
     });
 
-    // 打开连接
-    int result = hand.Open(xiaoyao::COMM_ETHERCAT, "auto");
+    // 尝试通过ETHERCAT连接灵巧手
+    std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
+    bool success = hand.Connect(xiaoyao::COMM_ETHERCAT, "auto");
 
-    if (result >= 0) {
+    if (success) {
         std::cout << "Successfully connected to the dexterous hand!" << std::endl;
 
         // 获取手部类型
         xiaoyao::HandType type = hand.GetHandType();
-        if (type == xiaoyao::LEFT) {
-            std::cout << "Hand type: Left hand" << std::endl;
-        } else if (type == xiaoyao::RIGHT) {
-            std::cout << "Hand type: Right hand" << std::endl;
-        } else {
-            std::cout << "Hand type: Unknown" << std::endl;
-        }
+        std::cout << "Hand type: " << xiaoyao::ToString(type) << std::endl;
 
         // 获取固件版本
         xiaoyao::DeviceInfo device_info = hand.GetDeviceInfo();
@@ -50,7 +40,7 @@ int main() {
         // 数据自动推送，无需轮询
         std::this_thread::sleep_for(std::chrono::seconds(30));
 
-        hand.Close();
+        hand.Disconnect();
         std::cout << "Connection closed." << std::endl;
     } else {
         std::cout << "Failed to connect to the dexterous hand!" << std::endl;

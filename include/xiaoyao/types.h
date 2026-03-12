@@ -1,6 +1,7 @@
 #ifndef XIAOYAO_TYPES_H_
 #define XIAOYAO_TYPES_H_
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -108,14 +109,58 @@ struct HandTemperature {
  * @brief 触觉数据结构
  */
 struct TactileData {
-    ForceType type;                      // 数据类型
-    FingerType finger;                   // 手指类型
-    std::vector<Force> forces;           // 力数据
+    /**
+     * @brief 每个手指的合力数据
+     * 索引对应 FingerType：0=THUMB, 1=FF, 2=MF, 3=RF, 4=LF
+     */
+    std::array<Force, NUM_FINGERS> resultants;
+
+    /**
+     * @brief 每个手指的分布力数据
+     * 索引对应 FingerType：0=THUMB, 1=FF, 2=MF, 3=RF, 4=LF
+     */
+    std::array<std::vector<Force>, NUM_FINGERS> samples;
 
     // 便利方法
-    bool IsResultant() const { return type == ForceType::RESULTANT; }
-    bool IsSample() const { return type == ForceType::SAMPLE; }
-    size_t SensorCount() const { return forces.size(); }
+    /**
+     * @brief 获取指定手指的合力
+     * @param finger 手指类型
+     * @return 合力数据
+     */
+    Force GetResultant(FingerType finger) const {
+        return resultants[static_cast<int>(finger)];
+    }
+
+    /**
+     * @brief 获取指定手指的分布力
+     * @param finger 手指类型
+     * @return 分布力数据（传感器数组）
+     */
+    const std::vector<Force>& GetSamples(FingerType finger) const {
+        return samples[static_cast<int>(finger)];
+    }
+
+    /**
+     * @brief 检查是否包含有效数据
+     * @return true 表示至少有一个力值不为0
+     */
+    bool HasData() const {
+        for (const Force& f : resultants) {
+            if (f.x != 0.0f || f.y != 0.0f || f.z != 0.0f) {
+                return true;
+            }
+        }
+
+        for (const auto& sample_vec : samples) {
+            if (!sample_vec.empty()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    std::string ToString() const;
 };
 
 // 关节命令结构体，用于参数化关节控制
