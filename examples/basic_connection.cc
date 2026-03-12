@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "xiaoyao/dexhand.h"
+#include "xiaoyao/xiaoyao.h"
 using namespace xiaoyao;
 
 int main() {

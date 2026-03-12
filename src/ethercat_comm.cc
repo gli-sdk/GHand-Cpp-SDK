@@ -1,4 +1,4 @@
-#include "xiaoyao/ethercat_comm.h"
+#include "internal/ethercat_comm.h"
 
 #include <windows.h>
 
