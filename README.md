@@ -2,7 +2,7 @@
 
 ## 概述
 
-Xiaoyao SDK C++ 是逍遥灵巧手的 C++ 开发包，提供对机械手的完整控制功能。
+Xiaoyao SDK C++ 是枭尧灵巧手的 C++ 开发包，提供对机械手的完整控制功能。
 
 ## 功能特性
 
@@ -82,7 +82,8 @@ hand.Disconnect();
 ## 编译示例
 
 ```bash
-mkdir build && cd build
+mkdir build 
+cd build
 cmake ..
 cmake --build . --config Release
 
