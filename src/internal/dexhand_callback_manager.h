@@ -24,7 +24,7 @@ class DexHandCallbackManager {
 public:
     // 回调类型定义
     using JointsCallback = std::function<void(const std::vector<Joint>&)>;
-    using TemperatureCallback = std::function<void(const HandTemperature&)>;
+    using HandStateCallback = std::function<void(const HandState&)>;
     using TactileDataCallback = std::function<void(const TactileData&)>;
 
     DexHandCallbackManager();
@@ -32,27 +32,27 @@ public:
 
     // 回调注册方法
     void SetJointsCallback(JointsCallback callback);
-    void SetTemperatureCallback(TemperatureCallback callback);
+    void SetHandStateCallback(HandStateCallback callback);
     void SetTactileDataCallback(TactileDataCallback callback);
 
     // 数据更新方法（由DexHand调用）
     void UpdateJoints(const std::vector<Joint>& joints);
-    void UpdateTemperature(const HandTemperature& temperature);
+    void UpdateTemperature(const HandState& temperature);
     void UpdateTactileData(const TactileData& data);
 
 private:
     // 变化检测方法
     bool HasJointDataChanged(const std::vector<Joint>& joints);
-    bool HasTemperatureChanged(const HandTemperature& temperature);
+    bool HasTemperatureChanged(const HandState& temperature);
 
     // 回调成员变量
     JointsCallback joints_callback_;
-    TemperatureCallback temperature_callback_;
+    HandStateCallback hand_state_callback_;
     TactileDataCallback tactile_data_callback_;
 
     // 上次数据缓存（用于变化检测）
     std::vector<Joint> last_joints_;
-    HandTemperature last_temperature_;
+    HandState last_state_;
     std::chrono::steady_clock::time_point last_joint_callback_time_;
     std::chrono::steady_clock::time_point last_temp_callback_time_;
 

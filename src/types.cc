@@ -6,9 +6,9 @@ namespace xiaoyao {
 
 // ===== 数据结构便利方法实现 =====
 
-std::string HandTemperature::ToString() const {
+std::string HandState::ToString() const {
     std::ostringstream oss;
-    oss << "HandTemperature{state=" << xiaoyao::ToString(state)
+    oss << "HandState{state=" << xiaoyao::ToString(state)
         << ", error=" << xiaoyao::ToString(error)
         << ", temperature=" << temperature << "}";
     return oss.str();
@@ -56,7 +56,7 @@ namespace {
         {State::STOPPED, "STOPPED"},
         {State::RUNNING, "RUNNING"},
         {State::ABNORMAL_RUNNING, "ABNORMAL_RUNNING"},
-        {State::PROTECTIVE_STOP, "PROTECTIVE_STOP"}
+        {State::PROTECTIVE_STOPPED, "PROTECTIVE_STOPPED"}
     };
 
     // 错误码映射

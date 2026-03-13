@@ -383,8 +383,8 @@ void DexHand::SetJointsCallback(std::function<void(const std::vector<Joint>&)> c
     callback_manager_->SetJointsCallback(cb);
 }
 
-void DexHand::SetTemperatureCallback(std::function<void(const HandTemperature&)> cb) {
-    callback_manager_->SetTemperatureCallback(cb);
+void DexHand::SetHandStateCallback(std::function<void(const HandState&)> cb) {
+    callback_manager_->SetHandStateCallback(cb);
 }
 
 void DexHand::SetTactileDataCallback(std::function<void(const TactileData&)> cb) {
@@ -394,7 +394,7 @@ void DexHand::SetTactileDataCallback(std::function<void(const TactileData&)> cb)
 void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
     // 直接解析PDO数据（与GetJoints()相同的解析逻辑）
     std::vector<Joint> parsed_joints;
-    HandTemperature parsed_temperature;
+    HandState parsed_temperature;
 
     if (data == nullptr || size == 0) {
         return;  // 无效数据
@@ -486,9 +486,7 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
         }
 
         // 触发一次性回调，包含所有触觉数据
-        if (tactile_data.HasData()) {
-            callback_manager_->UpdateTactileData(tactile_data);
-        }
+        callback_manager_->UpdateTactileData(tactile_data);
     }
 }
 

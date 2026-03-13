@@ -12,7 +12,7 @@ namespace xiaoyao {
 
 // ========== 回调类型定义 ==========
 using JointsCallback = std::function<void(const std::vector<Joint>&)>;
-using TemperatureCallback = std::function<void(const HandTemperature&)>;
+using HandStateCallback = std::function<void(const HandState&)>;
 using TactileDataCallback = std::function<void(const TactileData&)>;
 
 /**
@@ -125,10 +125,10 @@ public:
     void SetJointsCallback(JointsCallback cb);
 
     /**
-     * @brief 注册温度数据回调
+     * @brief 注册手部状态回调
      * @param cb 回调函数
      */
-    void SetTemperatureCallback(TemperatureCallback cb);
+    void SetHandStateCallback(HandStateCallback cb);
 
     /**
      * @brief 注册触觉数据回调

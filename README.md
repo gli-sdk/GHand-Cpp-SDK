@@ -21,10 +21,13 @@ xiaoyao-sdk-cpp/
 │   ├── xiaoyao.h       # 主 API
 │   ├── types.h         # 类型定义
 │   └── version.h       # 版本信息
-├── lib/               # 导入库
-│   └── xiaoyao.lib
-├── bin/               # 运行时库
-│   └── xiaoyao.dll
+├── lib/               # 库文件（按平台分类）
+│   ├── windows/
+│   │   └── x64/       # Windows 64位
+│   │       ├── xiaoyao.lib
+│   │       └── xiaoyao.dll
+│   └── linux/
+│       └── x64/       # Linux 64位（待添加）
 └── examples/          # 示例代码
 ```
 
@@ -93,9 +96,13 @@ cmake --build . --config Release
 
 ## 系统要求
 
-- Windows 7 或更高版本
-- Visual Studio 2017 或更高版本
-- CMake 3.5 或更高版本
+### 当前支持的平台
+- **Windows x64** (Windows 7 或更高版本)
+  - Visual Studio 2017 或更高版本
+  - CMake 3.5 或更高版本
+
+### 计划支持的平台
+- **Linux x64** (开发中)
 
 ## API 参考
 

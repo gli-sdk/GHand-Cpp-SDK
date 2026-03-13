@@ -37,10 +37,10 @@ struct Force {
 };
 
 enum class State : uint8_t {
-    STOPPED = 0,          // 停止
-    RUNNING = 1,          // 运行中
-    ABNORMAL_RUNNING = 2,  // 异常运行
-    PROTECTIVE_STOP = 3    // 保护性停止
+    STOPPED = 0,               // 停止
+    RUNNING = 1,               // 正常运行中
+    ABNORMAL_RUNNING = 2,      // 异常运行
+    PROTECTIVE_STOPPED = 3     // 保护性停止
 };
 
 enum class ErrorCode : uint8_t {
@@ -120,9 +120,9 @@ struct DeviceInfo {
 };
 
 /**
- * @brief 手部温度数据结构
+ * @brief 手部状态数据结构
  */
-struct HandTemperature {
+struct HandState {
     State state;
     ErrorCode error;
     int16_t temperature;
@@ -172,26 +172,6 @@ struct TactileData {
      */
     const std::vector<Force>& GetSamples(FingerType finger) const {
         return samples[static_cast<int>(finger)];
-    }
-
-    /**
-     * @brief 检查是否包含有效数据
-     * @return true 表示至少有一个力值不为0
-     */
-    bool HasData() const {
-        for (const Force& f : resultants) {
-            if (f.x != 0.0f || f.y != 0.0f || f.z != 0.0f) {
-                return true;
-            }
-        }
-
-        for (const auto& sample_vec : samples) {
-            if (!sample_vec.empty()) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     std::string ToString() const;

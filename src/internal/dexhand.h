@@ -52,7 +52,7 @@ public:
 
     // 回调注册
     void SetJointsCallback(std::function<void(const std::vector<Joint>&)> cb);
-    void SetTemperatureCallback(std::function<void(const HandTemperature&)> cb);
+    void SetHandStateCallback(std::function<void(const HandState&)> cb);
     void SetTactileDataCallback(std::function<void(const TactileData&)> cb);
 
     // 内部方法

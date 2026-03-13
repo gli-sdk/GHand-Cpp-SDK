@@ -8,7 +8,7 @@ namespace internal {
 DexHandCallbackManager::DexHandCallbackManager() {
     // 初始化缓存数据
     last_joints_.clear();
-    last_temperature_ = HandTemperature{State::STOPPED, ErrorCode::NORMAL, 0};
+    last_state_ = HandState{State::STOPPED, ErrorCode::NORMAL, 0};
     last_joint_callback_time_ = std::chrono::steady_clock::now();
     last_temp_callback_time_ = std::chrono::steady_clock::now();
 }
@@ -17,8 +17,8 @@ void DexHandCallbackManager::SetJointsCallback(JointsCallback callback) {
     joints_callback_ = callback;
 }
 
-void DexHandCallbackManager::SetTemperatureCallback(TemperatureCallback callback) {
-    temperature_callback_ = callback;
+void DexHandCallbackManager::SetHandStateCallback(HandStateCallback callback) {
+    hand_state_callback_ = callback;
 }
 
 void DexHandCallbackManager::SetTactileDataCallback(TactileDataCallback callback) {
@@ -35,12 +35,12 @@ void DexHandCallbackManager::UpdateJoints(const std::vector<Joint>& joints) {
     }
 }
 
-void DexHandCallbackManager::UpdateTemperature(const HandTemperature& temperature) {
+void DexHandCallbackManager::UpdateTemperature(const HandState& temperature) {
     if (HasTemperatureChanged(temperature)) {
-        if (temperature_callback_) {
-            temperature_callback_(temperature);
+        if (hand_state_callback_) {
+            hand_state_callback_(temperature);
         }
-        last_temperature_ = temperature;
+        last_state_ = temperature;
         last_temp_callback_time_ = std::chrono::steady_clock::now();
     }
 }
@@ -84,15 +84,15 @@ bool DexHandCallbackManager::HasJointDataChanged(const std::vector<Joint>& joint
     return false;
 }
 
-bool DexHandCallbackManager::HasTemperatureChanged(const HandTemperature& temperature) {
+bool DexHandCallbackManager::HasTemperatureChanged(const HandState& temperature) {
     // 1. 状态或错误变化 → 立即触发
-    if (temperature.state != last_temperature_.state ||
-        temperature.error != last_temperature_.error) {
+    if (temperature.state != last_state_.state ||
+        temperature.error != last_state_.error) {
         return true;
     }
 
     // 2. 温度变化触发（>1°C）
-    int temp_diff = std::abs(temperature.temperature - last_temperature_.temperature);
+    int temp_diff = std::abs(temperature.temperature - last_state_.temperature);
     if (temp_diff > TEMPERATURE_THRESHOLD) {
         return true;
     }

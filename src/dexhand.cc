@@ -78,8 +78,8 @@ void DexHand::SetJointsCallback(JointsCallback cb) {
     impl_->hand_.SetJointsCallback(cb);
 }
 
-void DexHand::SetTemperatureCallback(TemperatureCallback cb) {
-    impl_->hand_.SetTemperatureCallback(cb);
+void DexHand::SetHandStateCallback(HandStateCallback cb) {
+    impl_->hand_.SetHandStateCallback(cb);
 }
 
 void DexHand::SetTactileDataCallback(TactileDataCallback cb) {
