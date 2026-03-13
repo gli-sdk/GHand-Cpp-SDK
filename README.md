@@ -88,7 +88,7 @@ cmake ..
 cmake --build . --config Release
 
 # 运行示例
-.\Release\basic_connection.exe
+.\examples\Release\basic_connection.exe
 ```
 
 ## 系统要求

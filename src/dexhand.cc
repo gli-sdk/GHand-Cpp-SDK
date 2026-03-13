@@ -10,8 +10,8 @@ public:
 };
 
 // 构造/析构
-DexHand::DexHand() : impl_(std::make_unique<Impl>()) {}
-DexHand::~DexHand() = default;
+DexHand::DexHand() : impl_(new Impl()) {}
+DexHand::~DexHand() {}
 
 // 转发所有调用
 bool DexHand::AutoConnect(CommType comm_type) {

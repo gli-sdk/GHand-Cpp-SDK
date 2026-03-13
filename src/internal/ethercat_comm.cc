@@ -1,4 +1,4 @@
-#include "internal/ethercat_comm.h"
+#include "ethercat_comm.h"
 
 #include <windows.h>
 
@@ -13,6 +13,7 @@
 #define NSEC_PER_SEC 1000000000
 
 namespace xiaoyao {
+namespace internal {
 
 OSAL_THREAD_HANDLE
 EtherCATComm::threadrt, EtherCATComm::thread1;
@@ -422,4 +423,5 @@ OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
         }
     }
 }
-}
+}  // namespace internal
+}  // namespace xiaoyao

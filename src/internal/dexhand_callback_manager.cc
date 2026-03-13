@@ -1,8 +1,9 @@
-#include "internal/dexhand_callback_manager.h"
+#include "dexhand_callback_manager.h"
 
 #include <chrono>
 
 namespace xiaoyao {
+namespace internal {
 
 DexHandCallbackManager::DexHandCallbackManager() {
     // 初始化缓存数据
@@ -10,6 +11,18 @@ DexHandCallbackManager::DexHandCallbackManager() {
     last_temperature_ = HandTemperature{State::STOPPED, ErrorCode::NORMAL, 0};
     last_joint_callback_time_ = std::chrono::steady_clock::now();
     last_temp_callback_time_ = std::chrono::steady_clock::now();
+}
+
+void DexHandCallbackManager::SetJointsCallback(JointsCallback callback) {
+    joints_callback_ = callback;
+}
+
+void DexHandCallbackManager::SetTemperatureCallback(TemperatureCallback callback) {
+    temperature_callback_ = callback;
+}
+
+void DexHandCallbackManager::SetTactileDataCallback(TactileDataCallback callback) {
+    tactile_data_callback_ = callback;
 }
 
 void DexHandCallbackManager::UpdateJoints(const std::vector<Joint>& joints) {
@@ -95,4 +108,5 @@ bool DexHandCallbackManager::HasTemperatureChanged(const HandTemperature& temper
     return false;
 }
 
+}  // namespace internal
 }  // namespace xiaoyao

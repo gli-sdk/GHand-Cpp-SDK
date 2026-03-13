@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(XiaoyaoSDK VERSION 1.0.0 LANGUAGES CXX)
+project(XiaoyaoSDK VERSION 1.0.0 LANGUAGES C CXX)
 
 # 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 11)
@@ -18,6 +18,9 @@ if(WIN32)
         set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MDd")
         set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MD")
         set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MDd")
+    else()
+        # MinGW: 修复 timespec64_get 问题 (MinGW 13.x 兼容性)
+        add_compile_definitions(_POSIX_C_SOURCE=200809L)
     endif()
 endif()
 
@@ -38,8 +41,10 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/dexhand.cc")
     file(GLOB_RECURSE SOURCES
         "src/*.cpp"
         "src/*.cc"
+        "src/*.c"
         "src/internal/*.cpp"
         "src/internal/*.cc"
+        "src/internal/*.c"
     )
 
     # 创建动态库

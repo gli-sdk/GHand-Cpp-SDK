@@ -1,4 +1,4 @@
-#include "internal/file_lock.h"
+#include "file_lock.h"
 
 #include <iostream>
 #include <sstream>
@@ -11,6 +11,7 @@
 #include <io.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <share.h>
 
 // MinGW 可能没有定义这些常量，手动定义
 #ifndef _LK_NBLCK
@@ -29,6 +30,7 @@
 #endif
 
 namespace xiaoyao {
+namespace internal {
 
 // =============================================================================
 // MD5 哈希函数实现（任务 1.3）
@@ -263,4 +265,5 @@ std::string GetAdapterLockPath(const std::string& adapter_name) {
     return lock_path;
 }
 
-} // namespace xiaoyao
+}  // namespace internal
+}  // namespace xiaoyao

@@ -10,19 +10,6 @@
 *.obj
 *.pdb
 
-# 源代码保护（SDK 发布时不包含）
-/src/
-!/src/dexhand.cc  # 保留 Pimpl 适配器（可选，用于 SDK 模式）
-
-# 内部依赖头文件（不发布）
-/include/soem/
-/include/wpcap/
-
-# 依赖库（已静态链接，不发布）
-/lib/soem.lib
-/lib/libsoem.a
-/lib/Packet.lib
-/lib/wpcap.lib
 
 # 文档
 openspec/changes/
