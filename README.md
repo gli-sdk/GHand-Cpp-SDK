@@ -111,8 +111,10 @@ cmake --build . --config Release
 ## 支持与反馈
 
 - 如有问题或建议，请提交 Issue 或联系技术支持。
-- Email: csi@glitech.com
+- Email: qpan@glitech.com
 
 ## 许可证
+
+Xiaoyao SDK C++ 是 Glitech 的专有软件。使用本 SDK 前，请参阅 [LICENSE](LICENSE) 文件了解完整条款。
 
 Copyright © 2025 Glitech. All rights reserved.
