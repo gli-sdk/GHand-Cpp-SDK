@@ -136,7 +136,13 @@ public:
      */
     void SetTactileDataCallback(TactileDataCallback cb);
 
-private:
+    // Firmware update
+    int BootUpdate(const std::string& ifname,
+                   uint16_t slave,
+                   const std::string& filename,
+                   std::function<void(int)> progressCallback);
+
+ private:
     class Impl;  // Pimpl 模式
     std::unique_ptr<Impl> impl_;
 };

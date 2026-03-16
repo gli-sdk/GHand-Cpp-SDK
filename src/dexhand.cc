@@ -86,4 +86,10 @@ void DexHand::SetTactileDataCallback(TactileDataCallback cb) {
     impl_->hand_.SetTactileDataCallback(cb);
 }
 
+int DexHand::BootUpdate(const std::string& ifname,
+                   uint16_t slave,
+                   const std::string& filename,
+                   std::function<void(int)> progressCallback) {
+    return impl_->hand_.BootUpdate(ifname, slave, filename, progressCallback);
+}
 }  // namespace xiaoyao

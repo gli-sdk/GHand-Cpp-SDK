@@ -423,5 +423,98 @@ OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
         }
     }
 }
+bool EtherCATComm::InputBin(const char* fname, int* length) {
+    FILE* fp = nullptr;
+    errno_t err;
+
+    int cc = 0, c;
+
+    err = fopen_s(&fp, fname, "rb");
+    if (err != 0 || fp == NULL) return false;
+
+    while (((c = fgetc(fp)) != EOF) && (cc < kFirmwareBufferSize)) {
+        file_buffer[cc++] = (uint8_t)c;
+    }
+
+    *length = cc;
+    fclose(fp);
+    return true;
+}
+int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
+                             const std::string& file_path,
+                             std::function<void(int)> progressCallback) {
+    // ifname 参数保留以便将来使用，但当前未使用
+    (void)ifname;  // 抑制未使用参数警告
+    // std::lock_guard<std::mutex> lock(context_mutex_);
+
+    if (slave <= 0 || slave > ctx_.slavecount) {
+        return -1;
+    }
+    int filesize = 0;
+    inOP = 0;
+    dorun = 0;
+    StopThreads();
+    progress_callback_ = progressCallback;
+    ctx_.slavelist[0].state = EC_STATE_SAFE_OP;
+    ecx_writestate(&ctx_, 0);
+    ecx_statecheck(&ctx_, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
+
+    ctx_.slavelist[0].state = EC_STATE_PRE_OP;
+    ecx_writestate(&ctx_, 0);
+    ecx_statecheck(&ctx_, 0, EC_STATE_PRE_OP, EC_TIMEOUTSTATE);
+
+    ctx_.slavelist[0].state = EC_STATE_INIT;
+    ecx_writestate(&ctx_, 0);
+    ecx_statecheck(&ctx_, 0, EC_STATE_INIT, EC_TIMEOUTSTATE);
+
+    ctx_.slavelist[slave].mbxhandlerstate = 0;
+
+    ecx_FOEdefinehook(&ctx_, reinterpret_cast<void*>(EtherCATComm::FoeProgressHook));
+    ctx_.slavelist[slave].state = EC_STATE_BOOT;
+    ecx_writestate(&ctx_, slave);
+
+    if (ecx_statecheck(&ctx_, slave, EC_STATE_BOOT, EC_TIMEOUTSTATE * 10) == EC_STATE_BOOT) {
+        if (InputBin(file_path.c_str(), &filesize)) {
+            char file_name[] = "ECATFW__firmware";
+            int update_result =
+                ecx_FOEwrite(&ctx_, slave, file_name, 0, filesize, &file_buffer, EC_TIMEOUTSTATE);
+            return update_result;
+        } else {
+            return -2;
+        }
+    } else {
+        return -1;
+    }
+    return 0;
+}
+
+void EtherCATComm::FoeProgressHook(uint16 slave, int32 packetnumber, int32 totalsize) {
+    static int32 last_packet = -1;
+
+    if (packetnumber != last_packet) {
+        last_packet = packetnumber;
+
+        // 添加边界检查
+        if (slave > 0 && slave <= ctx_.slavecount) {
+            int maxdata = ctx_.slavelist[slave].mbx_l - 12;
+            if (maxdata <= 0) return;
+
+            int sent_data = packetnumber * maxdata;
+            if (sent_data > totalsize) {
+                sent_data = totalsize;
+            }
+
+            int percentage = 0;
+            if (totalsize > 0) {
+                percentage = (sent_data * 100 / totalsize);
+            }
+
+            fflush(stdout);
+            if (progress_callback_) {
+                progress_callback_(percentage);
+            }
+        }
+    }
+}
 }  // namespace internal
 }  // namespace xiaoyao

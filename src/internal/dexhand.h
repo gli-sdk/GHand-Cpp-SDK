@@ -1,5 +1,5 @@
-#ifndef XIAOYAO_INTERNAL_DEXHAND_H_
-#define XIAOYAO_INTERNAL_DEXHAND_H_
+#ifndef SRC_INTERNAL_DEXHAND_H_
+#define SRC_INTERNAL_DEXHAND_H_
 
 #include <cstdint>
 #include <functional>
@@ -54,12 +54,15 @@ public:
     void SetJointsCallback(std::function<void(const std::vector<Joint>&)> cb);
     void SetHandStateCallback(std::function<void(const HandState&)> cb);
     void SetTactileDataCallback(std::function<void(const TactileData&)> cb);
+    // Firmware update
+    int BootUpdate(const std::string& ifname,
+                   uint16_t slave,
+                   const std::string& filename,
+                   std::function<void(int)> progressCallback);
 
-    // 内部方法
-    void OnRawDataReceived(const uint8_t* data, size_t size);
-
-private:
+ private:
     bool ConnectToDevice(CommType comm_type, const std::string& device_name);
+    void OnRawDataReceived(const uint8_t* data, size_t size);
 
     std::unique_ptr<EtherCATComm> ethercat_comm_;
     std::unique_ptr<DexHandCallbackManager> callback_manager_;
@@ -72,4 +75,4 @@ private:
 }  // namespace internal
 }  // namespace xiaoyao
 
-#endif  // XIAOYAO_INTERNAL_DEXHAND_H_
+#endif  // SRC_INTERNAL_DEXHAND_H_

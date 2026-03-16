@@ -71,7 +71,13 @@ public:
         }
     }
 
-private:
+    int BootUpdate(const std::string& ifname,
+                   uint16_t slave,
+                   const std::string& filename,
+                   std::function<void(int)> progressCallback);
+
+
+ private:
     static std::mutex context_mutex_;
     static std::mutex rt_context_mutex_;
     static FileLock device_lock_;
