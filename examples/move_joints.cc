@@ -13,8 +13,8 @@ void DisplayJoints(const std::vector<xiaoyao::Joint>& joints) {
     std::cout << "\n========== Joint Status ==========" << std::endl;
     std::cout << std::left << std::setw(20) << "Joint"
               << std::setw(10) << "Angle(deg)"
-              << std::setw(10) << "Velocity"
-              << std::setw(10) << "Torque"
+              << std::setw(10) << "Velocity(%)"
+              << std::setw(10) << "Torque(%)"
               << std::setw(15) << "State"
               << "Error" << std::endl;
     std::cout << std::string(80, '-') << std::endl;
@@ -22,8 +22,8 @@ void DisplayJoints(const std::vector<xiaoyao::Joint>& joints) {
     for (const auto& joint : joints) {
         std::cout << std::left << std::setw(20) << xiaoyao::ToString(joint.id)
                   << std::fixed << std::setprecision(1) << std::setw(10) << joint.angle
-                  << std::setw(10) << static_cast<int>(joint.velocity)
-                  << std::setw(10) << static_cast<int>(joint.torque)
+                  << std::setw(15) << +joint.velocity
+                  << std::setw(15) << +joint.torque
                   << std::setw(15) << xiaoyao::ToString(joint.state)
                   << xiaoyao::ToString(joint.error) << std::endl;
     }

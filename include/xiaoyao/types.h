@@ -16,6 +16,12 @@ enum class HandType : uint8_t {
     NUM_HANDS  // 仅用于计数，不是有效值
 };
 
+/**
+ * @brief 获取手部类型的字符串表示（用于调试/日志）
+ * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ */
+std::string ToString(HandType type);
+
 // ===== 手指类型定义 =====
 enum class FingerType : uint8_t {
     THUMB,
@@ -25,6 +31,12 @@ enum class FingerType : uint8_t {
     LF,
     NUM_FINGERS  // 仅用于计数，不是有效值
 };
+
+/**
+ * @brief 获取手指类型的字符串表示（用于调试/日志）
+ * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ */
+std::string ToString(FingerType finger);
 
 // ===== 力数据结构 =====
 struct Force {
@@ -43,16 +55,18 @@ enum class State : uint8_t {
     PROTECTIVE_STOPPED = 3     // 保护性停止
 };
 
+/**
+ * @brief 获取状态的字符串表示（用于调试/日志）
+ * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ */
+std::string ToString(State state);
+
 enum class ErrorCode : uint8_t {
     NORMAL = 0,
     // 电机错误
-    MOTOR_HARDWARE_OVERCURRENT = 1,   // 电机硬件过流
-    MOTOR_SOFTWARE_OVERCURRENT = 2,   // 电机软件过流
-    MOTOR_BUS_OVERCURRENT = 3,        // 电机母线过流
-    MOTOR_PHASE_LOST = 4,             // 电机缺相
-    MOTOR_STALLED = 5,                // 电机堵转
-    MOTOR_DRIVER_OVERTEMP = 6,        // 电机驱动芯片过温
-    MOTOR_COMM_ERROR = 7,             // 电机通信错误
+    MOTOR_OVERCURRENT = 1,            // 电机过流
+    ENCODER_ERROR = 2,                // 编码器异常
+    MOTOR_COMM_ERROR = 3,             // 电机通信错误
     // 手指错误
     JOINT_CONFLICT = 11,              // 关节冲突
     TIP_CONFLICT = 12,                // 指尖冲突
@@ -70,10 +84,11 @@ enum class ErrorCode : uint8_t {
     UNKNOWN_ERROR = 201               // 未知错误
 };
 
-enum class ForceType : uint8_t {
-    RESULTANT = 0,  // 合力
-    SAMPLE = 1      // 分布力
-};
+/**
+ * @brief 获取错误码的字符串表示（用于调试/日志）
+ * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ */
+std::string ToString(ErrorCode error);
 
 enum class JointId : uint8_t {
     THUMB_DIP,
@@ -96,6 +111,12 @@ enum class JointId : uint8_t {
     LF_MCP,
     NUM_JOINTS
 };
+
+/**
+ * @brief 获取关节ID的字符串表示（用于调试/日志）
+ * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ */
+std::string ToString(JointId id);
 
 // ===== 通信类型定义 =====
 enum class CommType : uint8_t {
@@ -136,53 +157,48 @@ struct HandState {
         return error != ErrorCode::NORMAL || state != State::RUNNING || state == State::STOPPED;
     }
 
+    /**
+     * @brief 获取手部状态的字符串表示（用于调试/日志）
+     * @warning 不应在实时控制循环中调用（有字符串处理开销）
+     */
     std::string ToString() const;
 };
 
 /**
+ * @brief 单个手指的触觉数据
+ */
+struct FingerTactileData {
+    bool state;                       // 传感器状态 (true=正常, false=异常)
+    Force resultant_force;            // 合力数据
+    std::vector<Force> distributed_forces;  // 分布力数据
+};
+
+/**
  * @brief 触觉数据结构
+ *
+ * 设计说明：
+ * - 使用单手指结构体提供高度内聚的数据组织
+ * - 每个手指包含状态、合力、分布力，逻辑清晰
+ * - sensor_state 按位编码：bit 0-4 分别代表 thumb, index, middle, ring, pinky
+ * - sensor_error 为全局错误码
  */
 struct TactileData {
-    /**
-     * @brief 每个手指的合力数据
-     * 索引对应 FingerType：0=THUMB, 1=FF, 2=MF, 3=RF, 4=LF
-     */
-    std::array<Force, static_cast<int>(FingerType::NUM_FINGERS)> resultants;
+    uint8_t sensor_state;             // 保留原始字节（调试用）
+    uint8_t sensor_error;             // 全局错误码
 
-    /**
-     * @brief 每个手指的分布力数据
-     * 索引对应 FingerType：0=THUMB, 1=FF, 2=MF, 3=RF, 4=LF
-     */
-    std::array<std::vector<Force>, static_cast<int>(FingerType::NUM_FINGERS)> samples;
-
-    // 便利方法
-    /**
-     * @brief 获取指定手指的合力
-     * @param finger 手指类型
-     * @return 合力数据
-     */
-    Force GetResultant(FingerType finger) const {
-        return resultants[static_cast<int>(finger)];
-    }
-
-    /**
-     * @brief 获取指定手指的分布力
-     * @param finger 手指类型
-     * @return 分布力数据（传感器数组）
-     */
-    const std::vector<Force>& GetSamples(FingerType finger) const {
-        return samples[static_cast<int>(finger)];
-    }
-
-    std::string ToString() const;
+    FingerTactileData thumb;
+    FingerTactileData index;
+    FingerTactileData middle;
+    FingerTactileData ring;
+    FingerTactileData pinky;
 };
 
 // 关节命令结构体，用于参数化关节控制
 struct JointCommand {
-    JointId id;       // 关节标识符
-    float angle;      // 目标角度
-    uint8_t velocity; // 目标速度
-    uint8_t torque;   // 目标力矩
+    JointId id;         // 关节标识符
+    float angle;        // 目标角度（deg）
+    uint8_t velocity;   // 目标速度（0~100%）
+    uint8_t torque;     // 目标力矩（0~100%）
 };
 
 struct Joint {
@@ -202,16 +218,12 @@ struct Joint {
         return error != ErrorCode::NORMAL || state != State::RUNNING || state == State::STOPPED;
     }
 
+    /**
+     * @brief 获取关节状态的字符串表示（用于调试/日志）
+     * @warning 不应在实时控制循环中调用（有字符串处理开销）
+     */
     std::string ToString() const;
 };
-
-// ===== 枚举工具函数 =====
-const char* ToString(JointId id);
-const char* ToString(FingerType type);
-const char* ToString(State state);
-const char* ToString(ErrorCode error);
-const char* ToString(ForceType force_type);
-const char* ToString(HandType type);
 
 }  // namespace xiaoyao
 

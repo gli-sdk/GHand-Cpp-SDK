@@ -458,32 +458,45 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
 
     // 解析触觉数据并触发回调
     // 触觉数据紧跟在关节数据后面，无需硬编码偏移量
-    // 格式：[拇指合力6B][拇指分布力156B][食指合力6B][食指分布力93B]...
+    // 格式：[state(1B)][error(1B)][拇指合力6B][拇指分布力156B][食指合力6B][食指分布力93B]...
     if (offset < size) {  // 确保 offset 小于总大小
         TactileData tactile_data;
 
-        for (int finger_idx = static_cast<int>(FingerType::THUMB);
-             finger_idx < static_cast<int>(FingerType::NUM_FINGERS);
-             finger_idx++) {
-            FingerType finger = static_cast<FingerType>(finger_idx);
+        // 解析触觉传感器状态（2 字节）
+        if (offset + 2 <= size) {
+            tactile_data.sensor_state = data[offset];
+            tactile_data.sensor_error = data[offset + 1];
+            offset += 2;
+        }
 
-            // 1. 解析合力数据（固定 6 字节）
+        // 辅助 lambda：解析单个手指的触觉数据
+        auto ParseFingerTactile = [&offset, data, size, &tactile_data](
+            FingerTactileData& finger_data, FingerType finger, int bit_offset) {
+            // 1. 从 sensor_state 按位提取状态
+            finger_data.state = (tactile_data.sensor_state & (1 << bit_offset)) != 0;
+
+            // 2. 解析合力数据（固定 6 字节）
             if (offset + 6 <= size) {
-                Force resultant_force = ParseResultantForce(data + offset);
+                finger_data.resultant_force = ParseResultantForce(data + offset);
                 offset += 6;
-                tactile_data.resultants[finger_idx] = resultant_force;
             }
 
-            // 2. 解析分布力数据（可变长度）
+            // 3. 解析分布力数据（可变长度）
             int sensor_count = GetTactileSensorCount(finger);
             int sample_size = sensor_count * 3;
 
             if (offset + sample_size <= size) {
-                std::vector<Force> sample_forces = ParseSampleForces(data + offset, sensor_count);
+                finger_data.distributed_forces = ParseSampleForces(data + offset, sensor_count);
                 offset += sample_size;
-                tactile_data.samples[finger_idx] = std::move(sample_forces);
             }
-        }
+        };
+
+        // 按顺序解析每个手指的触觉数据
+        ParseFingerTactile(tactile_data.thumb,  FingerType::THUMB, 0);
+        ParseFingerTactile(tactile_data.index,  FingerType::FF,    1);
+        ParseFingerTactile(tactile_data.middle, FingerType::MF,    2);
+        ParseFingerTactile(tactile_data.ring,   FingerType::RF,    3);
+        ParseFingerTactile(tactile_data.pinky,  FingerType::LF,    4);
 
         // 触发一次性回调，包含所有触觉数据
         callback_manager_->UpdateTactileData(tactile_data);

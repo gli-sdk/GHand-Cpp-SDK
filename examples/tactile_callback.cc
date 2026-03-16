@@ -43,8 +43,6 @@ int main() {
 
     // 注册触觉数据回调（一次性）
     hand.SetTactileDataCallback([&first_print, CLEAR_SCREEN, MOVE_CURSOR](const xiaoyao::TactileData& data) {
-        const char* finger_names[] = {"Thumb", "Index", "Middle", "Ring", "Little"};
-
         if (first_print) {
             // 第一次打印，显示标题
             std::cout << CLEAR_SCREEN;
@@ -58,19 +56,41 @@ int main() {
             std::cout << "\033[4H";  // 移动到第4行开始
         }
 
-        // 打印所有手指的合力
-        for (int i = static_cast<int>(xiaoyao::FingerType::THUMB);
-             i < static_cast<int>(xiaoyao::FingerType::NUM_FINGERS);
-             i++) {
-            xiaoyao::FingerType finger = static_cast<xiaoyao::FingerType>(i);
-            xiaoyao::Force force = data.GetResultant(finger);
+        // 直接访问命名成员，无需循环和类型转换
+        std::cout << "| " << std::setw(6) << "Thumb" << ": "
+                  << "state=" << std::setw(6) << (data.thumb.state ? "OK" : "FAIL") << ", "
+                  << "x=" << std::setw(6) << std::fixed << std::setprecision(1) << data.thumb.resultant_force.x
+                  << ", y=" << std::setw(6) << std::fixed << std::setprecision(1) << data.thumb.resultant_force.y
+                  << ", z=" << std::setw(6) << std::fixed << std::setprecision(1) << data.thumb.resultant_force.z
+                  << " N |" << std::endl;
 
-            std::cout << "| " << std::setw(6) << finger_names[i] << ": "
-                      << "x=" << std::setw(6) << std::fixed << std::setprecision(2) << force.x
-                      << ", y=" << std::setw(6) << std::fixed << std::setprecision(2) << force.y
-                      << ", z=" << std::setw(6) << std::fixed << std::setprecision(2) << force.z
-                      << " N |" << std::endl;
-        }
+        std::cout << "| " << std::setw(6) << "Index" << ": "
+                  << "state=" << std::setw(6) << (data.index.state ? "OK" : "FAIL") << ", "
+                  << "x=" << std::setw(6) << std::fixed << std::setprecision(1) << data.index.resultant_force.x
+                  << ", y=" << std::setw(6) << std::fixed << std::setprecision(1) << data.index.resultant_force.y
+                  << ", z=" << std::setw(6) << std::fixed << std::setprecision(1) << data.index.resultant_force.z
+                  << " N |" << std::endl;
+
+        std::cout << "| " << std::setw(6) << "Middle" << ": "
+                  << "state=" << std::setw(6) << (data.middle.state ? "OK" : "FAIL") << ", "
+                  << "x=" << std::setw(6) << std::fixed << std::setprecision(1) << data.middle.resultant_force.x
+                  << ", y=" << std::setw(6) << std::fixed << std::setprecision(1) << data.middle.resultant_force.y
+                  << ", z=" << std::setw(6) << std::fixed << std::setprecision(1) << data.middle.resultant_force.z
+                  << " N |" << std::endl;
+
+        std::cout << "| " << std::setw(6) << "Ring" << ": "
+                  << "state=" << std::setw(6) << (data.ring.state ? "OK" : "FAIL") << ", "
+                  << "x=" << std::setw(6) << std::fixed << std::setprecision(1) << data.ring.resultant_force.x
+                  << ", y=" << std::setw(6) << std::fixed << std::setprecision(1) << data.ring.resultant_force.y
+                  << ", z=" << std::setw(6) << std::fixed << std::setprecision(1) << data.ring.resultant_force.z
+                  << " N |" << std::endl;
+
+        std::cout << "| " << std::setw(6) << "Pinky" << ": "
+                  << "state=" << std::setw(6) << (data.pinky.state ? "OK" : "FAIL") << ", "
+                  << "x=" << std::setw(6) << std::fixed << std::setprecision(1) << data.pinky.resultant_force.x
+                  << ", y=" << std::setw(6) << std::fixed << std::setprecision(1) << data.pinky.resultant_force.y
+                  << ", z=" << std::setw(6) << std::fixed << std::setprecision(1) << data.pinky.resultant_force.z
+                  << " N |" << std::endl;
 
         std::cout << "+==================================================+" << std::endl;
         std::cout << std::flush;  // 确保立即输出

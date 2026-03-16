@@ -1,11 +1,88 @@
 #include "xiaoyao/types.h"
-#include <map>
 #include <sstream>
 
 namespace xiaoyao {
 
-// ===== 数据结构便利方法实现 =====
+// ===== HandType =====
+std::string ToString(HandType type) {
+    switch (type) {
+        case HandType::NONE:  return "NONE";
+        case HandType::LEFT:  return "LEFT";
+        case HandType::RIGHT: return "RIGHT";
+        default:              return "UNKNOWN";
+    }
+}
 
+// ===== FingerType =====
+std::string ToString(FingerType finger) {
+    switch (finger) {
+        case FingerType::THUMB: return "THUMB";
+        case FingerType::FF:    return "INDEX";
+        case FingerType::MF:    return "MIDDLE";
+        case FingerType::RF:    return "RING";
+        case FingerType::LF:    return "PINKY";
+        default:                return "UNKNOWN";
+    }
+}
+
+// ===== State =====
+std::string ToString(State state) {
+    switch (state) {
+        case State::STOPPED:           return "STOPPED";
+        case State::RUNNING:           return "RUNNING";
+        case State::ABNORMAL_RUNNING:  return "ABNORMAL_RUNNING";
+        case State::PROTECTIVE_STOPPED: return "PROTECTIVE_STOPPED";
+        default:                       return "UNKNOWN";
+    }
+}
+
+// ===== ErrorCode =====
+std::string ToString(ErrorCode error) {
+    switch (error) {
+        case ErrorCode::NORMAL:              return "NORMAL";
+        case ErrorCode::MOTOR_OVERCURRENT:   return "MOTOR_OVERCURRENT";
+        case ErrorCode::ENCODER_ERROR:       return "ENCODER_ERROR";
+        case ErrorCode::MOTOR_COMM_ERROR:    return "MOTOR_COMM_ERROR";
+        case ErrorCode::JOINT_CONFLICT:      return "JOINT_CONFLICT";
+        case ErrorCode::TIP_CONFLICT:        return "TIP_CONFLICT";
+        case ErrorCode::LOW_TEMP:            return "LOW_TEMP";
+        case ErrorCode::HIGH_TEMP:           return "HIGH_TEMP";
+        case ErrorCode::LOW_VOLTAGE:         return "LOW_VOLTAGE";
+        case ErrorCode::HIGH_VOLTAGE:        return "HIGH_VOLTAGE";
+        case ErrorCode::TACTILE_ERROR:       return "TACTILE_ERROR";
+        case ErrorCode::PARAM_ERROR:         return "PARAM_ERROR";
+        case ErrorCode::TIMEOUT:             return "TIMEOUT";
+        case ErrorCode::UNKNOWN_ERROR:       return "UNKNOWN_ERROR";
+        default:                             return "UNKNOWN";
+    }
+}
+
+// ===== JointId =====
+std::string ToString(JointId id) {
+    switch (id) {
+        case JointId::THUMB_DIP:        return "THUMB_DIP";
+        case JointId::THUMB_PIP:        return "THUMB_PIP";
+        case JointId::THUMB_MCP:        return "THUMB_MCP";
+        case JointId::THUMB_SWING:      return "THUMB_SWING";
+        case JointId::THUMB_ROTATION:   return "THUMB_ROTATION";
+        case JointId::FF_DIP:           return "INDEX_DIP";
+        case JointId::FF_PIP:           return "INDEX_PIP";
+        case JointId::FF_MCP:           return "INDEX_MCP";
+        case JointId::FF_SWING:         return "INDEX_SWING";
+        case JointId::MF_DIP:           return "MIDDLE_DIP";
+        case JointId::MF_PIP:           return "MIDDLE_PIP";
+        case JointId::MF_MCP:           return "MIDDLE_MCP";
+        case JointId::RF_DIP:           return "RING_DIP";
+        case JointId::RF_PIP:           return "RING_PIP";
+        case JointId::RF_MCP:           return "RING_MCP";
+        case JointId::LF_DIP:           return "PINKY_DIP";
+        case JointId::LF_PIP:           return "PINKY_PIP";
+        case JointId::LF_MCP:           return "PINKY_MCP";
+        default:                        return "UNKNOWN";
+    }
+}
+
+// ===== HandState =====
 std::string HandState::ToString() const {
     std::ostringstream oss;
     oss << "HandState{state=" << xiaoyao::ToString(state)
@@ -14,126 +91,16 @@ std::string HandState::ToString() const {
     return oss.str();
 }
 
+// ===== Joint =====
 std::string Joint::ToString() const {
     std::ostringstream oss;
-    oss << "Joint{id=" << xiaoyao::ToString(id)
-        << ", state=" << xiaoyao::ToString(state)
+    oss << "Joint[" << xiaoyao::ToString(id)
+        << "]{state=" << xiaoyao::ToString(state)
         << ", error=" << xiaoyao::ToString(error)
         << ", angle=" << angle
         << ", velocity=" << static_cast<int>(velocity)
         << ", torque=" << static_cast<int>(torque) << "}";
     return oss.str();
-}
-
-// ===== ToString 函数实现 =====
-
-namespace {
-    // 关节ID映射
-    const std::map<JointId, const char*> kJointIdNames = {
-        {JointId::THUMB_DIP, "THUMB_DIP"},
-        {JointId::THUMB_PIP, "THUMB_PIP"},
-        {JointId::THUMB_MCP, "THUMB_MCP"},
-        {JointId::THUMB_SWING, "THUMB_SWING"},
-        {JointId::THUMB_ROTATION, "THUMB_ROTATION"},
-        {JointId::FF_DIP, "FF_DIP"},
-        {JointId::FF_PIP, "FF_PIP"},
-        {JointId::FF_MCP, "FF_MCP"},
-        {JointId::FF_SWING, "FF_SWING"},
-        {JointId::MF_DIP, "MF_DIP"},
-        {JointId::MF_PIP, "MF_PIP"},
-        {JointId::MF_MCP, "MF_MCP"},
-        {JointId::RF_DIP, "RF_DIP"},
-        {JointId::RF_PIP, "RF_PIP"},
-        {JointId::RF_MCP, "RF_MCP"},
-        {JointId::LF_DIP, "LF_DIP"},
-        {JointId::LF_PIP, "LF_PIP"},
-        {JointId::LF_MCP, "LF_MCP"},
-        {JointId::NUM_JOINTS, "NUM_JOINTS"}
-    };
-
-    // 状态映射
-    const std::map<State, const char*> kStateNames = {
-        {State::STOPPED, "STOPPED"},
-        {State::RUNNING, "RUNNING"},
-        {State::ABNORMAL_RUNNING, "ABNORMAL_RUNNING"},
-        {State::PROTECTIVE_STOPPED, "PROTECTIVE_STOPPED"}
-    };
-
-    // 错误码映射
-    const std::map<ErrorCode, const char*> kErrorCodeNames = {
-        {ErrorCode::NORMAL, "NORMAL"},
-        {ErrorCode::MOTOR_HARDWARE_OVERCURRENT, "MOTOR_HARDWARE_OVERCURRENT"},
-        {ErrorCode::MOTOR_SOFTWARE_OVERCURRENT, "MOTOR_SOFTWARE_OVERCURRENT"},
-        {ErrorCode::MOTOR_BUS_OVERCURRENT, "MOTOR_BUS_OVERCURRENT"},
-        {ErrorCode::MOTOR_PHASE_LOST, "MOTOR_PHASE_LOST"},
-        {ErrorCode::MOTOR_STALLED, "MOTOR_STALLED"},
-        {ErrorCode::MOTOR_DRIVER_OVERTEMP, "MOTOR_DRIVER_OVERTEMP"},
-        {ErrorCode::MOTOR_COMM_ERROR, "MOTOR_COMM_ERROR"},
-        {ErrorCode::JOINT_CONFLICT, "JOINT_CONFLICT"},
-        {ErrorCode::TIP_CONFLICT, "TIP_CONFLICT"},
-        {ErrorCode::LOW_TEMP, "LOW_TEMP"},
-        {ErrorCode::HIGH_TEMP, "HIGH_TEMP"},
-        {ErrorCode::LOW_VOLTAGE, "LOW_VOLTAGE"},
-        {ErrorCode::HIGH_VOLTAGE, "HIGH_VOLTAGE"},
-        {ErrorCode::TACTILE_ERROR, "TACTILE_ERROR"},
-        {ErrorCode::PARAM_ERROR, "PARAM_ERROR"},
-        {ErrorCode::TIMEOUT, "TIMEOUT"},
-        {ErrorCode::UNKNOWN_ERROR, "UNKNOWN_ERROR"}
-    };
-
-    // 手指类型映射
-    const std::map<FingerType, const char*> kFingerTypeNames = {
-        {FingerType::THUMB, "THUMB"},
-        {FingerType::FF, "FF"},
-        {FingerType::MF, "MF"},
-        {FingerType::RF, "RF"},
-        {FingerType::LF, "LF"},
-        {FingerType::NUM_FINGERS, "NUM_FINGERS"}
-    };
-
-    // 力类型映射
-    const std::map<ForceType, const char*> kForceTypeNames = {
-        {ForceType::RESULTANT, "RESULTANT"},
-        {ForceType::SAMPLE, "SAMPLE"}
-    };
-
-    // 手部类型映射
-    const std::map<xiaoyao::HandType, const char*> kHandTypeNames = {
-        {xiaoyao::HandType::NONE, "NONE"},
-        {xiaoyao::HandType::LEFT, "LEFT"},
-        {xiaoyao::HandType::RIGHT, "RIGHT"},
-        {xiaoyao::HandType::NUM_HANDS, "NUM_HANDS"}
-    };
-}
-
-const char* ToString(FingerType type) {
-    auto it = kFingerTypeNames.find(type);
-    return (it != kFingerTypeNames.end()) ? it->second : "UNKNOWN";
-}
-
-const char* ToString(JointId id) {
-    auto it = kJointIdNames.find(id);
-    return (it != kJointIdNames.end()) ? it->second : "UNKNOWN";
-}
-
-const char* ToString(State state) {
-    auto it = kStateNames.find(state);
-    return (it != kStateNames.end()) ? it->second : "UNKNOWN";
-}
-
-const char* ToString(ErrorCode error) {
-    auto it = kErrorCodeNames.find(error);
-    return (it != kErrorCodeNames.end()) ? it->second : "UNKNOWN";
-}
-
-const char* ToString(ForceType type) {
-    auto it = kForceTypeNames.find(type);
-    return (it != kForceTypeNames.end()) ? it->second : "UNKNOWN";
-}
-
-const char* ToString(HandType type) {
-    auto it = kHandTypeNames.find(type);
-    return (it != kHandTypeNames.end()) ? it->second : "UNKNOWN";
 }
 
 }  // namespace xiaoyao
