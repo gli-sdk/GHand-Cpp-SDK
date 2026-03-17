@@ -20,6 +20,7 @@ xiaoyao-sdk-cpp/
 ├── include/xiaoyao/    # 公共头文件
 │   ├── xiaoyao.h       # 主 API
 │   ├── types.h         # 类型定义
+│   ├── logging.h       # 日志系统
 │   └── version.h       # 版本信息
 ├── lib/               # 库文件（按平台分类）
 │   ├── windows/
@@ -81,6 +82,27 @@ hand.MoveJoints(commands);
 ```cpp
 hand.Disconnect();
 ```
+
+## 日志系统
+
+SDK 提供了内置的日志系统，默认只显示 WARNING 和 ERROR 级别的日志。你可以根据需要配置日志级别：
+
+```cpp
+#include "xiaoyao/logging.h"
+
+// 升级到 INFO 级别
+xiaoyao::ConfigureConsole(xiaoyao::LogLevel::INFO);
+
+// 启用文件日志（DEBUG 级别，包含详细的时间戳和源文件信息）
+xiaoyao::ConfigureFile("xiaoyao.log");
+
+// 在代码中记录日志
+LOG_INFO("连接到设备: " << adapter_name);
+LOG_ERROR("连接失败");
+LOG_DEBUG("调试信息");
+```
+
+详细的日志系统使用说明请参阅 [日志系统文档](docs/LOGGING.md)。
 
 ## 编译示例
 

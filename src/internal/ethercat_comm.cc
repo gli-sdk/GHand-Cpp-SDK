@@ -1,4 +1,5 @@
 #include "ethercat_comm.h"
+#include "logger.h"
 
 #include <windows.h>
 
@@ -22,6 +23,7 @@ int EtherCATComm::wkc;
 int EtherCATComm::mappingdone = 0;
 int EtherCATComm::dorun = 0;
 int EtherCATComm::inOP = 0;
+bool EtherCATComm::is_connected_ = false;
 int EtherCATComm::dowkccheck = 0;
 int EtherCATComm::currentgroup = 0;
 int EtherCATComm::cycle = 0;
@@ -97,11 +99,14 @@ std::map<std::string, std::string> EtherCATComm::SearchAdapters() {
 }
 
 int EtherCATComm::Connect(std::string device_name) {
+    LOG_INFO("EtherCAT connecting to: " << device_name);
+
     std::lock_guard<std::mutex> lock(context_mutex_);
 
     // 步骤1：尝试获取设备锁（防止多进程同时访问）
     std::string lock_path = GetAdapterLockPath(device_name);
     if (!device_lock_.Acquire(lock_path)) {
+        LOG_ERROR("Adapter " << device_name << " is already locked by another process");
         std::cerr << "Failed to connect: adapter " << device_name
                   << " is already locked by another process" << std::endl;
         return -1;  // 设备已被占用
@@ -112,12 +117,14 @@ int EtherCATComm::Connect(std::string device_name) {
 
     ResetContext();
     if (ecx_init(&ctx_, device_name.c_str()) <= 0) {
+        LOG_ERROR("Failed to initialize EtherCAT");
         device_lock_.Release();
         return -2;
     }
 
     int config_result = ecx_config_init(&ctx_);
     if (config_result <= 0 || ctx_.slavecount <= 0) {
+        LOG_ERROR("No slave devices found");
         device_lock_.Release();
         return -3;
     }
@@ -163,6 +170,7 @@ int EtherCATComm::Connect(std::string device_name) {
     }
 
     inOP = 1;
+    is_connected_ = true;
 
     return 0;
 }
@@ -171,6 +179,7 @@ int EtherCATComm::Disconnect() {
     StopThreads();
     std::lock_guard<std::mutex> lock(context_mutex_);
     inOP = 0;
+    is_connected_ = false;
     dorun = 0;
 
     memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
@@ -400,6 +409,7 @@ OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
                         if (slave->state == EC_STATE_NONE) {
                             slave->islost = TRUE;
                             threads_started_ = false;  // 异常防止崩溃
+                            is_connected_ = false;
                             slave->mbxhandlerstate = ECT_MBXH_LOST;
                             if (slave->Ibytes) {
                                 memset(slave->inputs, 0x00, slave->Ibytes);
@@ -412,10 +422,12 @@ OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
                         if (ecx_recover_slave(&ctx_, slaveix, EC_TIMEOUTMON)) {
                             slave->islost = FALSE;
                             threads_started_ = TRUE;
+                            is_connected_ = true;
                         }
                     } else {
                         slave->islost = FALSE;
                         threads_started_ = TRUE;
+                        is_connected_ = true;
                     }
                 }
             }

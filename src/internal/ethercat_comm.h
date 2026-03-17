@@ -56,7 +56,7 @@ public:
 
     uint8_t* ReadTxPDO(uint16_t slave);
     bool IsConnected() const {
-        return ctx_.slavecount > 0;
+        return is_connected_;
     }
 
     static void SetDataCallback(std::function<void(const uint8_t*, size_t)> callback) {
@@ -96,6 +96,7 @@ public:
     static int mappingdone;
     static int dorun;
     static int inOP;
+    static bool is_connected_;
     static int dowkccheck;
     static int currentgroup;
     static int cycle;

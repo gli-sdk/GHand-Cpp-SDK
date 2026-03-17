@@ -2,6 +2,7 @@
 #include "dexhand.h"
 #include "ethercat_comm.h"
 #include "dexhand_callback_manager.h"
+#include "logger.h"
 
 #include <cmath>
 #include <cstring>
@@ -89,19 +90,24 @@ DexHand::DexHand()
 DexHand::~DexHand() = default;
 
 bool DexHand::ConnectToDevice(CommType comm_type, const std::string& device_name) {
+    LOG_INFO("Connecting to device: " << device_name);
+
     switch (comm_type) {
         case CommType::ETHERCAT: {
             int ec_result = ethercat_comm_->Connect(device_name);
             if (ec_result == 0) {
                 GetDeviceInfo();
                 GetHandType();
+                LOG_INFO("Successfully connected to device: " << device_name);
                 return true;
             }
+            LOG_ERROR("Failed to connect to device: " << device_name);
             return false;
         }
         case CommType::CANFD:
         case CommType::RS485:
         default:
+            LOG_WARNING("Unsupported communication type");
             return false;
     }
 }
@@ -126,9 +132,19 @@ bool DexHand::Connect(CommType comm_type, const std::string& device_name) {
 }
 
 bool DexHand::Disconnect() {
+    LOG_INFO("Disconnecting from device");
+
     hand_type_ = HandType::NONE;
     device_info_ = DeviceInfo();
+    Stop();
     int result = ethercat_comm_->Disconnect();
+
+    if (result == 0) {
+        LOG_INFO("Successfully disconnected from device");
+    } else {
+        LOG_ERROR("Failed to disconnect from device");
+    }
+
     return (result == 0);
 }
 
@@ -215,13 +231,17 @@ void DexHand::SetControlMode(ControlMode mode) {
 bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
     // 检查设备连接状态
     if (!IsConnected()) {
+        LOG_ERROR("Cannot move joints: device not connected");
         return false;
     }
 
     // 检查命令是否为空
     if (joints.empty()) {
+        LOG_WARNING("MoveJoints called with empty joint list");
         return false;
     }
+
+    LOG_DEBUG("Moving " << joints.size() << " joints");
 
     // 将用户传入的joints转为unordered_map，按id索引（方便快速查找）
     std::unordered_map<int, JointCommand> joint_map;
@@ -308,6 +328,8 @@ void DexHand::Stop() {
 }
 
 bool DexHand::ClearFault() {
+    LOG_INFO("Clearing device fault");
+
     std::uint8_t command = 0x01;
     std::uint8_t state = 0xFF;
     int size = sizeof(std::uint8_t);
@@ -320,14 +342,22 @@ bool DexHand::ClearFault() {
             ret = ethercat_comm_->SDORead(1, 0x2002, 0x02, &size, &state, EC_TIMEOUTRXM);
             if (ret > 0 && state == 0) {  // 执行完成
                 ret = ethercat_comm_->SDORead(1, 0x2002, 0x03, &size, &result, EC_TIMEOUTRXM);
+                if (result == 1) {
+                    LOG_INFO("Device fault cleared successfully");
+                } else {
+                    LOG_ERROR("Failed to clear device fault");
+                }
                 return result == 1;  // true成功, false失败
             }
         }
     }
+    LOG_ERROR("Clear fault operation timed out");
     return false;
 }
 
 bool DexHand::InitJoint() {
+    LOG_INFO("Initializing joint positions");
+
     std::uint8_t command = 0x01;
     std::uint8_t state = 0xFF;
     int size = sizeof(std::uint8_t);
@@ -340,10 +370,16 @@ bool DexHand::InitJoint() {
             ret = ethercat_comm_->SDORead(1, 0x2003, 0x02, &size, &state, EC_TIMEOUTRXM);
             if (ret > 0 && state == 0) {  // 执行完成
                 ret = ethercat_comm_->SDORead(1, 0x2003, 0x03, &size, &result, EC_TIMEOUTRXM);
+                if (result == 1) {
+                    LOG_INFO("Joint initialization completed successfully");
+                } else {
+                    LOG_ERROR("Joint initialization failed");
+                }
                 return result == 1;  // true成功, false失败
             }
         }
     }
+    LOG_ERROR("Joint initialization timed out");
     return false;
 }
 
@@ -398,6 +434,7 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
     HandState parsed_temperature;
 
     if (data == nullptr || size == 0) {
+        LOG_WARNING("Received invalid data: null or empty");
         return;  // 无效数据
     }
 
@@ -517,6 +554,8 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
 int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
                         const std::string& filename,
                         std::function<void(int)> progressCallback) {
+    LOG_INFO("Starting firmware update: " << filename);
+
     const int retry_count = 10;
     const int retry_delay_ms = 1000;
     std::string last_version = device_info_.software_version;
