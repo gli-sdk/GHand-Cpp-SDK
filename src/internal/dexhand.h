@@ -63,6 +63,7 @@ public:
  private:
     bool ConnectToDevice(CommType comm_type, const std::string& device_name);
     void OnRawDataReceived(const uint8_t* data, size_t size);
+    void ClampJointAngle(JointCommand& joint);
 
     std::unique_ptr<EtherCATComm> ethercat_comm_;
     std::unique_ptr<DexHandCallbackManager> callback_manager_;
@@ -70,6 +71,9 @@ public:
     mutable HandType hand_type_;
     mutable DeviceInfo device_info_;
     ControlMode control_mode_;
+
+    // 关节限制静态表 (仅包含可控关节)
+    static const std::map<JointId, std::pair<float, float>> kJointLimits_;
 };
 
 }  // namespace internal

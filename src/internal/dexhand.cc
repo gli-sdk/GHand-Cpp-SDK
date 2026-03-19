@@ -247,7 +247,9 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
     std::unordered_map<int, JointCommand> joint_map;
     for (const auto& joint : joints) {
         if (static_cast<int>(joint.id) < static_cast<int>(JointId::NUM_JOINTS)) {
-            joint_map[static_cast<int>(joint.id)] = joint;
+            JointCommand limited_joint = joint;
+            ClampJointAngle(limited_joint);
+            joint_map[static_cast<int>(joint.id)] = limited_joint;
         }
     }
 
@@ -600,6 +602,44 @@ int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
         }
     }
     return 0;
+}
+
+// 关节限制静态表 (仅包含可控关节, 单位: 度)
+const std::map<JointId, std::pair<float, float>> DexHand::kJointLimits_ = {
+    // 大拇指
+    {JointId::THUMB_PIP, {0.0f, 66.0f}},
+    {JointId::THUMB_MCP, {0.0f, 50.0f}},
+    {JointId::THUMB_SWING, {0.0f, 90.0f}},
+    {JointId::THUMB_ROTATION, {-30.0f, 60.0f}},
+    // 食指
+    {JointId::FF_PIP, {0.0f, 80.0f}},
+    {JointId::FF_MCP, {0.0f, 90.0f}},
+    {JointId::FF_SWING, {-10.0f, 10.0f}},
+    // 中指
+    {JointId::MF_PIP, {0.0f, 90.0f}},
+    {JointId::MF_MCP, {0.0f, 90.0f}},
+    // 无名指
+    {JointId::RF_PIP, {0.0f, 90.0f}},
+    {JointId::RF_MCP, {0.0f, 90.0f}},
+    // 小指
+    {JointId::LF_PIP, {0.0f, 74.0f}},
+    {JointId::LF_MCP, {0.0f, 90.0f}}
+};
+
+void DexHand::ClampJointAngle(JointCommand& joint) {
+    auto it = kJointLimits_.find(joint.id);
+    if (it == kJointLimits_.end()) return;  // 未找到限制(如DIP关节)
+
+    const auto& [min_angle, max_angle] = it->second;
+    if (joint.angle < min_angle) {
+        LOG_WARNING("[Joint] " << ToString(joint.id)
+                   << " angle " << joint.angle << " < min " << min_angle << ", set to " << min_angle);
+        joint.angle = min_angle;
+    } else if (joint.angle > max_angle) {
+        LOG_WARNING("[Joint] " << ToString(joint.id)
+                   << " angle " << joint.angle << " > max " << max_angle << ", set to " << max_angle);
+        joint.angle = max_angle;
+    }
 }
 
 }  // namespace internal
