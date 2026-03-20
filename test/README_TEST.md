@@ -1,7 +1,7 @@
 # 测试环境搭建
 
 ## 1. 安装 MinGW-w64（编译器 + make+gdb）
-下载：[MinGW-w64](https://sourceforge.net/projects/mingw-w64/files/)（选 x86_64-posix-seh）
+下载：[MinGW-w64](https://github.com/niXman/mingw-builds-binaries/releases)（选x86_64-15.2.0-release-win32-seh-ucrt-rt_v13-rev1.7z）
 解压到 C:\mingw64
 配置环境变量：把 C:\mingw64\bin 加入系统 Path
 gcc -v
@@ -10,7 +10,7 @@ gdb -v
 mingw32-make -v
 
 ## 2. 安装 CMake
-下载：CMake（Windows x64 Installer）
+下载：CMake（Windows x64 Installer）https://cmake.org/download/
 安装时勾选 Add CMake to the system PATH
 验证：
 cmake --version
@@ -29,6 +29,7 @@ gcovr --version
 ## 5. 获取 googletest 源码
 # 项目根目录执行
 git clone https://github.com/google/googletest.git
+git clone https://gitee.com/hongjie-zhang0507/googletest.git
 # 或下载 zip 解压到项目下的 googletest 文件夹
 
 # 项目结构（推荐）
@@ -68,6 +69,7 @@ cd build
 calc_test.exe
 生成 JUnit 报告（用于 CI）
 .\calc_test.exe --gtest_output=xml:test_report.xml
+.\calc_test.exe --gtest_output=xml:test_report.xml --gtest_color=yes
 
 ## 3. 生成覆盖率报告
 bash
