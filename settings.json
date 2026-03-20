@@ -1,0 +1,7 @@
+{
+    "cmake.generator": "MinGW Makefiles",
+    "cmake.configureArgs": ["-DENABLE_COVERAGE=ON"],
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "testing.automaticallyOpenPeekWindow": "onTestRunStart",
+    "coverage-gutters.coverageFileNames": ["coverage.info", "coverage.html"]
+}
