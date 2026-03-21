@@ -17,6 +17,7 @@ include_directories(${PROJECT_SOURCE_DIR}/src)
 
 # 编译业务库
 add_library(calc_lib src/calc.cpp)
+# add_library(calc_lib src/)
 
 # 引入 googletest
 add_subdirectory(googletest)

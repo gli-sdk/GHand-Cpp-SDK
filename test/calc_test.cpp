@@ -26,14 +26,7 @@ TEST(CalcMockTest, MockAddTest) {
     EXPECT_EQ(mock.add(2, 3), 10);
 }
 
-// int main(int argc, char **argv) {
-//     testing::InitGoogleTest(&argc, argv);
-//     return RUN_ALL_TESTS();
-// }
-
-int main(int argc, char** argv) {
-    std::cout << "GoogleTest version: " 
-              << GTEST_VERSION_ << "\n";  // 需要 1.8.0 或更高版本
-    ::testing::InitGoogleTest(&argc, argv);
+int main(int argc, char **argv) {
+    testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
