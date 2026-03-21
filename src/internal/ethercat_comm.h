@@ -2,7 +2,14 @@
 #define XIAOYAO_INTERNAL_ETHERCAT_COMM_H_
 
 #include <soem/soem.h>
-#include <windows.h>
+
+#ifdef _WIN32
+    #include <windows.h>
+#else
+    #include <pthread.h>
+    #include <unistd.h>
+    #include <sys/mman.h>
+#endif
 
 #include <atomic>
 #include <condition_variable>

@@ -186,7 +186,8 @@ bool FileLock::Acquire(const std::string& lock_file) {
     // 写入当前进程 ID 和网卡名
     pid_t pid = getpid();
     std::string content = std::to_string(pid) + "\n" + lock_file + "\n";
-    write(fd_, content.c_str(), content.size());
+    ssize_t written = write(fd_, content.c_str(), content.size());
+    (void)written;  // 抑制未使用警告
     fsync(fd_);
 
     is_locked_ = true;
@@ -241,7 +242,7 @@ std::string GetAdapterLockPath(const std::string& adapter_name) {
         return "";
     }
 
-// #ifdef _WIN32
+#ifdef _WIN32
     // Windows: 使用 %TEMP% 目录
     char temp_path[MAX_PATH];
     DWORD result = GetTempPathA(MAX_PATH, temp_path);
@@ -257,10 +258,10 @@ std::string GetAdapterLockPath(const std::string& adapter_name) {
     }
     lock_path += "xiaoyao_ethernet_" + hash + ".lock";
 
-// #else
-//     // Linux: 固定使用 /tmp 目录
-//     std::string lock_path = "/tmp/xiaoyao_ethernet_" + hash + ".lock";
-// #endif
+#else
+    // Linux: 固定使用 /tmp 目录
+    std::string lock_path = "/tmp/xiaoyao_ethernet_" + hash + ".lock";
+#endif
 
     return lock_path;
 }

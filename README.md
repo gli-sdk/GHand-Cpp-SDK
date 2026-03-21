@@ -22,14 +22,18 @@ xiaoyao-sdk-cpp/
 │   ├── types.h         # 类型定义
 │   ├── logging.h       # 日志系统
 │   └── version.h       # 版本信息
-├── lib/               # 库文件（按平台分类）
-│   ├── windows/
-│   │   └── x64/       # Windows 64位
-│   │       ├── xiaoyao.lib
-│   │       └── xiaoyao.dll
-│   └── linux/
-│       └── x64/       # Linux 64位（待添加）
-└── examples/          # 示例代码
+├── src/                # 源代码
+│   └── internal/       # 内部实现
+├── lib/                # 库文件（按平台分类）
+│   ├── windows/        # Windows 64位
+│   │   ├── xiaoyao.lib
+│   │   └── xiaoyao.dll
+│   └── linux/          # Linux 64位
+│       └── libxiaoyao.so
+├── cmake/              # 平台配置
+│   ├── Windows.cmake
+│   └── Linux.cmake
+├── examples/           # 示例代码
 ```
 
 ## 快速开始
@@ -106,8 +110,10 @@ LOG_DEBUG("调试信息");
 
 ## 编译示例
 
+### Windows
+
 ```bash
-mkdir build 
+mkdir build
 cd build
 cmake ..
 cmake --build . --config Release
@@ -116,15 +122,38 @@ cmake --build . --config Release
 .\examples\Release\basic_connection.exe
 ```
 
+### Linux
+```bash
+# 安装依赖
+sudo apt install -y cmake build-essential pkg-config libpcap-dev libssl-dev
+
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+
+# 运行示例（需要 root 权限访问网卡）
+sudo ./examples/basic_connection
+```
+
 ## 系统要求
 
-### 当前支持的平台
-- **Windows x64** (Windows 7 或更高版本)
-  - Visual Studio 2017 或更高版本
-  - CMake 3.5 或更高版本
+### 支持的平台
 
-### 计划支持的平台
-- **Linux x64** (开发中)
+| 平台 | 架构 | 状态 | 编译器 |
+|------|------|------|--------|
+| **Windows** | x64 | ✅ 稳定 | Visual Studio 2017+ |
+| **Linux** | x64 | ✅ 稳定 | GCC 7.5+ (C++11) |
+
+#### Windows
+- Windows 7 或更高版本
+- Visual Studio 2017 或更高版本
+- CMake 3.5 或更高版本
+
+#### Linux
+- Ubuntu 20.04 LTS 或更高版本
+- GCC 7.5+ (支持 C++11)
+- CMake 3.5 或更高版本
+- libpcap-dev, libssl-dev
 
 ## API 参考
 
