@@ -1,9 +1,23 @@
+// 在包含任何头文件之前禁用 inline 宏冲突错误
+#ifdef _WIN32
+    #pragma warning(disable: 4005)
+#endif
+
 #include "ethercat_comm.h"
 #include "logger.h"
 
-#include <windows.h>
+#ifdef _WIN32
+    #include <windows.h>
+#else
+    #include <pthread.h>
+    #include <unistd.h>
+    #include <sys/mman.h>
+    #include <sys/resource.h>
+    #include <errno.h>
+#endif
 
 #include <chrono>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -16,8 +30,8 @@
 namespace xiaoyao {
 namespace internal {
 
-OSAL_THREAD_HANDLE
-EtherCATComm::threadrt, EtherCATComm::thread1;
+OSAL_THREAD_HANDLE EtherCATComm::threadrt;
+OSAL_THREAD_HANDLE EtherCATComm::thread1;
 int EtherCATComm::expectedWKC;
 int EtherCATComm::wkc;
 int EtherCATComm::mappingdone = 0;
@@ -52,16 +66,6 @@ void EtherCATComm::StartThreads() {
         osal_thread_create_rt(&threadrt, 128000, reinterpret_cast<void*>(Ecatthread), NULL);
         osal_thread_create(&thread1, 128000, reinterpret_cast<void*>(Ecatcheck), NULL);
 
-        // // 设置进程优先级类别
-        // // 提高整个进程的优先级，确保窗口最小化后仍有足够的CPU时间
-        // SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
-
-        // // 设置线程优先级
-        // // EtherCAT 实时线程需要高优先级以确保实时性能
-        // SetThreadPriority(threadrt, THREAD_PRIORITY_TIME_CRITICAL);
-        // // 检线程使用稍低优先级，避免影响实时线程
-        // SetThreadPriority(thread1, THREAD_PRIORITY_ABOVE_NORMAL);
-
         threads_started_ = true;
     }
 }
@@ -70,12 +74,7 @@ void EtherCATComm::StopThreads() {
     if (threads_started_) {
         threads_started_ = false;
         dorun = 0;
-        // const int max_wait_ms = 2000;
-        // int wait_count = 0;
-        // while (threads_started_ && wait_count < max_wait_ms) {
         osal_usleep(10000);
-        // wait_count += 10;
-        //}
     }
 }
 
@@ -117,7 +116,7 @@ int EtherCATComm::Connect(std::string device_name) {
 
     ResetContext();
     if (ecx_init(&ctx_, device_name.c_str()) <= 0) {
-        LOG_ERROR("Failed to initialize EtherCAT");
+        LOG_ERROR("Failed to initialize EtherCAT on " << device_name);
         device_lock_.Release();
         return -2;
     }
@@ -437,14 +436,17 @@ OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
 }
 bool EtherCATComm::InputBin(const char* fname, int* length) {
     FILE* fp = nullptr;
-    errno_t err;
-
     int cc = 0, c;
 
-    err = fopen_s(&fp, fname, "rb");
+#ifdef _WIN32
+    errno_t err = fopen_s(&fp, fname, "rb");
     if (err != 0 || fp == NULL) return false;
+#else
+    fp = fopen(fname, "rb");
+    if (fp == NULL) return false;
+#endif
 
-    while (((c = fgetc(fp)) != EOF) && (cc < kFirmwareBufferSize)) {
+    while (((c = fgetc(fp)) != EOF) && (cc < static_cast<int>(kFirmwareBufferSize))) {
         file_buffer[cc++] = (uint8_t)c;
     }
 

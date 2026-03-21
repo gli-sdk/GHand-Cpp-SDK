@@ -630,7 +630,8 @@ void DexHand::ClampJointAngle(JointCommand& joint) {
     auto it = kJointLimits_.find(joint.id);
     if (it == kJointLimits_.end()) return;  // 未找到限制(如DIP关节)
 
-    const auto& [min_angle, max_angle] = it->second;
+    const float min_angle = it->second.first;
+    const float max_angle = it->second.second;
     if (joint.angle < min_angle) {
         LOG_WARNING("[Joint] " << ToString(joint.id)
                    << " angle " << joint.angle << " < min " << min_angle << ", set to " << min_angle);

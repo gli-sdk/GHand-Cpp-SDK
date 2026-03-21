@@ -13,10 +13,13 @@ namespace internal {
 
 Logger::Logger()
     : console_level_(LogLevel::WARNING),
+      file_stream_(nullptr),
       file_level_(LogLevel::DEBUG),
+      mutex_(),
+      stream_buffer_(new std::ostringstream()),
       current_level_(LogLevel::INFO),
-      current_line_(0),
-      stream_buffer_(new std::ostringstream()) {
+      current_file_(),
+      current_line_(0) {
 }
 
 Logger::~Logger() {
