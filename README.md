@@ -106,7 +106,7 @@ LOG_ERROR("连接失败");
 LOG_DEBUG("调试信息");
 ```
 
-详细的日志系统使用说明请参阅 [日志系统文档](docs/LOGGING.md)。
+详细的日志系统使用说明请参阅 [C++ SDK 开发者文档](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)。
 
 ## 编译示例
 
@@ -157,7 +157,13 @@ sudo ./examples/basic_connection
 
 ## API 参考
 
-详细的 API 文档请查看头文件中的注释。
+完整的 API 文档请查看 [C++ SDK 开发者文档](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)，包含：
+- 完整的接口说明和参数定义
+- 详细的代码示例和使用场景
+- 常见问题解答和技术支持信息
+- 环境配置和安装流程
+
+详细的 API 签名说明请查看头文件中的注释。
 
 ## 支持与反馈
 
