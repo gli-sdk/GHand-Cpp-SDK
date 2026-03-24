@@ -137,7 +137,7 @@ struct DeviceInfo {
     std::string device_name;
     std::string hardware_version;
     std::string software_version;
-    std::string serial_number;
+    unsigned int serial_number;
 };
 
 /**
@@ -154,7 +154,7 @@ struct HandState {
     }
 
     bool HasError() const {
-        return error != ErrorCode::NORMAL || state != State::RUNNING || state == State::STOPPED;
+        return error != ErrorCode::NORMAL || (state != State::RUNNING && state != State::STOPPED);
     }
 
     /**
@@ -215,7 +215,7 @@ struct Joint {
     }
 
     bool HasError() const {
-        return error != ErrorCode::NORMAL || state != State::RUNNING || state == State::STOPPED;
+        return error != ErrorCode::NORMAL || (state != State::RUNNING && state != State::STOPPED);
     }
 
     /**

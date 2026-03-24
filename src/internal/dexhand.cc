@@ -218,7 +218,13 @@ DeviceInfo DexHand::GetDeviceInfo() const {
     memset(value, 0, sizeof(value));
     result = ethercat_comm_->SDORead(1, 0x1018, 0x04, &size, &value, EC_TIMEOUTRXM);
     if (result == 1) {
-        device_info_.serial_number = std::string(reinterpret_cast<char*>(value));
+        // 将 4 字节序列号转换为 unsigned int
+        unsigned int serial_num = 0;
+        serial_num |= static_cast<unsigned char>(value[0]);
+        serial_num |= static_cast<unsigned char>(value[1]) << 8;
+        serial_num |= static_cast<unsigned char>(value[2]) << 16;
+        serial_num |= static_cast<unsigned char>(value[3]) << 24;
+        device_info_.serial_number = serial_num;
     }
 
     return device_info_;

@@ -249,8 +249,8 @@ private:
  */
 std::vector<JointCommand> CreateTestJoints() {
     return {
-        {JointId::FF_PIP, 45.0f * M_PI / 180.0f, 100, 100},
-        {JointId::FF_MCP, 30.0f * M_PI / 180.0f, 100, 100},
+        {JointId::FF_PIP, 45.0f, 100, 100},
+        {JointId::FF_MCP, 30.0f, 100, 100},
     };
 }
 

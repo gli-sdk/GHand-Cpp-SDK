@@ -1,12 +1,6 @@
-#include "xiaoyao/xiaoyao.h"
-#include <iostream>
-#include <iomanip>
-#include <thread>
-#include <chrono>
-#include <cstring>
-#include <string>
-
+// 在包含 Windows 头文件之前先定义这些宏，避免 winsock.h/winsock2.h 冲突
 #ifdef _WIN32
+    #define WIN32_LEAN_AND_MEAN
     #include <winsock2.h>
     #include <ws2tcpip.h>
     #pragma comment(lib, "ws2_32.lib")
@@ -21,9 +15,13 @@
     const int SOCKET_ERROR = -1;
 #endif
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include "xiaoyao/xiaoyao.h"
+#include <iostream>
+#include <iomanip>
+#include <thread>
+#include <chrono>
+#include <cstring>
+#include <string>
 
 using namespace xiaoyao;
 
@@ -72,17 +70,17 @@ const double PROCESS_INTERVAL = 0.02;  // 20ms 处理间隔
 // ========== 辅助函数 ==========
 
 /**
- * @brief 角度限制函数（将角度限制在指定范围内并转换为弧度）
+ * @brief 角度限制函数（将角度限制在指定范围内）
  * @param value 输入角度值（度）
  * @param min_angle 最小角度值（度）
  * @param max_angle 最大角度值（度）
- * @return 被限制在范围内的角度值（弧度）
+ * @return 被限制在范围内的角度值（度）
  */
-float ClipAngleRadians(float value, float min_angle, float max_angle) {
+float ClipAngle(float value, float min_angle, float max_angle) {
     float clamped = value;
     if (clamped < min_angle) clamped = min_angle;
     if (clamped > max_angle) clamped = max_angle;
-    return clamped * M_PI / 180.0f;
+    return clamped;
 }
 
 /**
@@ -388,40 +386,40 @@ int main() {
 
                     // 拇指关节
                     joints.push_back({JointId::THUMB_PIP,
-                        ClipAngleRadians(left_hand.thumb.pip_bend, 0, 75), speed, torque});
+                        ClipAngle(left_hand.thumb.pip_bend, 0, 75), speed, torque});
                     joints.push_back({JointId::THUMB_MCP,
-                        ClipAngleRadians(left_hand.thumb.mcp_bend - 40, 0, 55), speed, torque});
+                        ClipAngle(left_hand.thumb.mcp_bend - 40, 0, 55), speed, torque});
                     joints.push_back({JointId::THUMB_SWING,
-                        ClipAngleRadians(-(left_hand.thumb.mcp_roll + left_hand.thumb.pip_roll +
+                        ClipAngle(-(left_hand.thumb.mcp_roll + left_hand.thumb.pip_roll +
                                           left_hand.thumb.dip_roll) - 85, 0, 90), speed, torque});
                     joints.push_back({JointId::THUMB_ROTATION,
-                        ClipAngleRadians(-left_hand.thumb.dip_sway, -30, 60), speed, torque});
+                        ClipAngle(-left_hand.thumb.dip_sway, -30, 60), speed, torque});
 
                     // 食指关节
                     joints.push_back({JointId::FF_PIP,
-                        ClipAngleRadians(left_hand.index.pip_bend, 0, 75), speed, torque});
+                        ClipAngle(left_hand.index.pip_bend, 0, 75), speed, torque});
                     joints.push_back({JointId::FF_MCP,
-                        ClipAngleRadians(left_hand.index.mcp_bend, 0, 70), speed, torque});
+                        ClipAngle(left_hand.index.mcp_bend, 0, 70), speed, torque});
                     joints.push_back({JointId::FF_SWING,
-                        ClipAngleRadians(left_hand.index.mcp_sway + left_hand.index.pip_sway, -15, 15), speed, torque});
+                        ClipAngle(left_hand.index.mcp_sway + left_hand.index.pip_sway, -15, 15), speed, torque});
 
                     // 中指关节
                     joints.push_back({JointId::MF_PIP,
-                        ClipAngleRadians(left_hand.middle.pip_bend, 0, 75), speed, torque});
+                        ClipAngle(left_hand.middle.pip_bend, 0, 75), speed, torque});
                     joints.push_back({JointId::MF_MCP,
-                        ClipAngleRadians(left_hand.middle.mcp_bend, 0, 70), speed, torque});
+                        ClipAngle(left_hand.middle.mcp_bend, 0, 70), speed, torque});
 
                     // 无名指关节
                     joints.push_back({JointId::RF_PIP,
-                        ClipAngleRadians(left_hand.ring.pip_bend, 0, 75), speed, torque});
+                        ClipAngle(left_hand.ring.pip_bend, 0, 75), speed, torque});
                     joints.push_back({JointId::RF_MCP,
-                        ClipAngleRadians(left_hand.ring.mcp_bend, 0, 70), speed, torque});
+                        ClipAngle(left_hand.ring.mcp_bend, 0, 70), speed, torque});
 
                     // 小指关节
                     joints.push_back({JointId::LF_PIP,
-                        ClipAngleRadians(left_hand.pinky.pip_bend, 0, 75), speed, torque});
+                        ClipAngle(left_hand.pinky.pip_bend, 0, 75), speed, torque});
                     joints.push_back({JointId::LF_MCP,
-                        ClipAngleRadians(left_hand.pinky.mcp_bend, 0, 70), speed, torque});
+                        ClipAngle(left_hand.pinky.mcp_bend, 0, 70), speed, torque});
 
                     // 发送关节命令
                     hand.MoveJoints(joints);

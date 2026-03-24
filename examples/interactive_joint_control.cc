@@ -231,12 +231,10 @@ int main() {
                     int joint_id = pair.first;
                     const JointParams& params = pair.second;
 
-                    // 转换角度从度到弧度
-                    float angle_rad = params.angle * M_PI / 180.0f;
-
+                    // 直接使用角度（度），MoveJoints 内部会转换为弧度
                     joints.push_back({
                         static_cast<JointId>(joint_id),
-                        angle_rad,
+                        params.angle,
                         static_cast<uint8_t>(params.speed),
                         static_cast<uint8_t>(params.torque)
                     });
@@ -265,9 +263,9 @@ int main() {
                     // 只显示前5个关节作为示例
                     for (size_t i = 0; i < std::min(size_t(5), last_joints.size()); ++i) {
                         const Joint& joint = last_joints[i];
-                        float angle_deg = joint.angle * 180.0f / M_PI;
+                        // GetJoints() 返回的角度已经是度数，无需转换
                         std::cout << std::left << std::setw(20) << ToString(joint.id)
-                                  << std::fixed << std::setprecision(1) << std::setw(12) << angle_deg
+                                  << std::fixed << std::setprecision(1) << std::setw(12) << joint.angle
                                   << ToString(joint.state) << std::endl;
                     }
                     if (last_joints.size() > 5) {

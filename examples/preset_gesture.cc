@@ -160,11 +160,10 @@ std::vector<JointCommand> CreateJointsFromGesture(
     std::vector<JointCommand> joints;
 
     for (const auto& pair : gesture_def) {
-        // 将角度从度转换为弧度
+        // 直接使用角度（度），MoveJoints 内部会转换为弧度
         JointId joint_id = pair.first;
-        float angle_deg = pair.second;
-        float angle_rad = angle_deg * M_PI / 180.0f;
-        joints.push_back({joint_id, angle_rad, speed, torque});
+        float angle = pair.second;
+        joints.push_back({joint_id, angle, speed, torque});
     }
 
     return joints;
