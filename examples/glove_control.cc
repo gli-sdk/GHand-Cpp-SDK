@@ -25,10 +25,10 @@
 
 using namespace xiaoyao;
 
-// ========== 数据结构 ==========
+// ========== Data Structures ==========
 
 /**
- * @brief 大拇指手指数据（9个传感器）
+ * @brief Thumb finger data (9 sensors)
  */
 struct ThumbFinger {
     float mcp_bend, mcp_sway, mcp_roll;
@@ -41,7 +41,7 @@ struct ThumbFinger {
 };
 
 /**
- * @brief 其他手指数据（4个传感器）
+ * @brief Other finger data (4 sensors)
  */
 struct Finger {
     float mcp_bend, mcp_sway;
@@ -51,7 +51,7 @@ struct Finger {
 };
 
 /**
- * @brief 手部数据
+ * @brief Hand data
  */
 struct HandData {
     ThumbFinger thumb;
@@ -61,20 +61,20 @@ struct HandData {
     Finger pinky;
 };
 
-// ========== 配置参数 ==========
+// ========== Configuration Parameters ==========
 
 const char* UDP_IP = "192.168.1.19";
 const int UDP_PORT = 8080;
-const double PROCESS_INTERVAL = 0.02;  // 20ms 处理间隔
+const double PROCESS_INTERVAL = 0.02;  // 20ms processing interval
 
-// ========== 辅助函数 ==========
+// ========== Helper Functions ==========
 
 /**
- * @brief 角度限制函数（将角度限制在指定范围内）
- * @param value 输入角度值（度）
- * @param min_angle 最小角度值（度）
- * @param max_angle 最大角度值（度）
- * @return 被限制在范围内的角度值（度）
+ * @brief Angle clipping function (clips angle to specified range)
+ * @param value Input angle value (degrees)
+ * @param min_angle Minimum angle value (degrees)
+ * @param max_angle Maximum angle value (degrees)
+ * @return Angle value clipped within range (degrees)
  */
 float ClipAngle(float value, float min_angle, float max_angle) {
     float clamped = value;
@@ -84,18 +84,18 @@ float ClipAngle(float value, float min_angle, float max_angle) {
 }
 
 /**
- * @brief 处理手套数据，解析左右手的手指数据
- * @param data 原始数据字符串
- * @param left_hand 输出：左手数据
- * @param right_hand 输出：右手数据
- * @return 成功返回true
+ * @brief Process glove data, parse left and right hand finger data
+ * @param data Raw data string
+ * @param left_hand Output: left hand data
+ * @param right_hand Output: right hand data
+ * @return Returns true on success
  */
 bool ProcessGloveData(const char* data, HandData& left_hand, HandData& right_hand) {
-    // 复制数据以避免修改原始字符串
+    // Copy data to avoid modifying original string
     std::string data_str(data);
     std::vector<float> numeric_data;
 
-    // 手动解析逗号分隔的数据
+    // Manually parse comma-separated data
     size_t start = 0;
     size_t end = data_str.find(',');
     bool first_item = true;
@@ -108,7 +108,7 @@ bool ProcessGloveData(const char* data, HandData& left_hand, HandData& right_han
                 float value = std::stof(item);
                 numeric_data.push_back(value);
             } catch (const std::exception&) {
-                // 转换失败，跳过
+                // Conversion failed, skip
             }
         } else {
             first_item = false;
@@ -118,24 +118,24 @@ bool ProcessGloveData(const char* data, HandData& left_hand, HandData& right_han
         end = data_str.find(',', start);
     }
 
-    // 处理最后一个项目
+    // Process last item
     if (start < data_str.length() && !first_item) {
         try {
             float value = std::stof(data_str.substr(start));
             numeric_data.push_back(value);
         } catch (const std::exception&) {
-            // 转换失败，跳过
+            // Conversion failed, skip
         }
     }
 
-    // 需要至少 192 个数据点
+    // Need at least 192 data points
     if (numeric_data.size() < 192) {
         return false;
     }
 
-    // 提取右手数据
+    // Extract right hand data
     std::vector<float> right_hand_data;
-    // 右手拇指 (组 1, 2, 3)
+    // Right hand thumb (groups 1, 2, 3)
     right_hand_data.push_back(numeric_data[10]); right_hand_data.push_back(numeric_data[9]);
     right_hand_data.push_back(numeric_data[11]);  // mcp bend, sway, roll
     right_hand_data.push_back(numeric_data[16]); right_hand_data.push_back(numeric_data[15]);
@@ -143,25 +143,25 @@ bool ProcessGloveData(const char* data, HandData& left_hand, HandData& right_han
     right_hand_data.push_back(numeric_data[22]); right_hand_data.push_back(numeric_data[21]);
     right_hand_data.push_back(numeric_data[23]);  // dip bend, sway, roll
 
-    // 右手食指 (组 4, 5)
+    // Right hand index finger (groups 4, 5)
     right_hand_data.push_back(numeric_data[28]); right_hand_data.push_back(numeric_data[27]);  // mcp
     right_hand_data.push_back(numeric_data[34]); right_hand_data.push_back(numeric_data[33]);  // pip
 
-    // 右手中指 (组 7, 8)
+    // Right hand middle finger (groups 7, 8)
     right_hand_data.push_back(numeric_data[46]); right_hand_data.push_back(numeric_data[45]);  // mcp
     right_hand_data.push_back(numeric_data[52]); right_hand_data.push_back(numeric_data[51]);  // pip
 
-    // 右手无名指 (组 10, 11)
+    // Right hand ring finger (groups 10, 11)
     right_hand_data.push_back(numeric_data[64]); right_hand_data.push_back(numeric_data[63]);  // mcp
     right_hand_data.push_back(numeric_data[70]); right_hand_data.push_back(numeric_data[69]);  // pip
 
-    // 右手小指 (组 13, 14)
+    // Right hand little finger (groups 13, 14)
     right_hand_data.push_back(numeric_data[82]); right_hand_data.push_back(numeric_data[81]);  // mcp
     right_hand_data.push_back(numeric_data[88]); right_hand_data.push_back(numeric_data[87]);  // pip
 
-    // 提取左手数据
+    // Extract left hand data
     std::vector<float> left_hand_data;
-    // 左手拇指 (组 17, 18, 19)
+    // Left hand thumb (groups 17, 18, 19)
     left_hand_data.push_back(numeric_data[106]); left_hand_data.push_back(numeric_data[105]);
     left_hand_data.push_back(numeric_data[107]);  // mcp bend, sway, roll
     left_hand_data.push_back(numeric_data[112]); left_hand_data.push_back(numeric_data[111]);
@@ -169,23 +169,23 @@ bool ProcessGloveData(const char* data, HandData& left_hand, HandData& right_han
     left_hand_data.push_back(numeric_data[118]); left_hand_data.push_back(numeric_data[117]);
     left_hand_data.push_back(numeric_data[119]);  // dip bend, sway, roll
 
-    // 左手食指 (组 20, 21)
+    // Left hand index finger (groups 20, 21)
     left_hand_data.push_back(numeric_data[124]); left_hand_data.push_back(numeric_data[123]);  // mcp
     left_hand_data.push_back(numeric_data[130]); left_hand_data.push_back(numeric_data[129]);  // pip
 
-    // 左手中指 (组 23, 24)
+    // Left hand middle finger (groups 23, 24)
     left_hand_data.push_back(numeric_data[142]); left_hand_data.push_back(numeric_data[141]);  // mcp
     left_hand_data.push_back(numeric_data[148]); left_hand_data.push_back(numeric_data[147]);  // pip
 
-    // 左手无名指 (组 26, 27)
+    // Left hand ring finger (groups 26, 27)
     left_hand_data.push_back(numeric_data[160]); left_hand_data.push_back(numeric_data[159]);  // mcp
     left_hand_data.push_back(numeric_data[166]); left_hand_data.push_back(numeric_data[165]);  // pip
 
-    // 左手小指 (组 29, 30)
+    // Left hand little finger (groups 29, 30)
     left_hand_data.push_back(numeric_data[178]); left_hand_data.push_back(numeric_data[177]);  // mcp
     left_hand_data.push_back(numeric_data[184]); left_hand_data.push_back(numeric_data[183]);  // pip
 
-    // 构建右手数据对象
+    // Build right hand data object
     if (right_hand_data.size() >= 25) {
         right_hand.thumb.mcp_bend = right_hand_data[0];
         right_hand.thumb.mcp_sway = right_hand_data[1];
@@ -218,7 +218,7 @@ bool ProcessGloveData(const char* data, HandData& left_hand, HandData& right_han
         right_hand.pinky.pip_sway = right_hand_data[24];
     }
 
-    // 构建左手数据对象
+    // Build left hand data object
     if (left_hand_data.size() >= 25) {
         left_hand.thumb.mcp_bend = left_hand_data[0];
         left_hand.thumb.mcp_sway = left_hand_data[1];
@@ -254,33 +254,33 @@ bool ProcessGloveData(const char* data, HandData& left_hand, HandData& right_han
     return true;
 }
 
-// ========== 主程序 ==========
+// ========== Main Program ==========
 
 int main() {
     std::cout << "========================================" << std::endl;
-    std::cout << "  枭尧灵巧手 SDK - 数据手套控制        " << std::endl;
+    std::cout << "  Xiaoyao Dexterous Hand SDK - Glove Control        " << std::endl;
     std::cout << "========================================" << std::endl;
 
 #ifdef _WIN32
-    // 初始化 Winsock
+    // Initialize Winsock
     WSADATA wsa_data;
     if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
-        std::cerr << "错误: WSAStartup 失败" << std::endl;
+        std::cerr << "Error: WSAStartup failed" << std::endl;
         return 1;
     }
 #endif
 
-    // 创建 UDP socket
+    // Create UDP socket
     SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock == INVALID_SOCKET) {
-        std::cerr << "错误: 无法创建 socket" << std::endl;
+        std::cerr << "Error: Unable to create socket" << std::endl;
 #ifdef _WIN32
         WSACleanup();
 #endif
         return 1;
     }
 
-    // 绑定 socket
+    // Bind socket
     sockaddr_in server_addr;
     std::memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
@@ -288,7 +288,7 @@ int main() {
     server_addr.sin_port = htons(UDP_PORT);
 
     if (bind(sock, (sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
-        std::cerr << "错误: 无法绑定到 " << UDP_IP << ":" << UDP_PORT << std::endl;
+        std::cerr << "Error: Unable to bind to " << UDP_IP << ":" << UDP_PORT << std::endl;
         closesocket(sock);
 #ifdef _WIN32
         WSACleanup();
@@ -296,15 +296,15 @@ int main() {
         return 1;
     }
 
-    std::cout << "\n✓ 正在监听 " << UDP_IP << ":" << UDP_PORT << " 上的数据..." << std::endl;
+    std::cout << "\n✓ Listening for data on " << UDP_IP << ":" << UDP_PORT << "..." << std::endl;
 
-    // 连接灵巧手
+    // Connect dexterous hand
     DexHand hand;
-    std::cout << "\n正在通过 EtherCAT 连接灵巧手..." << std::endl;
+    std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
     bool success = hand.AutoConnect(CommType::ETHERCAT);
 
     if (!success) {
-        std::cerr << "错误: 无法连接到灵巧手！" << std::endl;
+        std::cerr << "Error: Unable to connect to dexterous hand!" << std::endl;
         closesocket(sock);
 #ifdef _WIN32
         WSACleanup();
@@ -312,13 +312,13 @@ int main() {
         return 1;
     }
 
-    std::cout << "✓ 成功连接到灵巧手！" << std::endl;
-    std::cout << "\n开始接收手套数据并控制灵巧手..." << std::endl;
-    std::cout << "按 Ctrl+C 退出程序\n" << std::endl;
+    std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
+    std::cout << "\nStarting to receive glove data and control dexterous hand..." << std::endl;
+    std::cout << "Press Ctrl+C to exit program\n" << std::endl;
 
-    // 设置接收超时，避免永久阻塞
+    // Set receive timeout to avoid permanent blocking
 #ifdef _WIN32
-    DWORD timeout = 1000;  // 1秒超时
+    DWORD timeout = 1000;  // 1 second timeout
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
 #else
     struct timeval tv;
@@ -327,7 +327,7 @@ int main() {
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #endif
 
-    // 注册关节数据回调（用于显示反馈）
+    // Register joint data callback (for displaying feedback)
     std::vector<Joint> last_joints;
     bool joints_received = false;
     hand.SetJointsCallback([&](const std::vector<Joint>& joints) {
@@ -372,19 +372,19 @@ int main() {
                 if (ProcessGloveData(buffer, left_hand, right_hand)) {
                     data_count++;
 
-                    // 每 50 帧显示一次手套数据
+                    // Display glove data every 50 frames
                     if (data_count % 50 == 0) {
-                        std::cout << "【手套数据】左手拇指 MCP: bend=" << left_hand.thumb.mcp_bend
+                        std::cout << "[Glove Data] Left hand thumb MCP: bend=" << left_hand.thumb.mcp_bend
                                   << ", sway=" << left_hand.thumb.mcp_sway
                                   << ", roll=" << left_hand.thumb.mcp_roll << std::endl;
                     }
 
-                    // 使用左手数据控制灵巧手
+                    // Use left hand data to control dexterous hand
                     std::vector<JointCommand> joints;
                     const int speed = 100;
                     const int torque = 100;
 
-                    // 拇指关节
+                    // Thumb joints
                     joints.push_back({JointId::THUMB_PIP,
                         ClipAngle(left_hand.thumb.pip_bend, 0, 75), speed, torque});
                     joints.push_back({JointId::THUMB_MCP,
@@ -395,7 +395,7 @@ int main() {
                     joints.push_back({JointId::THUMB_ROTATION,
                         ClipAngle(-left_hand.thumb.dip_sway, -30, 60), speed, torque});
 
-                    // 食指关节
+                    // Index finger joints
                     joints.push_back({JointId::FF_PIP,
                         ClipAngle(left_hand.index.pip_bend, 0, 75), speed, torque});
                     joints.push_back({JointId::FF_MCP,
@@ -403,30 +403,30 @@ int main() {
                     joints.push_back({JointId::FF_SWING,
                         ClipAngle(left_hand.index.mcp_sway + left_hand.index.pip_sway, -15, 15), speed, torque});
 
-                    // 中指关节
+                    // Middle finger joints
                     joints.push_back({JointId::MF_PIP,
                         ClipAngle(left_hand.middle.pip_bend, 0, 75), speed, torque});
                     joints.push_back({JointId::MF_MCP,
                         ClipAngle(left_hand.middle.mcp_bend, 0, 70), speed, torque});
 
-                    // 无名指关节
+                    // Ring finger joints
                     joints.push_back({JointId::RF_PIP,
                         ClipAngle(left_hand.ring.pip_bend, 0, 75), speed, torque});
                     joints.push_back({JointId::RF_MCP,
                         ClipAngle(left_hand.ring.mcp_bend, 0, 70), speed, torque});
 
-                    // 小指关节
+                    // Little finger joints
                     joints.push_back({JointId::LF_PIP,
                         ClipAngle(left_hand.pinky.pip_bend, 0, 75), speed, torque});
                     joints.push_back({JointId::LF_MCP,
                         ClipAngle(left_hand.pinky.mcp_bend, 0, 70), speed, torque});
 
-                    // 发送关节命令
+                    // Send joint commands
                     hand.MoveJoints(joints);
 
-                    // 每 100 帧显示一次关节状态
+                    // Display joint status every 100 frames
                     if (data_count % 100 == 0 && joints_received && !last_joints.empty()) {
-                        std::cout << "【灵巧手状态】已处理 " << data_count << " 帧数据" << std::endl;
+                        std::cout << "[Dexterous Hand Status] Processed " << data_count << " frames" << std::endl;
                     }
                 }
 
@@ -435,17 +435,17 @@ int main() {
         }
 
     } catch (const std::exception& e) {
-        std::cout << "\n程序异常: " << e.what() << std::endl;
+        std::cout << "\nProgram exception: " << e.what() << std::endl;
     }
 
-    // 清理
-    std::cout << "\n正在清理资源..." << std::endl;
+    // Cleanup
+    std::cout << "\nCleaning up resources..." << std::endl;
     hand.Disconnect();
     closesocket(sock);
 #ifdef _WIN32
     WSACleanup();
 #endif
 
-    std::cout << "✓ 程序已退出" << std::endl;
+    std::cout << "✓ Program exited" << std::endl;
     return 0;
 }

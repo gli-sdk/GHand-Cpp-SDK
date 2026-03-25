@@ -64,6 +64,8 @@ public:
     bool ConnectToDevice(CommType comm_type, const std::string& device_name);
     void OnRawDataReceived(const uint8_t* data, size_t size);
     void ClampJointAngle(JointCommand& joint);
+    void ClampJointVelocity(JointCommand& joint);
+    void ClampJointTorque(JointCommand& joint);
 
     std::unique_ptr<EtherCATComm> ethercat_comm_;
     std::unique_ptr<DexHandCallbackManager> callback_manager_;

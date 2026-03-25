@@ -15,21 +15,21 @@
 using namespace xiaoyao;
 
 /**
- * @brief 关节参数结构
+ * @brief Joint parameter structure
  */
 struct JointParams {
-    float angle;   // 角度（度）
-    int speed;     // 速度（0-100）
-    int torque;    // 力矩（0-100）
+    float angle;   // Angle (degrees)
+    int speed;     // Speed (0-100)
+    int torque;    // Torque (0-100)
 
     JointParams() : angle(0), speed(0), torque(0) {}
 };
 
 /**
- * @brief 显示关节ID列表
+ * @brief Display joint ID list
  */
 void DisplayJointIdList() {
-    std::cout << "\n关节ID列表:" << std::endl;
+    std::cout << "\nJoint ID List:" << std::endl;
     std::cout << "  1: THUMB_PIP,      2: THUMB_MCP,      3: THUMB_SWING,     4: THUMB_ROTATION" << std::endl;
     std::cout << "  6: FF_PIP,         7: FF_MCP,         8: FF_SWING" << std::endl;
     std::cout << " 10: MF_PIP,        11: MF_MCP" << std::endl;
@@ -38,25 +38,25 @@ void DisplayJointIdList() {
 }
 
 /**
- * @brief 显示已设置的关节参数
+ * @brief Display set joint parameters
  */
 void DisplaySetJoints(const std::unordered_map<int, JointParams>& joint_params) {
     if (joint_params.empty()) {
         return;
     }
 
-    std::cout << "\n已设置的关节:" << std::endl;
-    std::cout << std::left << std::setw(20) << "关节名称"
-              << std::setw(10) << "角度(°)"
-              << std::setw(10) << "速度(%)"
-              << std::setw(10) << "力矩(%)" << std::endl;
+    std::cout << "\nSet Joints:" << std::endl;
+    std::cout << std::left << std::setw(20) << "Joint Name"
+              << std::setw(10) << "Angle(deg)"
+              << std::setw(10) << "Speed(%)"
+              << std::setw(10) << "Torque(%)" << std::endl;
     std::cout << std::string(50, '-') << std::endl;
 
     for (const auto& pair : joint_params) {
         int joint_id = pair.first;
         const JointParams& params = pair.second;
 
-        // 获取关节名称
+        // Get joint name
         std::string joint_name = ToString(static_cast<JointId>(joint_id));
 
         std::cout << std::left << std::setw(20) << joint_name
@@ -67,10 +67,10 @@ void DisplaySetJoints(const std::unordered_map<int, JointParams>& joint_params) 
 }
 
 /**
- * @brief 从用户读取数值，支持默认值
- * @param prompt 提示信息
- * @param default_value 默认值
- * @return 用户输入的值，如果直接回车则返回默认值
+ * @brief Read numeric value from user with default value support
+ * @param prompt Prompt message
+ * @param default_value Default value
+ * @return User input value, or default value if user presses Enter directly
  */
 float ReadFloatWithDefault(const std::string& prompt, float default_value) {
     std::cout << prompt << " [" << default_value << "]: ";
@@ -84,13 +84,13 @@ float ReadFloatWithDefault(const std::string& prompt, float default_value) {
     try {
         return std::stof(input);
     } catch (const std::exception&) {
-        std::cout << "  输入无效，使用默认值: " << default_value << std::endl;
+        std::cout << "  Invalid input, using default value: " << default_value << std::endl;
         return default_value;
     }
 }
 
 /**
- * @brief 从用户读取整数，支持默认值
+ * @brief Read integer from user with default value support
  */
 int ReadIntWithDefault(const std::string& prompt, int default_value) {
     std::cout << prompt << " [" << default_value << "]: ";
@@ -104,16 +104,16 @@ int ReadIntWithDefault(const std::string& prompt, int default_value) {
     try {
         return std::stoi(input);
     } catch (const std::exception&) {
-        std::cout << "  输入无效，使用默认值: " << default_value << std::endl;
+        std::cout << "  Invalid input, using default value: " << default_value << std::endl;
         return default_value;
     }
 }
 
 /**
- * @brief 将关节ID映射到 JointId 枚举
+ * @brief Check if joint ID is valid
  */
 bool IsValidJointId(int id) {
-    // 有效的关节ID列表
+    // List of valid joint IDs
     static const int valid_ids[] = {
         1, 2, 3, 4,     // THUMB
         6, 7, 8,        // FF (Forefinger)
@@ -132,36 +132,36 @@ bool IsValidJointId(int id) {
 
 int main() {
     std::cout << "========================================" << std::endl;
-    std::cout << "  枭尧灵巧手 SDK - 交互式关节控制    " << std::endl;
+    std::cout << "  Xiaoyao Dexterous Hand SDK - Interactive Joint Control    " << std::endl;
     std::cout << "========================================" << std::endl;
 
     DexHand hand;
 
-    // 连接设备
-    std::cout << "\n正在通过 EtherCAT 连接灵巧手..." << std::endl;
+    // Connect device
+    std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
     bool success = hand.AutoConnect(CommType::ETHERCAT);
 
     if (!success) {
-        std::cerr << "错误: 无法连接到灵巧手！" << std::endl;
+        std::cerr << "Error: Unable to connect to dexterous hand!" << std::endl;
         return 1;
     }
 
-    std::cout << "✓ 成功连接到灵巧手！" << std::endl;
+    std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
 
-    // 显示设备信息
+    // Display device information
     DeviceInfo info = hand.GetDeviceInfo();
     HandType hand_type = hand.GetHandType();
-    std::cout << "\n设备信息:" << std::endl;
-    std::cout << "  设备名: " << info.device_name << std::endl;
-    std::cout << "  硬件版本: " << info.hardware_version << std::endl;
-    std::cout << "  软件版本: " << info.software_version << std::endl;
-    std::cout << "  序列号: " << info.serial_number << std::endl;
-    std::cout << "  手部类型: " << ToString(hand_type) << std::endl;
+    std::cout << "\nDevice Information:" << std::endl;
+    std::cout << "  Device Name: " << info.device_name << std::endl;
+    std::cout << "  Hardware Version: " << info.hardware_version << std::endl;
+    std::cout << "  Software Version: " << info.software_version << std::endl;
+    std::cout << "  Serial Number: " << info.serial_number << std::endl;
+    std::cout << "  Hand Type: " << ToString(hand_type) << std::endl;
 
-    // 设置控制模式为位置模式
+    // Set control mode to position mode
     hand.SetControlMode(ControlMode::POSITION);
 
-    // 注册关节数据回调（用于读取反馈）
+    // Register joint data callback (for reading feedback)
     std::vector<Joint> last_joints;
     bool joints_received = false;
     hand.SetJointsCallback([&](const std::vector<Joint>& joints) {
@@ -169,127 +169,127 @@ int main() {
         joints_received = true;
     });
 
-    std::cout << "\n交互式控制模式已启动" << std::endl;
-    std::cout << "按 Ctrl+C 可随时退出程序\n" << std::endl;
+    std::cout << "\nInteractive control mode started" << std::endl;
+    std::cout << "Press Ctrl+C to exit program at any time\n" << std::endl;
 
     try {
         while (true) {
-            // 为每个控制循环重置关节参数
+            // Reset joint parameters for each control loop
             std::unordered_map<int, JointParams> joint_params;
 
             DisplayJointIdList();
-            std::cout << "\n请为关节设置参数 (输入空行结束输入):\n" << std::endl;
+            std::cout << "\nPlease set joint parameters (press Enter to finish input):\n" << std::endl;
 
-            // 交互式输入关节参数
+            // Interactive joint parameter input
             while (true) {
-                // 显示已设置的关节
+                // Display set joints
                 DisplaySetJoints(joint_params);
 
-                std::cout << "\n请输入关节ID (或直接按回车结束输入): ";
+                std::cout << "\nEnter joint ID (or press Enter to finish input): ";
                 std::string joint_input;
                 std::getline(std::cin, joint_input);
 
-                // 用户直接回车，结束输入
+                // User pressed Enter directly, finish input
                 if (joint_input.empty()) {
                     break;
                 }
 
-                // 解析关节ID
+                // Parse joint ID
                 try {
                     int joint_id = std::stoi(joint_input);
 
                     if (!IsValidJointId(joint_id)) {
-                        std::cout << "  无效的关节ID，请重新输入" << std::endl;
+                        std::cout << "  Invalid joint ID, please re-enter" << std::endl;
                         continue;
                     }
 
-                    // 获取当前参数（如果有）
+                    // Get current parameters (if any)
                     JointParams& params = joint_params[joint_id];
                     std::string joint_name = ToString(static_cast<JointId>(joint_id));
 
-                    std::cout << "\n为关节 " << joint_name << " 设置参数:" << std::endl;
+                    std::cout << "\nSetting parameters for joint " << joint_name << ":" << std::endl;
 
-                    // 读取角度、速度、力矩
-                    params.angle = ReadFloatWithDefault("角度值(度)", params.angle);
-                    params.speed = ReadIntWithDefault("速度值(0-100)", params.speed);
-                    params.torque = ReadIntWithDefault("力矩值(0-100)", params.torque);
+                    // Read angle, speed, torque
+                    params.angle = ReadFloatWithDefault("Angle value (degrees)", params.angle);
+                    params.speed = ReadIntWithDefault("Speed value (0-100)", params.speed);
+                    params.torque = ReadIntWithDefault("Torque value (0-100)", params.torque);
 
-                    std::cout << "  ✓ 已设置" << std::endl;
+                    std::cout << "  ✓ Set successfully" << std::endl;
 
                 } catch (const std::exception& e) {
-                    std::cout << "  输入格式错误: " << e.what() << std::endl;
+                    std::cout << "  Input format error: " << e.what() << std::endl;
                 }
             }
 
-            // 构建关节命令列表
+            // Build joint command list
             std::vector<JointCommand> joints;
 
             if (joint_params.empty()) {
-                std::cout << "\n未设置任何关节，所有关节将保持当前位置" << std::endl;
+                std::cout << "\nNo joints set, all joints will maintain current position" << std::endl;
             } else {
                 for (const auto& pair : joint_params) {
                     int joint_id = pair.first;
                     const JointParams& params = pair.second;
 
-                    // 直接使用角度（度），MoveJoints 内部会转换为弧度
+                    // Use angle directly (degrees), MoveJoints will convert to radians internally
                     joints.push_back({
                         static_cast<JointId>(joint_id),
                         params.angle,
-                        static_cast<uint8_t>(params.speed),
-                        static_cast<uint8_t>(params.torque)
+                        static_cast<int8_t>(params.speed),
+                        static_cast<int8_t>(params.torque)
                     });
                 }
 
-                std::cout << "\n发送关节命令..." << std::endl;
+                std::cout << "\nSending joint commands..." << std::endl;
             }
 
-            // 发送关节命令
+            // Send joint commands
             bool move_success = hand.MoveJoints(joints);
 
             if (move_success) {
-                std::cout << "✓ 命令发送成功" << std::endl;
+                std::cout << "✓ Command sent successfully" << std::endl;
 
-                // 等待一段时间让设备响应并获取关节数据
+                // Wait for device to respond and get joint data
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-                // 显示当前关节状态（如果有回调数据）
+                // Display current joint status (if callback data available)
                 if (joints_received && !last_joints.empty()) {
-                    std::cout << "\n当前关节状态 (部分显示):" << std::endl;
-                    std::cout << std::left << std::setw(20) << "关节"
-                              << std::setw(12) << "角度(度)"
-                              << "状态" << std::endl;
+                    std::cout << "\nCurrent Joint Status (partial display):" << std::endl;
+                    std::cout << std::left << std::setw(20) << "Joint"
+                              << std::setw(12) << "Angle(deg)"
+                              << "State" << std::endl;
                     std::cout << std::string(40, '-') << std::endl;
 
-                    // 只显示前5个关节作为示例
+                    // Only display first 5 joints as example
                     for (size_t i = 0; i < std::min(size_t(5), last_joints.size()); ++i) {
                         const Joint& joint = last_joints[i];
-                        // GetJoints() 返回的角度已经是度数，无需转换
+                        // GetJoints() returns angles in degrees, no conversion needed
                         std::cout << std::left << std::setw(20) << ToString(joint.id)
                                   << std::fixed << std::setprecision(1) << std::setw(12) << joint.angle
                                   << ToString(joint.state) << std::endl;
                     }
                     if (last_joints.size() > 5) {
-                        std::cout << "... (还有 " << (last_joints.size() - 5) << " 个关节)" << std::endl;
+                        std::cout << "... (and " << (last_joints.size() - 5) << " more joints)" << std::endl;
                     }
                 }
             } else {
-                std::cerr << "✗ 命令发送失败" << std::endl;
+                std::cerr << "✗ Command send failed" << std::endl;
             }
 
             std::cout << "\n" << std::string(50, '=') << std::endl;
-            std::cout << "按回车键开始下一轮控制..." << std::endl;
+            std::cout << "Press Enter to start next control cycle..." << std::endl;
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         }
 
     } catch (const std::exception& e) {
-        std::cout << "\n程序异常: " << e.what() << std::endl;
+        std::cout << "\nProgram exception: " << e.what() << std::endl;
     }
 
-    // 断开连接
-    std::cout << "\n正在断开连接..." << std::endl;
+    // Disconnect
+    std::cout << "\nDisconnecting..." << std::endl;
     hand.Disconnect();
-    std::cout << "✓ 已断开连接" << std::endl;
+    std::cout << "✓ Disconnected" << std::endl;
 
-    std::cout << "\n程序结束，感谢使用！" << std::endl;
+    std::cout << "\nProgram ended. Thank you for using!" << std::endl;
     return 0;
 }

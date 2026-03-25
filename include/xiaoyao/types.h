@@ -197,8 +197,8 @@ struct TactileData {
 struct JointCommand {
     JointId id;         // 关节标识符
     float angle;        // 目标角度（deg）
-    uint8_t velocity;   // 目标速度（0~100%）
-    uint8_t torque;     // 目标力矩（0~100%）
+    int8_t velocity;    // 目标速度（-100~100%，根据控制模式）
+    int8_t torque;      // 目标力矩（-100~100%，根据控制模式）
 };
 
 struct Joint {
@@ -206,8 +206,8 @@ struct Joint {
     State state;
     ErrorCode error;
     float angle;
-    uint8_t velocity;
-    uint8_t torque;
+    int8_t velocity;
+    int8_t torque;
 
     // 便利方法
     bool IsNormal() const {

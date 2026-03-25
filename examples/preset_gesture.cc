@@ -7,48 +7,44 @@
 #include <cmath>
 #include <exception>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
 using namespace xiaoyao;
 
-// ========== 手势类型定义 ==========
+// ========== Gesture Type Definitions ==========
 
 /**
- * @brief 预设手势类型枚举
+ * @brief Preset gesture type enumeration
  */
 enum class GestureType {
-    OPEN_HAND,      // 张开手
-    FIST,           // 握拳
-    OK,             // OK手势
-    THUMBS_UP,      // 竖大拇指
-    SIX_SIGN        // 六手势
+    OPEN_HAND,      // Open hand
+    FIST,           // Fist
+    OK,             // OK gesture
+    THUMBS_UP,      // Thumbs up
+    SIX_SIGN        // Six sign
 };
 
 /**
- * @brief 获取手势的中文名称
- * @param gesture 手势类型
- * @return 手势的中文名称
+ * @brief Get English name of gesture
+ * @param gesture Gesture type
+ * @return English name of gesture
  */
 std::string GetGestureName(GestureType gesture) {
     switch (gesture) {
-        case GestureType::OPEN_HAND: return "张开手";
-        case GestureType::FIST: return "握拳";
-        case GestureType::OK: return "OK手势";
-        case GestureType::THUMBS_UP: return "竖大拇指";
-        case GestureType::SIX_SIGN: return "六手势";
-        default: return "未知手势";
+        case GestureType::OPEN_HAND: return "Open Hand";
+        case GestureType::FIST: return "Fist";
+        case GestureType::OK: return "OK Gesture";
+        case GestureType::THUMBS_UP: return "Thumbs Up";
+        case GestureType::SIX_SIGN: return "Six Sign";
+        default: return "Unknown Gesture";
     }
 }
 
-// ========== 手势定义（关节角度，单位：度）==========
+// ========== Gesture Definitions (joint angles in degrees) ==========
 
 /**
- * @brief 手势关节角度定义
+ * @brief Gesture joint angle definitions
  *
- * 每个手势包含13个可控关节的角度配置（单位：度）
- * 执行时会自动转换为弧度
+ * Each gesture contains angle configurations for 13 controllable joints (in degrees)
+ * Automatically converted to radians during execution
  */
 const std::unordered_map<GestureType, std::unordered_map<JointId, float>> GESTURE_DEFINITIONS = {
     {
@@ -143,24 +139,24 @@ const std::unordered_map<GestureType, std::unordered_map<JointId, float>> GESTUR
     },
 };
 
-// ========== 辅助函数 ==========
+// ========== Helper Functions ==========
 
 /**
- * @brief 将手势定义转换为关节命令列表
- * @param gesture_def 手势定义（关节ID -> 角度（度））
- * @param speed 速度百分比（0-100），默认100
- * @param torque 力矩百分比（0-100），默认100
- * @return 关节命令列表
+ * @brief Convert gesture definition to joint command list
+ * @param gesture_def Gesture definition (joint ID -> angle (degrees))
+ * @param speed Speed percentage (0-100), default 100
+ * @param torque Torque percentage (0-100), default 100
+ * @return Joint command list
  */
 std::vector<JointCommand> CreateJointsFromGesture(
     const std::unordered_map<JointId, float>& gesture_def,
-    uint8_t speed = 100,
-    uint8_t torque = 100
+    int8_t speed = 100,
+    int8_t torque = 100
 ) {
     std::vector<JointCommand> joints;
 
     for (const auto& pair : gesture_def) {
-        // 直接使用角度（度），MoveJoints 内部会转换为弧度
+        // Use angle directly (degrees), MoveJoints will convert to radians internally
         JointId joint_id = pair.first;
         float angle = pair.second;
         joints.push_back({joint_id, angle, speed, torque});
@@ -170,52 +166,52 @@ std::vector<JointCommand> CreateJointsFromGesture(
 }
 
 /**
- * @brief 执行预设手势
- * @param hand 灵巧手实例
- * @param gesture 要执行的手势类型
- * @param speed 速度百分比（0-100），默认100
- * @param torque 力矩百分比（0-100），默认100
- * @return 成功返回true，失败返回false
+ * @brief Execute preset gesture
+ * @param hand Dexterous hand instance
+ * @param gesture Gesture type to execute
+ * @param speed Speed percentage (0-100), default 100
+ * @param torque Torque percentage (0-100), default 100
+ * @return Returns true on success, false on failure
  */
-bool ExecuteGesture(DexHand& hand,GestureType gesture,uint8_t speed = 100,uint8_t torque = 100) {
-    // 查找手势定义
+bool ExecuteGesture(DexHand& hand,GestureType gesture,int8_t speed = 100,int8_t torque = 100) {
+    // Find gesture definition
     auto it = GESTURE_DEFINITIONS.find(gesture);
     if (it == GESTURE_DEFINITIONS.end()) {
-        std::cerr << "错误: 未知的手势类型" << std::endl;
+        std::cerr << "Error: Unknown gesture type" << std::endl;
         return false;
     }
 
-    // 转换为关节命令并发送
+    // Convert to joint commands and send
     const auto& gesture_def = it->second;
     std::vector<JointCommand> joints = CreateJointsFromGesture(gesture_def, speed, torque);
 
     return hand.MoveJoints(joints);
 }
 
-// ========== 主程序 ==========
+// ========== Main Program ==========
 
 int main() {
     std::cout << "========================================" << std::endl;
-    std::cout << "  枭尧灵巧手 SDK - 预设手势演示        " << std::endl;
+    std::cout << "  Xiaoyao Dexterous Hand SDK - Preset Gesture Demo        " << std::endl;
     std::cout << "========================================" << std::endl;
 
     DexHand hand;
 
-    // 连接设备
-    std::cout << "\n正在通过 EtherCAT 连接灵巧手..." << std::endl;
+    // Connect device
+    std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
     bool success = hand.AutoConnect(CommType::ETHERCAT);
 
     if (!success) {
-        std::cerr << "错误: 无法连接到灵巧手！" << std::endl;
+        std::cerr << "Error: Unable to connect to dexterous hand!" << std::endl;
         return 1;
     }
 
-    std::cout << "✓ 成功连接到灵巧手！" << std::endl;
+    std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
 
-    // 设置控制模式为位置模式
+    // Set control mode to position mode
     hand.SetControlMode(ControlMode::POSITION);
 
-    // 定义要演示的手势列表
+    // Define list of gestures to demonstrate
     const std::vector<GestureType> gesture_demo = {
         GestureType::OPEN_HAND,
         GestureType::FIST,
@@ -224,49 +220,49 @@ int main() {
         GestureType::SIX_SIGN,
     };
 
-    std::cout << "\n开始依次演示预设手势..." << std::endl;
-    std::cout << "按 Ctrl+C 可随时停止演示\n" << std::endl;
+    std::cout << "\nStarting preset gesture demonstration..." << std::endl;
+    std::cout << "Press Ctrl+C to stop demonstration at any time\n" << std::endl;
 
     int cycle = 0;
     try {
         while (true) {
             cycle++;
-            std::cout << "\n========== 第 " << cycle << " 轮演示 ==========" << std::endl;
+            std::cout << "\n========== Cycle " << cycle << " ==========" << std::endl;
 
-            // 依次演示每个手势
+            // Demonstrate each gesture sequentially
             for (size_t i = 0; i < gesture_demo.size(); ++i) {
                 GestureType gesture = gesture_demo[i];
                 std::string gesture_name = GetGestureName(gesture);
 
-                std::cout << "\n[" << (i + 1) << "/" << gesture_demo.size() << "] 执行手势: " << gesture_name << std::endl;
+                std::cout << "\n[" << (i + 1) << "/" << gesture_demo.size() << "] Executing gesture: " << gesture_name << std::endl;
 
-                // 执行手势
+                // Execute gesture
                 if (!ExecuteGesture(hand, gesture, 100, 100)) {
-                    std::cerr << "错误: 手势执行失败！" << std::endl;
+                    std::cerr << "Error: Gesture execution failed!" << std::endl;
                     hand.Disconnect();
                     return 1;
                 }
 
-                // 等待动作完成
+                // Wait for movement completion
                 std::this_thread::sleep_for(std::chrono::milliseconds(1500));
             }
 
-            std::cout << "\n========== 第 " << cycle << " 轮演示完成 ==========" << std::endl;
-            std::cout << "按 Ctrl+C 停止演示，或继续下一轮...\n" << std::endl;
+            std::cout << "\n========== Cycle " << cycle << " completed ==========" << std::endl;
+            std::cout << "Press Ctrl+C to stop demonstration, or continue to next cycle...\n" << std::endl;
 
-            // 短暂延时后进入下一轮
+            // Short delay before next cycle
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
 
     } catch (const std::exception& e) {
-        std::cout << "\n程序被中断: " << e.what() << std::endl;
+        std::cout << "\nProgram interrupted: " << e.what() << std::endl;
     }
 
-    // 断开连接
-    std::cout << "\n正在断开连接..." << std::endl;
+    // Disconnect
+    std::cout << "\nDisconnecting..." << std::endl;
     hand.Disconnect();
-    std::cout << "✓ 已断开连接" << std::endl;
+    std::cout << "✓ Disconnected" << std::endl;
 
-    std::cout << "\n演示结束，感谢使用！" << std::endl;
+    std::cout << "\nDemo completed. Thank you for using!" << std::endl;
     return 0;
 }

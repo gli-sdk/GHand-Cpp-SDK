@@ -255,6 +255,8 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
         if (static_cast<int>(joint.id) < static_cast<int>(JointId::NUM_JOINTS)) {
             JointCommand limited_joint = joint;
             ClampJointAngle(limited_joint);
+            ClampJointVelocity(limited_joint);
+            ClampJointTorque(limited_joint);
             joint_map[static_cast<int>(joint.id)] = limited_joint;
         }
     }
@@ -303,12 +305,8 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
             torque = 0;
         }
 
-        // 转换角度（与原实现保持一致）
-        if (i == static_cast<int>(JointId::THUMB_ROTATION)) {
-            angle = (angle + 30) * (static_cast<float>(M_PI) / 180.0f);
-        } else {
-            angle = angle * (static_cast<float>(M_PI) / 180.0f);
-        }
+        // 转换角度为弧度
+        angle = angle * (static_cast<float>(M_PI) / 180.0f);
 
         // 写入角度（4字节）
         memcpy(buffer + offset, &angle, sizeof(angle));
@@ -489,10 +487,8 @@ void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
         parsed_joints[i].id = static_cast<JointId>(i);
         parsed_joints[i].state = static_cast<State>(joint_state);
         parsed_joints[i].error = static_cast<ErrorCode>(joint_error);
+        // 转换角度为度
         joint_angle = joint_angle * (180.0f / static_cast<float>(M_PI));
-        if (i == static_cast<int>(JointId::THUMB_ROTATION)) {
-            joint_angle = joint_angle - 30;
-        }
         parsed_joints[i].angle = joint_angle;
         parsed_joints[i].velocity = joint_velocity;
         parsed_joints[i].torque = joint_torque;
@@ -615,8 +611,8 @@ const std::map<JointId, std::pair<float, float>> DexHand::kJointLimits_ = {
     // 大拇指
     {JointId::THUMB_PIP, {0.0f, 66.0f}},
     {JointId::THUMB_MCP, {0.0f, 50.0f}},
-    {JointId::THUMB_SWING, {0.0f, 90.0f}},
-    {JointId::THUMB_ROTATION, {-30.0f, 60.0f}},
+    {JointId::THUMB_SWING, {20.0f, 90.0f}},
+    {JointId::THUMB_ROTATION, {-10.0f, 60.0f}},
     // 食指
     {JointId::FF_PIP, {0.0f, 80.0f}},
     {JointId::FF_MCP, {0.0f, 90.0f}},
@@ -646,6 +642,81 @@ void DexHand::ClampJointAngle(JointCommand& joint) {
         LOG_WARNING("[Joint] " << ToString(joint.id)
                    << " angle " << joint.angle << " > max " << max_angle << ", set to " << max_angle);
         joint.angle = max_angle;
+    }
+}
+
+void DexHand::ClampJointVelocity(JointCommand& joint) {
+    if (control_mode_ == ControlMode::POSITION) {
+        // 位置模式：速度范围 0-100，负数取绝对值，绝对值>100取100
+        if (joint.velocity < 0) {
+            int8_t original = joint.velocity;
+            joint.velocity = abs(joint.velocity);
+            LOG_WARNING("[Joint] " << ToString(joint.id)
+                       << " velocity " << static_cast<int>(original)
+                       << " is negative in POSITION mode, converted to absolute value "
+                       << static_cast<int>(joint.velocity));
+        }
+        if (joint.velocity > 100) {
+            int8_t original = joint.velocity;
+            joint.velocity = 100;
+            LOG_WARNING("[Joint] " << ToString(joint.id)
+                       << " velocity " << static_cast<int>(original)
+                       << " exceeds limit in POSITION mode, clamped to 100");
+        }
+    } else if (control_mode_ == ControlMode::SPEED) {
+        // 速度模式：速度范围 -100到100
+        if (joint.velocity < -100) {
+            int8_t original = joint.velocity;
+            joint.velocity = -100;
+            LOG_WARNING("[Joint] " << ToString(joint.id)
+                       << " velocity " << static_cast<int>(original)
+                       << " below limit in SPEED mode, clamped to -100");
+        } else if (joint.velocity > 100) {
+            int8_t original = joint.velocity;
+            joint.velocity = 100;
+            LOG_WARNING("[Joint] " << ToString(joint.id)
+                       << " velocity " << static_cast<int>(original)
+                       << " exceeds limit in SPEED mode, clamped to 100");
+        }
+    }
+    // 力矩模式：速度不影响，不进行检查
+}
+
+void DexHand::ClampJointTorque(JointCommand& joint) {
+    if (control_mode_ == ControlMode::POSITION || control_mode_ == ControlMode::SPEED) {
+        // 位置模式和速度模式：力矩范围 0-100，负数取绝对值，绝对值>100取100
+        if (joint.torque < 0) {
+            int8_t original = joint.torque;
+            joint.torque = abs(joint.torque);
+            const char* mode_name = (control_mode_ == ControlMode::POSITION) ? "POSITION" : "SPEED";
+            LOG_WARNING("[Joint] " << ToString(joint.id)
+                       << " torque " << static_cast<int>(original)
+                       << " is negative in " << mode_name << " mode, converted to absolute value "
+                       << static_cast<int>(joint.torque));
+        }
+        if (joint.torque > 100) {
+            int8_t original = joint.torque;
+            joint.torque = 100;
+            const char* mode_name = (control_mode_ == ControlMode::POSITION) ? "POSITION" : "SPEED";
+            LOG_WARNING("[Joint] " << ToString(joint.id)
+                       << " torque " << static_cast<int>(original)
+                       << " exceeds limit in " << mode_name << " mode, clamped to 100");
+        }
+    } else if (control_mode_ == ControlMode::TORQUE) {
+        // 力矩模式：力矩范围 -100到100
+        if (joint.torque < -100) {
+            int8_t original = joint.torque;
+            joint.torque = -100;
+            LOG_WARNING("[Joint] " << ToString(joint.id)
+                       << " torque " << static_cast<int>(original)
+                       << " below limit in TORQUE mode, clamped to -100");
+        } else if (joint.torque > 100) {
+            int8_t original = joint.torque;
+            joint.torque = 100;
+            LOG_WARNING("[Joint] " << ToString(joint.id)
+                       << " torque " << static_cast<int>(original)
+                       << " exceeds limit in TORQUE mode, clamped to 100");
+        }
     }
 }
 
