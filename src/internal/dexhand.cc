@@ -77,7 +77,9 @@ int GetTactileSensorCount(FingerType finger) {
 
 DexHand::DexHand()
     : hand_type_(HandType::NONE),
-      control_mode_(ControlMode::POSITION) {
+      control_mode_(ControlMode::POSITION),
+      comm_type_(CommType::ETHERCAT),
+      device_name_("") {
     ethercat_comm_ = std::unique_ptr<EtherCATComm>(new EtherCATComm());
     callback_manager_ = std::unique_ptr<DexHandCallbackManager>(new DexHandCallbackManager());
 
@@ -96,6 +98,8 @@ bool DexHand::ConnectToDevice(CommType comm_type, const std::string& device_name
         case CommType::ETHERCAT: {
             int ec_result = ethercat_comm_->Connect(device_name);
             if (ec_result == 0) {
+                comm_type_ = comm_type;
+                device_name_ = device_name;
                 GetDeviceInfo();
                 GetHandType();
                 LOG_INFO("Successfully connected to device: " << device_name);
@@ -157,11 +161,6 @@ std::map<std::string, std::string> DexHand::SearchAdapters() const {
 }
 
 HandType DexHand::GetHandType() const {
-    // 如果已识别，直接返回缓存
-    if (hand_type_ != HandType::NONE) {
-        return hand_type_;
-    }
-
     // 从硬件读取
     std::uint8_t value = 0;
     int size = sizeof(value);
@@ -188,11 +187,6 @@ HandType DexHand::GetHandType() const {
 }
 
 DeviceInfo DexHand::GetDeviceInfo() const {
-    // 如果软件版本已读取（非空），说明已缓存
-    if (!device_info_.software_version.empty()) {
-        return device_info_;
-    }
-
     // 从硬件读取
     std::uint8_t value[255] = {0};
     int size = sizeof(value);
@@ -577,13 +571,16 @@ int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
     }
     if (result == 1)  // 1成功,2失败
     {
+        // BootUpdate 内部已释放文件锁，保持 is_connected_ = true（期望重连成功）
         ret = ethercat_comm_->BootUpdate(ifname.c_str(), slave, filename.c_str(), progressCallback);
         if (ret == 1) {
+            // 固件更新成功，尝试重连
             for (int i = 0; i < retry_count; i++) {
                 progressCallback(100);
                 std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
-                if (Connect(CommType::ETHERCAT, ifname)) {
+                if (Connect(comm_type_, device_name_)) {
+                    // 重连成功，is_connected_ 保持为 true
                     if (last_version < device_info_.software_version) {
                         return 1;
                     } else {
@@ -591,15 +588,20 @@ int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
                     }
                 }
             }
+            // 所有重试都失败，确认无法重连，设置 is_connected_ = false
+            ethercat_comm_->Disconnect();
             return -11;
         } else {
+            // 固件更新失败，尝试重连
             for (int i = 0; i < retry_count; i++) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
-                if (Connect(CommType::ETHERCAT, ifname)) {
+                if (Connect(comm_type_, device_name_)) {
                     return ret;
                 }
             }
+            // 重连失败，设置 is_connected_ = false
+            ethercat_comm_->Disconnect();
             return ret;
         }
     }

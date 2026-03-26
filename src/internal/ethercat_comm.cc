@@ -461,7 +461,12 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
     (void)ifname;  // 抑制未使用参数警告
     // std::lock_guard<std::mutex> lock(context_mutex_);
 
+    // 注意：此方法会释放文件锁但不修改 is_connected_ 标志
+    // 原因：固件更新后期望重连成功，从用户视角看设备仍是"已连接"状态
+    // 只有在确认重连失败后，才由调用方设置 is_connected_ = false
+
     if (slave <= 0 || slave > ctx_.slavecount) {
+        // Slave validation失败，无需释放锁（未使用设备）
         return -1;
     }
     int filesize = 0;
@@ -492,11 +497,22 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
             char file_name[] = "ECATFW__firmware";
             int update_result =
                 ecx_FOEwrite(&ctx_, slave, file_name, 0, filesize, &file_buffer, EC_TIMEOUTSTATE);
+
+            // 释放文件锁以允许重连，但保持 is_connected_ = true（期望重连成功）
+            LOG_DEBUG("Releasing device lock after firmware update (result: " << update_result << ")");
+            device_lock_.Release();
+
             return update_result;
         } else {
+            // 文件读取失败，释放锁
+            LOG_DEBUG("Releasing device lock after firmware file read failure");
+            device_lock_.Release();
             return -2;
         }
     } else {
+        // 状态转换失败，释放锁
+        LOG_DEBUG("Releasing device lock after BOOT state transition failure");
+        device_lock_.Release();
         return -1;
     }
     return 0;

@@ -73,6 +73,8 @@ public:
     mutable HandType hand_type_;
     mutable DeviceInfo device_info_;
     ControlMode control_mode_;
+    CommType comm_type_;
+    std::string device_name_;
 
     // 关节限制静态表 (仅包含可控关节)
     static const std::map<JointId, std::pair<float, float>> kJointLimits_;

@@ -103,6 +103,8 @@ public:
     static int mappingdone;
     static int dorun;
     static int inOP;
+    // 连接状态标志：表示设备的逻辑连接状态
+    // 特殊情况：BootUpdate() 后保持为 true（期望重连成功），仅在确认重连失败后才设置为 false
     static bool is_connected_;
     static int dowkccheck;
     static int currentgroup;
