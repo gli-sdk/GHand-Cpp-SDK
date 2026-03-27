@@ -4,29 +4,22 @@
 #include <thread>
 #include <chrono>
 #include <unordered_map>
-#include <cmath>
-#include <exception>
+#include <vector>
+#include <mutex>
+#include <sstream>
 
 using namespace xiaoyao;
 
 // ========== Gesture Type Definitions ==========
 
-/**
- * @brief Preset gesture type enumeration
- */
 enum class GestureType {
-    OPEN_HAND,      // Open hand
-    FIST,           // Fist
-    OK,             // OK gesture
-    THUMBS_UP,      // Thumbs up
-    SIX_SIGN        // Six sign
+    OPEN_HAND,
+    FIST,
+    OK,
+    THUMBS_UP,
+    SIX_SIGN
 };
 
-/**
- * @brief Get English name of gesture
- * @param gesture Gesture type
- * @return English name of gesture
- */
 std::string GetGestureName(GestureType gesture) {
     switch (gesture) {
         case GestureType::OPEN_HAND: return "Open Hand";
@@ -34,185 +27,178 @@ std::string GetGestureName(GestureType gesture) {
         case GestureType::OK: return "OK Gesture";
         case GestureType::THUMBS_UP: return "Thumbs Up";
         case GestureType::SIX_SIGN: return "Six Sign";
-        default: return "Unknown Gesture";
+        default: return "Unknown";
     }
 }
 
-// ========== Gesture Definitions (joint angles in degrees) ==========
+// ========== Gesture Definitions ==========
 
-/**
- * @brief Gesture joint angle definitions
- *
- * Each gesture contains angle configurations for 13 controllable joints (in degrees)
- * Automatically converted to radians during execution
- */
-const std::unordered_map<GestureType, std::unordered_map<JointId, float>> GESTURE_DEFINITIONS = {
+const std::unordered_map<GestureType, std::unordered_map<xiaoyao::JointId, float>> GESTURE_DEFINITIONS = {
     {
         GestureType::OPEN_HAND,
         {
-            {JointId::THUMB_PIP, 0.0f},
-            {JointId::THUMB_MCP, 0.0f},
-            {JointId::THUMB_SWING, 0.0f},
-            {JointId::THUMB_ROTATION, 0.0f},
-            {JointId::FF_PIP, 0.0f},
-            {JointId::FF_MCP, 0.0f},
-            {JointId::FF_SWING, 0.0f},
-            {JointId::MF_PIP, 0.0f},
-            {JointId::MF_MCP, 0.0f},
-            {JointId::RF_PIP, 0.0f},
-            {JointId::RF_MCP, 0.0f},
-            {JointId::LF_PIP, 0.0f},
-            {JointId::LF_MCP, 0.0f},
+            {xiaoyao::JointId::THUMB_PIP, 0.0f}, {xiaoyao::JointId::THUMB_MCP, 0.0f},
+            {xiaoyao::JointId::THUMB_SWING, 0.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
+            {xiaoyao::JointId::FF_PIP, 0.0f}, {xiaoyao::JointId::FF_MCP, 0.0f},
+            {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 0.0f},
+            {xiaoyao::JointId::MF_MCP, 0.0f}, {xiaoyao::JointId::RF_PIP, 0.0f},
+            {xiaoyao::JointId::RF_MCP, 0.0f}, {xiaoyao::JointId::LF_PIP, 0.0f},
+            {xiaoyao::JointId::LF_MCP, 0.0f},
         }
     },
     {
         GestureType::FIST,
         {
-            {JointId::THUMB_PIP, 40.0f},
-            {JointId::THUMB_MCP, 30.0f},
-            {JointId::THUMB_SWING, 30.0f},
-            {JointId::THUMB_ROTATION, 4.0f},
-            {JointId::FF_PIP, 65.0f},
-            {JointId::FF_MCP, 55.0f},
-            {JointId::FF_SWING, 0.0f},
-            {JointId::MF_PIP, 65.0f},
-            {JointId::MF_MCP, 55.0f},
-            {JointId::RF_PIP, 65.0f},
-            {JointId::RF_MCP, 55.0f},
-            {JointId::LF_PIP, 65.0f},
-            {JointId::LF_MCP, 55.0f},
+            {xiaoyao::JointId::THUMB_PIP, 40.0f}, {xiaoyao::JointId::THUMB_MCP, 30.0f},
+            {xiaoyao::JointId::THUMB_SWING, 30.0f}, {xiaoyao::JointId::THUMB_ROTATION, 4.0f},
+            {xiaoyao::JointId::FF_PIP, 65.0f}, {xiaoyao::JointId::FF_MCP, 55.0f},
+            {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 65.0f},
+            {xiaoyao::JointId::MF_MCP, 55.0f}, {xiaoyao::JointId::RF_PIP, 65.0f},
+            {xiaoyao::JointId::RF_MCP, 55.0f}, {xiaoyao::JointId::LF_PIP, 65.0f},
+            {xiaoyao::JointId::LF_MCP, 55.0f},
         }
     },
     {
         GestureType::OK,
         {
-            {JointId::THUMB_PIP, 40.0f},
-            {JointId::THUMB_MCP, 30.0f},
-            {JointId::THUMB_SWING, 30.0f},
-            {JointId::THUMB_ROTATION, 4.0f},
-            {JointId::FF_PIP, 30.0f},
-            {JointId::FF_MCP, 50.0f},
-            {JointId::FF_SWING, 0.0f},
-            {JointId::MF_PIP, 0.0f},
-            {JointId::MF_MCP, 0.0f},
-            {JointId::RF_PIP, 0.0f},
-            {JointId::RF_MCP, 0.0f},
-            {JointId::LF_PIP, 0.0f},
-            {JointId::LF_MCP, 0.0f},
+            {xiaoyao::JointId::THUMB_PIP, 40.0f}, {xiaoyao::JointId::THUMB_MCP, 30.0f},
+            {xiaoyao::JointId::THUMB_SWING, 30.0f}, {xiaoyao::JointId::THUMB_ROTATION, 4.0f},
+            {xiaoyao::JointId::FF_PIP, 30.0f}, {xiaoyao::JointId::FF_MCP, 50.0f},
+            {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 0.0f},
+            {xiaoyao::JointId::MF_MCP, 0.0f}, {xiaoyao::JointId::RF_PIP, 0.0f},
+            {xiaoyao::JointId::RF_MCP, 0.0f}, {xiaoyao::JointId::LF_PIP, 0.0f},
+            {xiaoyao::JointId::LF_MCP, 0.0f},
         }
     },
     {
         GestureType::THUMBS_UP,
         {
-            {JointId::THUMB_PIP, 0.0f},
-            {JointId::THUMB_MCP, 0.0f},
-            {JointId::THUMB_SWING, 0.0f},
-            {JointId::THUMB_ROTATION, 0.0f},
-            {JointId::FF_PIP, 65.0f},
-            {JointId::FF_MCP, 55.0f},
-            {JointId::FF_SWING, 0.0f},
-            {JointId::MF_PIP, 65.0f},
-            {JointId::MF_MCP, 55.0f},
-            {JointId::RF_PIP, 65.0f},
-            {JointId::RF_MCP, 55.0f},
-            {JointId::LF_PIP, 65.0f},
-            {JointId::LF_MCP, 55.0f},
+            {xiaoyao::JointId::THUMB_PIP, 0.0f}, {xiaoyao::JointId::THUMB_MCP, 0.0f},
+            {xiaoyao::JointId::THUMB_SWING, 0.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
+            {xiaoyao::JointId::FF_PIP, 65.0f}, {xiaoyao::JointId::FF_MCP, 55.0f},
+            {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 65.0f},
+            {xiaoyao::JointId::MF_MCP, 55.0f}, {xiaoyao::JointId::RF_PIP, 65.0f},
+            {xiaoyao::JointId::RF_MCP, 55.0f}, {xiaoyao::JointId::LF_PIP, 65.0f},
+            {xiaoyao::JointId::LF_MCP, 55.0f},
         }
     },
     {
         GestureType::SIX_SIGN,
         {
-            {JointId::THUMB_PIP, 0.0f},
-            {JointId::THUMB_MCP, 0.0f},
-            {JointId::THUMB_SWING, 0.0f},
-            {JointId::THUMB_ROTATION, 0.0f},
-            {JointId::FF_PIP, 65.0f},
-            {JointId::FF_MCP, 55.0f},
-            {JointId::FF_SWING, 0.0f},
-            {JointId::MF_PIP, 65.0f},
-            {JointId::MF_MCP, 55.0f},
-            {JointId::RF_PIP, 65.0f},
-            {JointId::RF_MCP, 55.0f},
-            {JointId::LF_PIP, 0.0f},
-            {JointId::LF_MCP, 0.0f},
+            {xiaoyao::JointId::THUMB_PIP, 0.0f}, {xiaoyao::JointId::THUMB_MCP, 0.0f},
+            {xiaoyao::JointId::THUMB_SWING, 0.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
+            {xiaoyao::JointId::FF_PIP, 65.0f}, {xiaoyao::JointId::FF_MCP, 55.0f},
+            {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 65.0f},
+            {xiaoyao::JointId::MF_MCP, 55.0f}, {xiaoyao::JointId::RF_PIP, 65.0f},
+            {xiaoyao::JointId::RF_MCP, 55.0f}, {xiaoyao::JointId::LF_PIP, 0.0f},
+            {xiaoyao::JointId::LF_MCP, 0.0f},
         }
     },
 };
 
-// ========== Helper Functions ==========
+// ========== Global State for Error Handling ==========
 
-/**
- * @brief Convert gesture definition to joint command list
- * @param gesture_def Gesture definition (joint ID -> angle (degrees))
- * @param speed Speed percentage (0-100), default 100
- * @param torque Torque percentage (0-100), default 100
- * @return Joint command list
- */
-std::vector<JointCommand> CreateJointsFromGesture(
-    const std::unordered_map<JointId, float>& gesture_def,
-    int8_t speed = 100,
-    int8_t torque = 100
-) {
-    std::vector<JointCommand> joints;
+xiaoyao::HandState g_hand_state;
+std::vector<xiaoyao::Joint> g_joints;
+std::mutex g_state_mutex;
 
-    for (const auto& pair : gesture_def) {
-        // Use angle directly (degrees), MoveJoints will convert to radians internally
-        JointId joint_id = pair.first;
-        float angle = pair.second;
-        joints.push_back({joint_id, angle, speed, torque});
+void OnHandStateUpdate(const xiaoyao::HandState& state) {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+    g_hand_state = state;
+}
+
+void OnJointsUpdate(const std::vector<xiaoyao::Joint>& joints) {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+    g_joints = joints;
+}
+
+bool HasError() {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+
+    // Check hand state first (priority 1)
+    if (g_hand_state.HasError()) {
+        return true;
     }
 
+    // Check joints (priority 2)
+    for (const auto& joint : g_joints) {
+        if (joint.HasError()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void PrintError() {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+
+    // Print hand state errors
+    if (g_hand_state.HasError()) {
+        std::cerr << "\n[ERROR] Hand state error detected!" << std::endl;
+        std::cerr << "Error: " << xiaoyao::ToString(g_hand_state.error) << std::endl;
+        std::cerr << "State: " << xiaoyao::ToString(g_hand_state.state) << std::endl;
+        std::cerr << "Temperature: " << g_hand_state.temperature << " degC" << std::endl;
+    }
+
+    // Print joint errors
+    std::vector<std::string> faulty_joints;
+    for (const auto& joint : g_joints) {
+        if (joint.HasError()) {
+            std::stringstream ss;
+            ss << "  - " << xiaoyao::ToString(joint.id)
+               << ": state=" << xiaoyao::ToString(joint.state)
+               << ", error=" << xiaoyao::ToString(joint.error);
+            faulty_joints.push_back(ss.str());
+        }
+    }
+
+    if (!faulty_joints.empty()) {
+        if (g_hand_state.HasError()) {
+            std::cerr << std::endl;
+        }
+        std::cerr << "[ERROR] Detected " << faulty_joints.size() << " faulty joint(s)" << std::endl;
+        std::cerr << "Faulty joints:" << std::endl;
+        for (const auto& fault : faulty_joints) {
+            std::cerr << fault << std::endl;
+        }
+    }
+}
+
+// ========== Helper Functions ==========
+
+std::vector<xiaoyao::JointCommand> CreateJointsFromGesture(
+    const std::unordered_map<xiaoyao::JointId, float>& gesture_def) {
+    std::vector<xiaoyao::JointCommand> joints;
+    for (const auto& pair : gesture_def) {
+        joints.push_back({pair.first, pair.second, 100, 100});
+    }
     return joints;
 }
 
-/**
- * @brief Execute preset gesture
- * @param hand Dexterous hand instance
- * @param gesture Gesture type to execute
- * @param speed Speed percentage (0-100), default 100
- * @param torque Torque percentage (0-100), default 100
- * @return Returns true on success, false on failure
- */
-bool ExecuteGesture(DexHand& hand,GestureType gesture,int8_t speed = 100,int8_t torque = 100) {
-    // Find gesture definition
-    auto it = GESTURE_DEFINITIONS.find(gesture);
-    if (it == GESTURE_DEFINITIONS.end()) {
-        std::cerr << "Error: Unknown gesture type" << std::endl;
-        return false;
-    }
-
-    // Convert to joint commands and send
-    const auto& gesture_def = it->second;
-    std::vector<JointCommand> joints = CreateJointsFromGesture(gesture_def, speed, torque);
-
-    return hand.MoveJoints(joints);
-}
-
-// ========== Main Program ==========
-
 int main() {
     std::cout << "========================================" << std::endl;
-    std::cout << "  Xiaoyao Dexterous Hand SDK - Preset Gesture Demo        " << std::endl;
+    std::cout << "  Xiaoyao Dexterous Hand SDK - Preset Gesture Demo" << std::endl;
     std::cout << "========================================" << std::endl;
 
-    DexHand hand;
-
-    // Connect device
-    std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
-    bool success = hand.AutoConnect(CommType::ETHERCAT);
-
-    if (!success) {
-        std::cerr << "Error: Unable to connect to dexterous hand!" << std::endl;
+    // Connect to device
+    xiaoyao::DexHand hand;
+    std::cout << "\nConnecting to dexterous hand..." << std::endl;
+    if (!hand.AutoConnect(xiaoyao::CommType::ETHERCAT)) {
+        std::cerr << "Failed to connect!" << std::endl;
         return 1;
     }
+    std::cout << "Connected successfully" << std::endl;
 
-    std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
+    // Set control mode
+    hand.SetControlMode(xiaoyao::ControlMode::POSITION);
 
-    // Set control mode to position mode
-    hand.SetControlMode(ControlMode::POSITION);
+    // Register callbacks for error detection
+    hand.SetJointsCallback(OnJointsUpdate);
+    hand.SetHandStateCallback(OnHandStateUpdate);
 
-    // Define list of gestures to demonstrate
-    const std::vector<GestureType> gesture_demo = {
+    // Gesture sequence
+    const std::vector<GestureType> gestures = {
         GestureType::OPEN_HAND,
         GestureType::FIST,
         GestureType::OK,
@@ -220,49 +206,83 @@ int main() {
         GestureType::SIX_SIGN,
     };
 
-    std::cout << "\nStarting preset gesture demonstration..." << std::endl;
-    std::cout << "Press Ctrl+C to stop demonstration at any time\n" << std::endl;
-
+    // Run demo cycles
     int cycle = 0;
-    try {
-        while (true) {
-            cycle++;
-            std::cout << "\n========== Cycle " << cycle << " ==========" << std::endl;
+    const int kGestureWaitMs = 1500;
+    const int kCycleDelayMs = 500;
+    const int kErrorCheckIntervalMs = 100;
 
-            // Demonstrate each gesture sequentially
-            for (size_t i = 0; i < gesture_demo.size(); ++i) {
-                GestureType gesture = gesture_demo[i];
-                std::string gesture_name = GetGestureName(gesture);
+    std::cout << "\nStarting gesture demonstration..." << std::endl;
+    std::cout << "Press Ctrl+C to stop\n" << std::endl;
 
-                std::cout << "\n[" << (i + 1) << "/" << gesture_demo.size() << "] Executing gesture: " << gesture_name << std::endl;
+    bool has_error = false;
+    while (!has_error) {
+        cycle++;
+        std::cout << "\n========== Cycle " << cycle << " ==========" << std::endl;
 
-                // Execute gesture
-                if (!ExecuteGesture(hand, gesture, 100, 100)) {
-                    std::cerr << "Error: Gesture execution failed!" << std::endl;
-                    hand.Disconnect();
-                    return 1;
-                }
-
-                // Wait for movement completion
-                std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        // Execute each gesture
+        for (auto gesture : gestures) {
+            // Check for errors before executing gesture
+            if (HasError()) {
+                has_error = true;
+                break;
             }
 
-            std::cout << "\n========== Cycle " << cycle << " completed ==========" << std::endl;
-            std::cout << "Press Ctrl+C to stop demonstration, or continue to next cycle...\n" << std::endl;
+            std::cout << "\nExecuting: " << GetGestureName(gesture) << std::endl;
 
-            // Short delay before next cycle
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            // Get gesture definition and execute
+            auto it = GESTURE_DEFINITIONS.find(gesture);
+            if (it != GESTURE_DEFINITIONS.end()) {
+                auto joints = CreateJointsFromGesture(it->second);
+                hand.MoveJoints(joints);
+            }
+
+            // Wait for completion with error checking
+            int elapsed = 0;
+            while (elapsed < kGestureWaitMs && !has_error) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(kErrorCheckIntervalMs));
+                elapsed += kErrorCheckIntervalMs;
+
+                if (HasError()) {
+                    has_error = true;
+                    break;
+                }
+            }
+
+            if (has_error) break;
         }
 
-    } catch (const std::exception& e) {
-        std::cout << "\nProgram interrupted: " << e.what() << std::endl;
+        if (has_error) break;
+
+        std::cout << "\n========== Cycle " << cycle << " completed ==========" << std::endl;
+        std::cout << "Press Ctrl+C to stop, or continue to next cycle...\n" << std::endl;
+
+        // Wait between cycles with error checking
+        int elapsed = 0;
+        while (elapsed < kCycleDelayMs && !has_error) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(kErrorCheckIntervalMs));
+            elapsed += kErrorCheckIntervalMs;
+
+            if (HasError()) {
+                has_error = true;
+                break;
+            }
+        }
     }
 
-    // Disconnect
+    // Handle error if detected
+    if (has_error) {
+        PrintError();
+        std::cerr << "\nStopping all motion and clearing fault..." << std::endl;
+        hand.Stop();
+        hand.ClearFault();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    // Cleanup
     std::cout << "\nDisconnecting..." << std::endl;
     hand.Disconnect();
-    std::cout << "✓ Disconnected" << std::endl;
+    std::cout << "Disconnected. Thank you!" << std::endl;
 
-    std::cout << "\nDemo completed. Thank you for using!" << std::endl;
-    return 0;
+    return has_error ? 1 : 0;
 }
