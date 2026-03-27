@@ -106,8 +106,6 @@ int EtherCATComm::Connect(std::string device_name) {
     std::string lock_path = GetAdapterLockPath(device_name);
     if (!device_lock_.Acquire(lock_path)) {
         LOG_ERROR("Adapter " << device_name << " is already locked by another process");
-        std::cerr << "Failed to connect: adapter " << device_name
-                  << " is already locked by another process" << std::endl;
         return -1;  // 设备已被占用
     }
 
@@ -116,14 +114,14 @@ int EtherCATComm::Connect(std::string device_name) {
 
     ResetContext();
     if (ecx_init(&ctx_, device_name.c_str()) <= 0) {
-        LOG_ERROR("Failed to initialize EtherCAT on " << device_name);
+        LOG_ERROR("Unable to initialize EtherCAT adapter: " << device_name);
         device_lock_.Release();
         return -2;
     }
 
     int config_result = ecx_config_init(&ctx_);
     if (config_result <= 0 || ctx_.slavecount <= 0) {
-        LOG_ERROR("No slave devices found");
+        LOG_ERROR("No devices found on adapter: " << device_name);
         device_lock_.Release();
         return -3;
     }

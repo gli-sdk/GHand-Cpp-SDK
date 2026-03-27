@@ -105,7 +105,6 @@ bool DexHand::ConnectToDevice(CommType comm_type, const std::string& device_name
                 LOG_INFO("Successfully connected to device: " << device_name);
                 return true;
             }
-            LOG_ERROR("Failed to connect to device: " << device_name);
             return false;
         }
         case CommType::CANFD:

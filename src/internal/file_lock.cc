@@ -1,6 +1,6 @@
 #include "file_lock.h"
+#include "logger.h"
 
-#include <iostream>
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
@@ -58,14 +58,14 @@ std::string MD5Hash(const std::string& input) {
 
     // 获取加密服务提供者句柄
     if (!CryptAcquireContext(&hProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
-        std::cerr << "Failed to acquire crypt context" << std::endl;
+        LOG_DEBUG("Failed to acquire crypt context");
         return "";
     }
 
     // 创建哈希对象
     if (!CryptCreateHash(hProv, CALG_MD5, 0, 0, &hHash)) {
         CryptReleaseContext(hProv, 0);
-        std::cerr << "Failed to create hash" << std::endl;
+        LOG_DEBUG("Failed to create hash");
         return "";
     }
 
@@ -73,7 +73,7 @@ std::string MD5Hash(const std::string& input) {
     if (!CryptHashData(hHash, (BYTE*)input.c_str(), static_cast<DWORD>(input.length()), 0)) {
         CryptDestroyHash(hHash);
         CryptReleaseContext(hProv, 0);
-        std::cerr << "Failed to hash data" << std::endl;
+        LOG_DEBUG("Failed to hash data");
         return "";
     }
 
@@ -81,7 +81,7 @@ std::string MD5Hash(const std::string& input) {
     if (!CryptGetHashParam(hHash, HP_HASHVAL, rgbHash, &cbHash, 0)) {
         CryptDestroyHash(hHash);
         CryptReleaseContext(hProv, 0);
-        std::cerr << "Failed to get hash param" << std::endl;
+        LOG_DEBUG("Failed to get hash param");
         return "";
     }
 
