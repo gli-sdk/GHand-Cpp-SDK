@@ -1,8 +1,8 @@
-cmake_minimum_required(VERSION 3.5)
-project(XiaoyaoSDK VERSION 1.0.0 LANGUAGES C CXX)
+cmake_minimum_required(VERSION 3.14)
+project(gtest_demo)
 
-# 设置 C++ 标准
-set(CMAKE_CXX_STANDARD 11)
+# C++ 标准
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 设置 Windows 特定的编译选项
@@ -103,3 +103,6 @@ install(FILES README.md CHANGELOG.md
     DESTINATION .
 )
 
+# 测试命令
+enable_testing()
+add_test(NAME CalcTest COMMAND calc_test)

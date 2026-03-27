@@ -1,0 +1,62 @@
+
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <title>测试报告</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { color: #333; }
+            .summary { background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #4CAF50; color: white; }
+            tr:nth-child(even) { background-color: #f2f2f2; }
+            .pass { color: green; font-weight: bold; }
+            .fail { color: red; font-weight: bold; }
+            .properties { font-size: 0.9em; color: #666; }
+        </style>
+    </head>
+    <body>
+        <h1>测试报告汇总</h1>
+        <div class="summary">
+            <p><strong>生成时间:</strong> 2026-03-21T10:23:35.298</p>
+            <p><strong>总测试数:</strong> 2 | <strong>失败数:</strong> 0 | <strong>耗时:</strong> 0.015s</p>
+        </div>
+        <h2>测试详情</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>测试套件</th>
+                    <th>测试用例</th>
+                    <th>状态</th>
+                    <th>耗时 (s)</th>
+                    <th>文件位置</th>
+                    <th>属性</th>
+                </tr>
+            </thead>
+            <tbody>
+    
+                <tr>
+                    <td>CalcTest</td>
+                    <td>AddTest</td>
+                    <td class="pass">completed</td>
+                    <td>0.</td>
+                    <td>calc_test.cpp:9</td>
+                    <td class="properties">NodeID1: node-001<br>Priority1: high<br>Description1: 测试加法运算的边界条件</td>
+                </tr>
+            
+                <tr>
+                    <td>CalcMockTest</td>
+                    <td>MockAddTest</td>
+                    <td class="pass">completed</td>
+                    <td>0.</td>
+                    <td>calc_test.cpp:20</td>
+                    <td class="properties">NodeID: node-001<br>Priority: high<br>Description: 测试加法运算的边界条件</td>
+                </tr>
+            
+            </tbody>
+        </table>
+    </body>
+    </html>
+    
