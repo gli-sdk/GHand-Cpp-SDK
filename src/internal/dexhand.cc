@@ -9,6 +9,9 @@
 #include <unordered_map>
 #include <vector>
 #include <thread>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
 
 namespace xiaoyao {
 namespace internal {
@@ -313,6 +316,7 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
         memcpy(buffer + offset, &torque, sizeof(torque));
         offset += sizeof(torque);
     }
+    LOG_INFO("Sending PDO data ");
 
     int wkc = ethercat_comm_->SendRxPDO(1, ECT_SDO_RXPDOASSIGN, sizeof(buffer), buffer);
 
@@ -320,6 +324,7 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
 }
 
 void DexHand::Stop() {
+    LOG_INFO("Sending stop command");
     // 构造停止命令
     uint8_t buffer[80] = {0};
     buffer[1] = 1;
@@ -406,9 +411,11 @@ bool DexHand::CloseTactile() {
 
 bool DexHand::ZeroTactile() {
     std::uint8_t command = 0x04;
+    std::uint8_t state = 0xFF;
     int size = sizeof(std::uint8_t);
     int result = -1;
     result = ethercat_comm_->SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
+    result = ethercat_comm_->SDORead(1, 0x2004, 0x03, &size, &state, EC_TIMEOUTRXM);
     if (result > 0) {
         return true;
     }

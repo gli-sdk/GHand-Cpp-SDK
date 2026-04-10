@@ -1,6 +1,10 @@
 #include "dexhand_callback_manager.h"
 
 #include <chrono>
+#include <sstream>
+#include <iomanip>
+
+#include "xiaoyao/logging.h"
 
 namespace xiaoyao {
 namespace internal {
@@ -88,6 +92,7 @@ bool DexHandCallbackManager::HasTemperatureChanged(const HandState& temperature)
     // 1. 状态或错误变化 → 立即触发
     if (temperature.state != last_state_.state ||
         temperature.error != last_state_.error) {
+        LOG_DEBUG("Hand state change detected: " << xiaoyao::ToString(temperature.state));
         return true;
     }
 

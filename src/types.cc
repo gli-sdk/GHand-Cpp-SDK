@@ -39,10 +39,14 @@ std::string ToString(State state) {
 // ===== ErrorCode =====
 std::string ToString(ErrorCode error) {
     switch (error) {
-        case ErrorCode::NORMAL:              return "NORMAL";
-        case ErrorCode::MOTOR_OVERCURRENT:   return "MOTOR_OVERCURRENT";
-        case ErrorCode::ENCODER_ERROR:       return "ENCODER_ERROR";
-        case ErrorCode::MOTOR_COMM_ERROR:    return "MOTOR_COMM_ERROR";
+        case ErrorCode::NORMAL:                      return "NORMAL";
+        case ErrorCode::MOTOR_HARDWARE_OVERCURRENT:  return "MOTOR_HARDWARE_OVERCURRENT";
+        case ErrorCode::MOTOR_SOFTWARE_OVERCURRENT:  return "MOTOR_SOFTWARE_OVERCURRENT";
+        case ErrorCode::MOTOR_BUS_OVERCURRENT:       return "MOTOR_BUS_OVERCURRENT";
+        case ErrorCode::MOTOR_PHASE_LOST:            return "MOTOR_PHASE_LOST";
+        case ErrorCode::MOTOR_STALLED:               return "MOTOR_STALLED";
+        case ErrorCode::MOTOR_DRIVER_OVERTEMP:       return "MOTOR_DRIVER_OVERTEMP";
+        case ErrorCode::MOTOR_COMM_ERROR:            return "MOTOR_COMM_ERROR";
         case ErrorCode::JOINT_CONFLICT:      return "JOINT_CONFLICT";
         case ErrorCode::TIP_CONFLICT:        return "TIP_CONFLICT";
         case ErrorCode::LOW_TEMP:            return "LOW_TEMP";

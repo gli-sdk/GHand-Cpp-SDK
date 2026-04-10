@@ -4,6 +4,8 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <chrono>
+#include <ctime>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -139,31 +141,36 @@ bool FileLock::Acquire(const std::string& lock_file) {
 
 #ifdef _WIN32
     // Windows 实现：完全模拟 Python SDK 的方式
-    // 直接使用 _open() + _locking()，与 Python 的 open() + msvcrt.locking() 一致
-
-    // 1. 使用 _sopen_s() 打开文件（与 Python 的 open() 一致）
-    int fd = -1;
-    errno_t err = _sopen_s(&fd, lock_file.c_str(), _O_RDWR | _O_CREAT, _SH_DENYNO, _S_IREAD | _S_IWRITE);
-    if (err != 0 || fd < 0) {
-        std::cerr << "Failed to open lock file: " << lock_file << std::endl;
+    // 使用与 Python open() + msvcrt.locking() 相同的行为
+    FILE* file_ptr = nullptr;
+    errno_t err = fopen_s(&file_ptr, lock_file.c_str(), "w");
+    if (err != 0 || file_ptr == nullptr) {
         return false;
     }
 
-    // 2. 使用 _locking() 获取文件锁（与 Python 的 msvcrt.locking() 一致）
-    // 参数：文件描述符、锁模式（非阻塞）、锁定字节数（1字节）
+    int fd = _fileno(file_ptr);
+    if (fd == -1) {
+        fclose(file_ptr);
+        return false;
+    }
+
     if (_locking(fd, _LK_NBLCK, 1) < 0) {
-        std::cerr << "Failed to acquire lock: " << lock_file << std::endl;
-        _close(fd);
+        fclose(file_ptr);
         return false;
     }
 
-    // 3. 写入当前进程 ID 和网卡名（与 Python SDK 格式一致）
     DWORD pid = GetCurrentProcessId();
     std::string content = std::to_string(pid) + "\n" + lock_file + "\n";
-    _write(fd, content.c_str(), static_cast<unsigned int>(content.size()));
+    fwrite(content.c_str(), static_cast<size_t>(content.size()), 1, file_ptr);
+    fflush(file_ptr);
 
-    // 保存文件描述符用于后续释放
-    fd_ = fd;
+    fd_ = _dup(fd);
+    if (fd_ == -1) {
+        fclose(file_ptr);
+        return false;
+    }
+
+    fclose(file_ptr);
     is_locked_ = true;
     return true;
 
@@ -171,23 +178,19 @@ bool FileLock::Acquire(const std::string& lock_file) {
     // Linux 实现：使用 open() + flock()
     fd_ = open(lock_file.c_str(), O_WRONLY | O_CREAT, 0666);
     if (fd_ < 0) {
-        std::cerr << "Failed to open lock file: " << lock_file << std::endl;
         return false;
     }
 
-    // 尝试获取非阻塞独占锁
     if (flock(fd_, LOCK_EX | LOCK_NB) < 0) {
-        std::cerr << "Failed to acquire lock: " << lock_file << std::endl;
         close(fd_);
         fd_ = -1;
         return false;
     }
 
-    // 写入当前进程 ID 和网卡名
     pid_t pid = getpid();
     std::string content = std::to_string(pid) + "\n" + lock_file + "\n";
     ssize_t written = write(fd_, content.c_str(), content.size());
-    (void)written;  // 抑制未使用警告
+    (void)written;
     fsync(fd_);
 
     is_locked_ = true;
@@ -197,7 +200,7 @@ bool FileLock::Acquire(const std::string& lock_file) {
 
 void FileLock::Release() {
     if (!is_locked_) {
-        return; // 未持有锁，直接返回
+        return;  // 未持有锁，直接返回
     }
 
 #ifdef _WIN32
