@@ -24,6 +24,12 @@ int main() {
             std::cout << "Firmware version: " << version << std::endl;
         }
 
+        // 获取电机驱动版本
+        std::string motor_version = device_info.motor_driver_version;
+        if (!motor_version.empty()) {
+            std::cout << "Motor driver version: " << motor_version << std::endl;
+        }
+
         // 断开连接
         hand.Disconnect();
         std::cout << "Connection closed." << std::endl;

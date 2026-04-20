@@ -132,7 +132,7 @@ bool DexHand::AutoConnect(CommType comm_type) {
 
 bool DexHand::Connect(CommType comm_type, const std::string& device_name) {
     if (device_name == "auto") {
-        return AutoConnect(comm_type);
+        return AutoConnect(comm_type); 
     }
     return ConnectToDevice(comm_type, device_name);
 }
@@ -221,6 +221,20 @@ DeviceInfo DexHand::GetDeviceInfo() const {
         serial_num |= static_cast<unsigned char>(value[2]) << 16;
         serial_num |= static_cast<unsigned char>(value[3]) << 24;
         device_info_.serial_number = serial_num;
+    }
+
+    // 读取电机驱动版本号 (0x2007:0x01~0x03)
+    std::uint8_t motor_ver[3] = {0};
+    int motor_size = sizeof(std::uint8_t);
+    int motor_result[3] = {0};
+    motor_result[0] = ethercat_comm_->SDORead(1, 0x2007, 0x01, &motor_size, &motor_ver[0], EC_TIMEOUTRXM);
+    motor_result[1] = ethercat_comm_->SDORead(1, 0x2007, 0x02, &motor_size, &motor_ver[1], EC_TIMEOUTRXM);
+    motor_result[2] = ethercat_comm_->SDORead(1, 0x2007, 0x03, &motor_size, &motor_ver[2], EC_TIMEOUTRXM);
+    if (motor_result[0] == 1 && motor_result[1] == 1 && motor_result[2] == 1) {
+        device_info_.motor_driver_version =
+            std::to_string(motor_ver[0]) + "." +
+            std::to_string(motor_ver[1]) + "." +
+            std::to_string(motor_ver[2]);
     }
 
     return device_info_;

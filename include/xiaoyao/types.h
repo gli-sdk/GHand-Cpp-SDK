@@ -141,6 +141,7 @@ struct DeviceInfo {
     std::string device_name;
     std::string hardware_version;
     std::string software_version;
+    std::string motor_driver_version;
     unsigned int serial_number;
 };
 
