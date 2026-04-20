@@ -139,7 +139,7 @@ int EtherCATComm::Connect(std::string device_name) {
 
     // ❌ 禁用DC分布式时钟同步
     // 原因：单从站系统不需要DC同步，禁用后可避免窗口最小化时的周期波动
-    // ecx_configdc(&ctx_);
+    ecx_configdc(&ctx_);
 
     for (int si = 1; si <= ctx_.slavecount; si++) {
         ec_slavet* slave = &ctx_.slavelist[si];
@@ -294,6 +294,24 @@ uint8_t* EtherCATComm::ReadTxPDO(uint16 slave) {
     }
     return nullptr;
 }
+
+void EtherCATComm::add_time_ns(ec_timet* ts, int64 addtime) {
+    ec_timet addts;
+    addts.tv_nsec = addtime % NSEC_PER_SEC;
+    addts.tv_sec = (addtime - addts.tv_nsec) / NSEC_PER_SEC;
+    osal_timespecadd(ts, &addts, ts);
+}
+
+void EtherCATComm::ec_sync(int64 reftime, int64 cycletime, int64* offsettime) {
+    static int64 integral = 0;
+    int64 delta = (reftime - 500000) % cycletime;
+    if (delta > (cycletime / 2)) {
+        delta -= cycletime;
+    }
+    integral += delta;
+    *offsettime = (int64)((delta * 0.01f) + (integral * 0.00002f));
+}
+
 OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
     ec_timet ts;
     int ht;
@@ -315,10 +333,10 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
     }
 
     while (threads_started_) {
-        // add_time_ns(&ts, cycletime + toff);
-        // osal_monotonic_sleep(&ts);
+         add_time_ns(&ts, cycletime + toff);
+         osal_monotonic_sleep(&ts);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
         if (dorun > 0) {
             cycle++;

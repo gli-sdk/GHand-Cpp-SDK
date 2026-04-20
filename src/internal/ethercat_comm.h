@@ -110,7 +110,8 @@ public:
     static int currentgroup;
     static int cycle;
     static int64_t cycletime;
-
+    static void add_time_ns(ec_timet* ts, int64_t addtime);
+    static void ec_sync(int64_t reftime, int64_t cycletime, int64_t* offsettime);
     static OSAL_THREAD_FUNC_RT Ecatthread(void);
     static OSAL_THREAD_FUNC Ecatcheck(void);
     void StartThreads();

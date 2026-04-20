@@ -5,10 +5,15 @@
 
 # 构建产物
 /build/
+/build*/
 *.dll
 *.exe
 *.obj
 *.pdb
+
+# SOEM build artifacts
+third_party/soem/build/
+third_party/soem/.git
 
 
 # 文档
@@ -21,3 +26,5 @@ README.md
 openspec/config.yaml
 CHANGELOG.md
 openspec/specs/software-licensing/spec.md
+docs/LOGGING.md
+docs/LINUX.md
