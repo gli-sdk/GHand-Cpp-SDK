@@ -87,7 +87,7 @@ DexHand::DexHand()
     callback_manager_ = std::unique_ptr<DexHandCallbackManager>(new DexHandCallbackManager());
 
     // 注册PDO数据回调
-    EtherCATComm::SetDataCallback(
+    ethercat_comm_->SetDataCallback(
         std::bind(&DexHand::OnRawDataReceived, this,
                   std::placeholders::_1, std::placeholders::_2));
 }

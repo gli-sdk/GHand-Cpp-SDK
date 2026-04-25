@@ -11,7 +11,6 @@
 #else
     #include <pthread.h>
     #include <unistd.h>
-    #include <sys/mman.h>
     #include <sys/resource.h>
     #include <errno.h>
 #endif
@@ -30,41 +29,40 @@
 namespace xiaoyao {
 namespace internal {
 
-OSAL_THREAD_HANDLE EtherCATComm::threadrt;
-OSAL_THREAD_HANDLE EtherCATComm::thread1;
-int EtherCATComm::expectedWKC;
-int EtherCATComm::wkc;
-int EtherCATComm::mappingdone = 0;
-int EtherCATComm::dorun = 0;
-int EtherCATComm::inOP = 0;
-bool EtherCATComm::is_connected_ = false;
-int EtherCATComm::dowkccheck = 0;
-int EtherCATComm::currentgroup = 0;
-int EtherCATComm::cycle = 0;
-int64_t EtherCATComm::cycletime = 10000000;
-ecx_contextt EtherCATComm::ctx_;
-uint8 EtherCATComm::IOmap_[4096] = {0};
-bool EtherCATComm::threads_started_ = false;
-std::mutex EtherCATComm::context_mutex_;
-std::mutex EtherCATComm::rt_context_mutex_;
-FileLock EtherCATComm::device_lock_;  // 设备锁静态成员定义
-std::function<void(int)> EtherCATComm::state_update_callback_ = nullptr;
-std::function<void(int)> EtherCATComm::progress_callback_ = nullptr;
-std::function<void(const uint8_t*, size_t)> EtherCATComm::data_callback_ = nullptr;
-std::mutex EtherCATComm::data_callback_mutex_;
-
-// static LockFreeQueue<std::pair<std::vector<uint8>, uint16>, 32> pdo_queue_;
-static uint8 rxpdo_buffer_[80];
 static std::atomic<bool> print_debug_info{false};
-EtherCATComm::EtherCATComm() {}
+static std::atomic<EtherCATComm*> g_current_foe_instance{nullptr};
 
-EtherCATComm::~EtherCATComm() {}
+EtherCATComm::EtherCATComm()
+    : ctx_{},
+      threads_started_(false),
+      expectedWKC(0),
+      wkc(0),
+      mappingdone(0),
+      dorun(0),
+      inOP(0),
+      is_connected_(false),
+      dowkccheck(0),
+      currentgroup(0),
+      cycle(0),
+      cycletime(10000000),
+      state_update_callback_(nullptr),
+      data_callback_(nullptr) {
+    memset(IOmap_, 0, sizeof(IOmap_));
+    memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
+    rxpdo_buffer_[1] = 0x01;
+}
+
+EtherCATComm::~EtherCATComm() {
+    if (is_connected_ || threads_started_) {
+        Disconnect();
+    }
+}
 
 void EtherCATComm::StartThreads() {
     if (!threads_started_) {
         dorun = 1;
-        osal_thread_create_rt(&threadrt, 128000, reinterpret_cast<void*>(Ecatthread), NULL);
-        osal_thread_create(&thread1, 128000, reinterpret_cast<void*>(Ecatcheck), NULL);
+        osal_thread_create_rt(&threadrt, 128000, reinterpret_cast<void*>(Ecatthread), this);
+        osal_thread_create(&thread1, 128000, reinterpret_cast<void*>(Ecatcheck), this);
 
         threads_started_ = true;
     }
@@ -137,7 +135,7 @@ int EtherCATComm::Connect(std::string device_name) {
     dorun = 1;
     expectedWKC = (group->outputsWKC * 2) + group->inputsWKC;
 
-    // ❌ 禁用DC分布式时钟同步
+    // 禁用DC分布式时钟同步
     // 原因：单从站系统不需要DC同步，禁用后可避免窗口最小化时的周期波动
     ecx_configdc(&ctx_);
 
@@ -233,8 +231,6 @@ int EtherCATComm::SDOWrite(std::uint16_t slave, std::uint16_t index, std::uint8_
         return -1;
     }
 
-    // 直接使用实时上下文进行 SDO 写操作
-    // 使用互斥锁保护
     std::lock_guard<std::mutex> lock(rt_context_mutex_);
 
     int retries = 3;
@@ -252,10 +248,6 @@ int EtherCATComm::SDOWrite(std::uint16_t slave, std::uint16_t index, std::uint8_
 }
 
 int EtherCATComm::SendRxPDO(uint16 slave, uint16 pdo_index, uint32 data_size, uint8* data) {
-    // SendRxPDO 使用无锁队列，不需要加锁
-    // 使用 rt_context_mutex_ 验证参数
-    // std::lock_guard<std::mutex> lock(rt_context_mutex_);
-
     if (!data || data_size <= 0 || slave <= 0 || slave > ctx_.slavecount) {
         return -1;
     }
@@ -264,31 +256,11 @@ int EtherCATComm::SendRxPDO(uint16 slave, uint16 pdo_index, uint32 data_size, ui
         return -1;
     }
 
-    // if (data_size <= ctx_.slavelist[slave].Obytes) {
-    //     memcpy(ctx_.slavelist[slave].outputs, data, data_size);
-    // }
     memcpy(rxpdo_buffer_, data, data_size);
-
-    // std::vector<uint8> data_copy(data, data + data_size);
-    // std::pair<std::vector<uint8>, uint16> pdo_item(data_copy, slave);
-    // if (data[1] == 1) {
-    //     // 清除 pdo_queue_ 队列
-    //     std::pair<std::vector<uint8>, uint16> temp_item;
-    //     while (pdo_queue_.Pop(temp_item)) {
-    //         // 继续弹出元素直到队列为空
-    //     }
-    // }
-
-    // if (!pdo_queue_.Push(pdo_item)) {
-    //     return -1;
-    // }
     return 1;
 }
 
 uint8_t* EtherCATComm::ReadTxPDO(uint16 slave) {
-    // 使用 rt_context_mutex_ 读取，避免与实时线程冲突
-    // std::lock_guard<std::mutex> lock(rt_context_mutex_);
-
     if (slave > 0 && slave <= ctx_.slavecount) {
         return ctx_.slavelist[slave].inputs;
     }
@@ -312,7 +284,15 @@ void EtherCATComm::ec_sync(int64 reftime, int64 cycletime, int64* offsettime) {
     *offsettime = (int64)((delta * 0.01f) + (integral * 0.00002f));
 }
 
-OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
+void EtherCATComm::Ecatthread(void* param) {
+    reinterpret_cast<EtherCATComm*>(param)->EcatthreadImpl();
+}
+
+void EtherCATComm::Ecatcheck(void* param) {
+    reinterpret_cast<EtherCATComm*>(param)->EcatcheckImpl();
+}
+
+void EtherCATComm::EcatthreadImpl() {
     ec_timet ts;
     int ht;
     static int64_t toff = 0;
@@ -333,9 +313,6 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
     }
 
     while (threads_started_) {
-        //  add_time_ns(&ts, cycletime + toff);
-        //  osal_monotonic_sleep(&ts);
-
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
         if (dorun > 0) {
@@ -371,7 +348,6 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
 
             if (wkc != expectedWKC) {
                 dowkccheck++;
-
             } else {
                 dowkccheck = 0;
             }
@@ -386,7 +362,7 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
     }
 }
 
-OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
+void EtherCATComm::EcatcheckImpl() {
     int slaveix;
     while (threads_started_) {
         osal_usleep(50000);
@@ -450,6 +426,7 @@ OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
         }
     }
 }
+
 bool EtherCATComm::InputBin(const char* fname, int* length) {
     FILE* fp = nullptr;
     int cc = 0, c;
@@ -470,19 +447,13 @@ bool EtherCATComm::InputBin(const char* fname, int* length) {
     fclose(fp);
     return true;
 }
+
 int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
                              const std::string& file_path,
                              std::function<void(int)> progressCallback) {
-    // ifname 参数保留以便将来使用，但当前未使用
-    (void)ifname;  // 抑制未使用参数警告
-    // std::lock_guard<std::mutex> lock(context_mutex_);
-
-    // 注意：此方法会释放文件锁但不修改 is_connected_ 标志
-    // 原因：固件更新后期望重连成功，从用户视角看设备仍是"已连接"状态
-    // 只有在确认重连失败后，才由调用方设置 is_connected_ = false
+    (void)ifname;
 
     if (slave <= 0 || slave > ctx_.slavecount) {
-        // Slave validation失败，无需释放锁（未使用设备）
         return -1;
     }
     int filesize = 0;
@@ -504,9 +475,9 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
 
     ctx_.slavelist[slave].mbxhandlerstate = 0;
 
+    // 通过全局原子指针让 FoeProgressHook 能访问当前实例
+    g_current_foe_instance.store(this);
     ecx_FOEdefinehook(&ctx_, reinterpret_cast<void*>(EtherCATComm::FoeProgressHook));
-    ctx_.slavelist[slave].state = EC_STATE_BOOT;
-    ecx_writestate(&ctx_, slave);
 
     if (ecx_statecheck(&ctx_, slave, EC_STATE_BOOT, EC_TIMEOUTSTATE * 10) == EC_STATE_BOOT) {
         if (InputBin(file_path.c_str(), &filesize)) {
@@ -514,21 +485,21 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
             int update_result =
                 ecx_FOEwrite(&ctx_, slave, file_name, 0, filesize, &file_buffer, EC_TIMEOUTSTATE);
 
-            // 释放文件锁以允许重连，但保持 is_connected_ = true（期望重连成功）
             LOG_DEBUG("Releasing device lock after firmware update (result: " << update_result << ")");
             device_lock_.Release();
 
+            g_current_foe_instance.store(nullptr);
             return update_result;
         } else {
-            // 文件读取失败，释放锁
             LOG_DEBUG("Releasing device lock after firmware file read failure");
             device_lock_.Release();
+            g_current_foe_instance.store(nullptr);
             return -2;
         }
     } else {
-        // 状态转换失败，释放锁
         LOG_DEBUG("Releasing device lock after BOOT state transition failure");
         device_lock_.Release();
+        g_current_foe_instance.store(nullptr);
         return -1;
     }
     return 0;
@@ -537,12 +508,15 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
 void EtherCATComm::FoeProgressHook(uint16 slave, int32 packetnumber, int32 totalsize) {
     static int32 last_packet = -1;
 
+    EtherCATComm* comm = g_current_foe_instance.load();
+    if (!comm) return;
+
     if (packetnumber != last_packet) {
         last_packet = packetnumber;
 
         // 添加边界检查
-        if (slave > 0 && slave <= ctx_.slavecount) {
-            int maxdata = ctx_.slavelist[slave].mbx_l - 12;
+        if (slave > 0 && slave <= comm->ctx_.slavecount) {
+            int maxdata = comm->ctx_.slavelist[slave].mbx_l - 12;
             if (maxdata <= 0) return;
 
             int sent_data = packetnumber * maxdata;
@@ -556,11 +530,12 @@ void EtherCATComm::FoeProgressHook(uint16 slave, int32 packetnumber, int32 total
             }
 
             fflush(stdout);
-            if (progress_callback_) {
-                progress_callback_(percentage);
+            if (comm->progress_callback_) {
+                comm->progress_callback_(percentage);
             }
         }
     }
 }
+
 }  // namespace internal
 }  // namespace xiaoyao

@@ -28,6 +28,7 @@ if(WIN32)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/internal)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/wpcap)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/soem/win32)
 
     # 链接 SOEM 的库文件
     link_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib)
@@ -36,6 +37,7 @@ elseif(UNIX AND NOT APPLE)
     # 添加头文件目录
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/internal)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/soem/linux)
 
     # 依赖检测
     find_package(Threads REQUIRED)

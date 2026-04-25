@@ -66,12 +66,12 @@ public:
         return is_connected_;
     }
 
-    static void SetDataCallback(std::function<void(const uint8_t*, size_t)> callback) {
+    void SetDataCallback(std::function<void(const uint8_t*, size_t)> callback) {
         std::lock_guard<std::mutex> lock(data_callback_mutex_);
         data_callback_ = callback;
     }
 
-    static void NotifyDataReceived(const uint8_t* data, size_t size) {
+    void NotifyDataReceived(const uint8_t* data, size_t size) {
         std::lock_guard<std::mutex> lock(data_callback_mutex_);
         if (data_callback_) {
             data_callback_(data, size);
@@ -85,44 +85,52 @@ public:
 
 
  private:
-    static std::mutex context_mutex_;
-    static std::mutex rt_context_mutex_;
-    static FileLock device_lock_;
-    static ecx_contextt ctx_;
-    static std::function<void(int)> progress_callback_;
+    std::mutex context_mutex_;
+    std::mutex rt_context_mutex_;
+    FileLock device_lock_;
+    ecx_contextt ctx_;
+    std::function<void(int)> progress_callback_;
+
+    uint8_t IOmap_[4096];
+    OSAL_THREAD_HANDLE threadrt;
+    OSAL_THREAD_HANDLE thread1;
+    bool threads_started_;
+    int expectedWKC;
+    int wkc;
+    int mappingdone;
+    int dorun;
+    int inOP;
+    // 连接状态标志：表示设备的逻辑连接状态
+    // 特殊情况：BootUpdate() 后保持为 true（期望重连成功），仅在确认重连失败后才设置为 false
+    bool is_connected_;
+    int dowkccheck;
+    int currentgroup;
+    int cycle;
+    int64_t cycletime;
+    uint8_t rxpdo_buffer_[80];
 
     void ResetContext();
     bool InputBin(const char* fname, int* length);
 
-    static uint8_t IOmap_[4096];
-    static OSAL_THREAD_HANDLE threadrt;
-    static OSAL_THREAD_HANDLE thread1;
-    static bool threads_started_;
-    static int expectedWKC;
-    static int wkc;
-    static int mappingdone;
-    static int dorun;
-    static int inOP;
-    // 连接状态标志：表示设备的逻辑连接状态
-    // 特殊情况：BootUpdate() 后保持为 true（期望重连成功），仅在确认重连失败后才设置为 false
-    static bool is_connected_;
-    static int dowkccheck;
-    static int currentgroup;
-    static int cycle;
-    static int64_t cycletime;
     static void add_time_ns(ec_timet* ts, int64_t addtime);
     static void ec_sync(int64_t reftime, int64_t cycletime, int64_t* offsettime);
-    static OSAL_THREAD_FUNC_RT Ecatthread(void);
-    static OSAL_THREAD_FUNC Ecatcheck(void);
+
+    // 线程入口（静态，兼容 SOEM 的线程创建 API）
+    static void Ecatthread(void* param);
+    static void Ecatcheck(void* param);
+    // 实际的线程逻辑
+    void EcatthreadImpl();
+    void EcatcheckImpl();
+
     void StartThreads();
     void StopThreads();
 
     char file_buffer[kFirmwareBufferSize] = {0};
     static void FoeProgressHook(uint16_t slave, int32_t packetnumber, int32_t totalsize);
 
-    static std::function<void(int)> state_update_callback_;
-    static std::function<void(const uint8_t*, size_t)> data_callback_;
-    static std::mutex data_callback_mutex_;
+    std::function<void(int)> state_update_callback_;
+    std::function<void(const uint8_t*, size_t)> data_callback_;
+    std::mutex data_callback_mutex_;
 };
 
 }  // namespace internal
