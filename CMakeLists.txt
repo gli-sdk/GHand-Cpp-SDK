@@ -28,6 +28,7 @@ if(WIN32)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/internal)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/wpcap)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/zlgcan)
 
     # 链接 SOEM 的库文件
     link_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib)
@@ -43,6 +44,24 @@ elseif(UNIX AND NOT APPLE)
     pkg_check_modules(PCAP REQUIRED libpcap)
     pkg_check_modules(OPENSSL REQUIRED openssl)
 endif()
+
+# 从 zlgcan.h 自动生成设备类型映射表，避免手动维护宏名映射
+set(ZLGCAN_H "${CMAKE_CURRENT_SOURCE_DIR}/include/zlgcan/zlgcan.h")
+set(GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY ${GENERATED_DIR})
+
+file(STRINGS ${ZLGCAN_H} ZLGCAN_LINES REGEX "^#define ZCAN_[A-Za-z0-9_]+[ \t]+[0-9]+")
+set(DEVICE_TYPE_INC "")
+foreach(line ${ZLGCAN_LINES})
+    string(REGEX MATCH "ZCAN_[A-Za-z0-9_]+" MACRO_NAME ${line})
+    if(MACRO_NAME)
+        set(DEVICE_TYPE_INC "${DEVICE_TYPE_INC}XX(${MACRO_NAME})\n")
+    endif()
+endforeach()
+
+set(GENERATED_INC "${GENERATED_DIR}/zlgcan_device_types.inc")
+file(WRITE ${GENERATED_INC} "${DEVICE_TYPE_INC}")
+include_directories(${GENERATED_DIR})
 
 # 查找源文件
 file(GLOB_RECURSE SOURCES
@@ -62,8 +81,10 @@ if(WIN32)
     target_link_libraries(xiaoyao PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/soem.lib
         winmm ws2_32
+        setupapi cfgmgr32
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/Packet.lib
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/wpcap.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/zlgcan.lib
     )
 else()
     # Linux: 使用预编译库
@@ -81,6 +102,19 @@ set_target_properties(xiaoyao PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
 )
+
+# ========== 自动复制运行时 DLL 到输出目录 ==========
+if(WIN32)
+    file(GLOB RUNTIME_DLLS "${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/*.dll")
+    if(RUNTIME_DLLS)
+        add_custom_command(TARGET xiaoyao POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${RUNTIME_DLLS}
+            $<TARGET_FILE_DIR:xiaoyao>
+            COMMENT "Copying runtime DLLs to output directory"
+        )
+    endif()
+endif()
 
 # ========== 示例程序 ==========
 add_subdirectory(examples)

@@ -6,20 +6,21 @@ namespace xiaoyao {
 // Pimpl 实现
 class DexHand::Impl {
 public:
+    explicit Impl(CommType comm_type) : hand_(comm_type) {}
     internal::DexHand hand_;
 };
 
 // 构造/析构
-DexHand::DexHand() : impl_(new Impl()) {}
+DexHand::DexHand(CommType comm_type) : impl_(new Impl(comm_type)) {}
 DexHand::~DexHand() {}
 
 // 转发所有调用
-bool DexHand::AutoConnect(CommType comm_type) {
-    return impl_->hand_.AutoConnect(comm_type);
+bool DexHand::AutoConnect() {
+    return impl_->hand_.AutoConnect();
 }
 
-bool DexHand::Connect(CommType comm_type, const std::string& device_name) {
-    return impl_->hand_.Connect(comm_type, device_name);
+bool DexHand::Connect(const std::string& device_name) {
+    return impl_->hand_.Connect(device_name);
 }
 
 bool DexHand::Disconnect() {

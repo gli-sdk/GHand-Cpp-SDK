@@ -1,5 +1,6 @@
 #define _USE_MATH_DEFINES
 #include "dexhand.h"
+#include "canfd_comm.h"
 #include "ethercat_comm.h"
 #include "dexhand_callback_manager.h"
 #include "logger.h"
@@ -78,63 +79,92 @@ int GetTactileSensorCount(FingerType finger) {
 
 }  // anonymous namespace
 
-DexHand::DexHand()
+DexHand::DexHand(CommType comm_type)
     : hand_type_(HandType::NONE),
       control_mode_(ControlMode::POSITION),
-      comm_type_(CommType::ETHERCAT),
+      comm_type_(comm_type),
       device_name_("") {
-    ethercat_comm_ = std::unique_ptr<EtherCATComm>(new EtherCATComm());
+    switch (comm_type) {
+        case CommType::ETHERCAT:
+            comm_ = std::unique_ptr<EtherCATComm>(new EtherCATComm());
+            break;
+        case CommType::CANFD:
+            comm_ = std::unique_ptr<CANFDComm>(new CANFDComm());
+            break;
+        case CommType::RS485:
+        default:
+            LOG_WARNING("Unsupported communication type");
+            break;
+    }
     callback_manager_ = std::unique_ptr<DexHandCallbackManager>(new DexHandCallbackManager());
 
-    // 注册PDO数据回调
-    EtherCATComm::SetDataCallback(
-        std::bind(&DexHand::OnRawDataReceived, this,
-                  std::placeholders::_1, std::placeholders::_2));
+    SetupCallbacks();
 }
 
 DexHand::~DexHand() = default;
 
-bool DexHand::ConnectToDevice(CommType comm_type, const std::string& device_name) {
+void DexHand::SetupCallbacks() {
+    if (!comm_) return;
+    comm_->SetJointsCallback(
+        [this](const std::vector<Joint>& joints) {
+            callback_manager_->UpdateJoints(joints);
+        });
+    comm_->SetHandStateCallback(
+        [this](const HandState& state) {
+            callback_manager_->UpdateTemperature(state);
+        });
+    comm_->SetTactileDataCallback(
+        [this](const TactileData& data) {
+            callback_manager_->UpdateTactileData(data);
+        });
+}
+
+bool DexHand::ConnectToDevice(const std::string& device_name) {
     LOG_INFO("Connecting to device: " << device_name);
 
-    switch (comm_type) {
+    /*switch (comm_type_) {
         case CommType::ETHERCAT: {
-            int ec_result = ethercat_comm_->Connect(device_name);
-            if (ec_result == 0) {
-                comm_type_ = comm_type;
-                device_name_ = device_name;
-                GetDeviceInfo();
-                GetHandType();
-                LOG_INFO("Successfully connected to device: " << device_name);
-                return true;
-            }
-            return false;
+            comm_ = std::unique_ptr<EtherCATComm>(new EtherCATComm());
+            break;
         }
-        case CommType::CANFD:
+        case CommType::CANFD: {
+            comm_ = std::unique_ptr<CANFDComm>(new CANFDComm());
+            break;
+        }
         case CommType::RS485:
         default:
             LOG_WARNING("Unsupported communication type");
             return false;
     }
+
+    SetupCallbacks();*/
+
+    int result = comm_->Connect(device_name);
+    if (result == 0) {
+        device_name_ = device_name;
+        GetDeviceInfo();
+        GetHandType();
+        LOG_INFO("Successfully connected to device: " << device_name);
+        return true;
+    }
+    return false;
 }
 
-bool DexHand::AutoConnect(CommType comm_type) {
-    if (comm_type == CommType::ETHERCAT) {
-        std::map<std::string, std::string> adapter_names = SearchAdapters();
-        for (const auto& adapter_pair : adapter_names) {
-            if (ConnectToDevice(comm_type, adapter_pair.first)) {
-                return true;
-            }
+bool DexHand::AutoConnect() {
+    std::map<std::string, std::string> adapter_names = SearchAdapters();
+    for (const auto& adapter_pair : adapter_names) {
+        if (ConnectToDevice(adapter_pair.first)) {
+            return true;
         }
     }
     return false;
 }
 
-bool DexHand::Connect(CommType comm_type, const std::string& device_name) {
+bool DexHand::Connect(const std::string& device_name) {
     if (device_name == "auto") {
-        return AutoConnect(comm_type); 
+        return AutoConnect();
     }
-    return ConnectToDevice(comm_type, device_name);
+    return ConnectToDevice(device_name);
 }
 
 bool DexHand::Disconnect() {
@@ -143,7 +173,7 @@ bool DexHand::Disconnect() {
     hand_type_ = HandType::NONE;
     device_info_ = DeviceInfo();
     Stop();
-    int result = ethercat_comm_->Disconnect();
+    int result = comm_->Disconnect();
 
     if (result == 0) {
         LOG_INFO("Successfully disconnected from device");
@@ -155,88 +185,20 @@ bool DexHand::Disconnect() {
 }
 
 bool DexHand::IsConnected() const {
-    return ethercat_comm_ && ethercat_comm_->IsConnected();
+    return comm_ && comm_->IsConnected();
 }
 
 std::map<std::string, std::string> DexHand::SearchAdapters() const {
-    return ethercat_comm_->SearchAdapters();
+    return comm_->SearchAdapters();
 }
 
 HandType DexHand::GetHandType() const {
-    // 从硬件读取
-    std::uint8_t value = 0;
-    int size = sizeof(value);
-    int result = ethercat_comm_->SDORead(1, 0x2001, 0x00, &size, &value, EC_TIMEOUTRXM);
-
-    if (result == 1) {
-        switch (value) {
-            case 0:
-                hand_type_ = HandType::NONE;
-                break;
-            case 1:
-                hand_type_ = HandType::LEFT;
-                break;
-            case 2:
-                hand_type_ = HandType::RIGHT;
-                break;
-            default:
-                hand_type_ = HandType::NONE;
-                break;
-        }
-    }
-
+    hand_type_ = comm_->GetHandType();
     return hand_type_;
 }
 
 DeviceInfo DexHand::GetDeviceInfo() const {
-    // 从硬件读取
-    std::uint8_t value[255] = {0};
-    int size = sizeof(value);
-    int result = -1;
-
-    result = ethercat_comm_->SDORead(1, 0x1008, 0x00, &size, &value, EC_TIMEOUTRXM);
-    if (result == 1) {
-        device_info_.device_name = std::string(reinterpret_cast<char*>(value));
-    }
-
-    memset(value, 0, sizeof(value));
-    result = ethercat_comm_->SDORead(1, 0x1009, 0x00, &size, &value, EC_TIMEOUTRXM);
-    if (result == 1) {
-        device_info_.hardware_version = std::string(reinterpret_cast<char*>(value));
-    }
-
-    memset(value, 0, sizeof(value));
-    result = ethercat_comm_->SDORead(1, 0x100A, 0x00, &size, &value, EC_TIMEOUTRXM);
-    if (result == 1) {
-        device_info_.software_version = std::string(reinterpret_cast<char*>(value));
-    }
-
-    memset(value, 0, sizeof(value));
-    result = ethercat_comm_->SDORead(1, 0x1018, 0x04, &size, &value, EC_TIMEOUTRXM);
-    if (result == 1) {
-        // 将 4 字节序列号转换为 unsigned int
-        unsigned int serial_num = 0;
-        serial_num |= static_cast<unsigned char>(value[0]);
-        serial_num |= static_cast<unsigned char>(value[1]) << 8;
-        serial_num |= static_cast<unsigned char>(value[2]) << 16;
-        serial_num |= static_cast<unsigned char>(value[3]) << 24;
-        device_info_.serial_number = serial_num;
-    }
-
-    // 读取电机驱动版本号 (0x2007:0x01~0x03)
-    std::uint8_t motor_ver[3] = {0};
-    int motor_size = sizeof(std::uint8_t);
-    int motor_result[3] = {0};
-    motor_result[0] = ethercat_comm_->SDORead(1, 0x2007, 0x01, &motor_size, &motor_ver[0], EC_TIMEOUTRXM);
-    motor_result[1] = ethercat_comm_->SDORead(1, 0x2007, 0x02, &motor_size, &motor_ver[1], EC_TIMEOUTRXM);
-    motor_result[2] = ethercat_comm_->SDORead(1, 0x2007, 0x03, &motor_size, &motor_ver[2], EC_TIMEOUTRXM);
-    if (motor_result[0] == 1 && motor_result[1] == 1 && motor_result[2] == 1) {
-        device_info_.motor_driver_version =
-            std::to_string(motor_ver[0]) + "." +
-            std::to_string(motor_ver[1]) + "." +
-            std::to_string(motor_ver[2]);
-    }
-
+    device_info_ = comm_->GetDeviceInfo();
     return device_info_;
 }
 
@@ -259,181 +221,52 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
 
     LOG_DEBUG("Moving " << joints.size() << " joints");
 
-    // 将用户传入的joints转为unordered_map，按id索引（方便快速查找）
-    std::unordered_map<int, JointCommand> joint_map;
+    // 构建完整关节命令表（全部 18 个关节），未传入的补 0
+    std::vector<JointCommand> full_joints;
+    full_joints.reserve(static_cast<int>(JointId::NUM_JOINTS));
+    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); ++i) {
+        full_joints.push_back({static_cast<JointId>(i), 0.0f, 0, 0});
+    }
+
     for (const auto& joint : joints) {
-        if (static_cast<int>(joint.id) < static_cast<int>(JointId::NUM_JOINTS)) {
+        int idx = static_cast<int>(joint.id);
+        if (idx >= 0 && idx < static_cast<int>(JointId::NUM_JOINTS)) {
             JointCommand limited_joint = joint;
             ClampJointAngle(limited_joint);
             ClampJointVelocity(limited_joint);
             ClampJointTorque(limited_joint);
-            joint_map[static_cast<int>(joint.id)] = limited_joint;
+            full_joints[idx] = limited_joint;
         }
     }
 
-    // 构建发送缓冲区
-    uint8_t buffer[80] = {0};
-    size_t offset = 0;
-
-    // 写入控制模式
-    uint8_t mode = static_cast<uint8_t>(control_mode_);
-    memcpy(buffer + offset, &mode, sizeof(mode));
-    offset += sizeof(mode);
-
-    // 写入停止标志
-    uint8_t stop = 0;
-    memcpy(buffer + offset, &stop, sizeof(stop));
-    offset += sizeof(stop);
-
-    // 按照JointId枚举顺序（0-17）遍历所有关节
-    // 硬件期望按固定顺序接收数据
-    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); i++) {
-        // 跳过所有DIP关节（硬件不支持控制）
-        if (i == static_cast<int>(JointId::THUMB_DIP) ||
-            i == static_cast<int>(JointId::FF_DIP) ||
-            i == static_cast<int>(JointId::MF_DIP) ||
-            i == static_cast<int>(JointId::RF_DIP) ||
-            i == static_cast<int>(JointId::LF_DIP)) {
-            continue;
-        }
-
-        // 从map中查找当前关节的数据
-        float angle = 0.0f;
-        uint8_t velocity = 0;
-        uint8_t torque = 0;
-
-        auto it = joint_map.find(i);
-        if (it != joint_map.end()) {
-            // 找到了用户传入的数据
-            angle = it->second.angle;
-            velocity = it->second.velocity;
-            torque = it->second.torque;
-        } else {
-            // 未找到，使用默认值0
-            angle = 0.0f;
-            velocity = 0;
-            torque = 0;
-        }
-
-        // 转换角度为弧度
-        angle = angle * (static_cast<float>(M_PI) / 180.0f);
-
-        // 写入角度（4字节）
-        memcpy(buffer + offset, &angle, sizeof(angle));
-        offset += sizeof(angle);
-
-        // 写入速度（1字节）
-        memcpy(buffer + offset, &velocity, sizeof(velocity));
-        offset += sizeof(velocity);
-
-        // 写入力矩（1字节）
-        memcpy(buffer + offset, &torque, sizeof(torque));
-        offset += sizeof(torque);
-    }
-    LOG_INFO("Sending PDO data ");
-
-    int wkc = ethercat_comm_->SendRxPDO(1, ECT_SDO_RXPDOASSIGN, sizeof(buffer), buffer);
-
-    return true;  // 返回成功或失败
+    return comm_->MoveJoints(full_joints, control_mode_);
 }
 
 void DexHand::Stop() {
     LOG_INFO("Sending stop command");
-    // 构造停止命令
-    uint8_t buffer[80] = {0};
-    buffer[1] = 1;
-    ethercat_comm_->SendRxPDO(1, ECT_SDO_RXPDOASSIGN, sizeof(buffer), buffer);
+    comm_->Stop();
 }
 
 bool DexHand::ClearFault() {
     LOG_INFO("Clearing device fault");
-
-    std::uint8_t command = 0x01;
-    std::uint8_t state = 0xFF;
-    int size = sizeof(std::uint8_t);
-    std::uint8_t result = 0;  // 初始化为0
-    int ret = -1;
-    int times = 100;
-    ret = ethercat_comm_->SDOWrite(1, 0x2002, 0x01, size, &command, EC_TIMEOUTRXM);
-    if (ret > 0) {
-        while (times--) {
-            ret = ethercat_comm_->SDORead(1, 0x2002, 0x02, &size, &state, EC_TIMEOUTRXM);
-            if (ret > 0 && state == 0) {  // 执行完成
-                ret = ethercat_comm_->SDORead(1, 0x2002, 0x03, &size, &result, EC_TIMEOUTRXM);
-                if (result == 1) {
-                    LOG_INFO("Device fault cleared successfully");
-                } else {
-                    LOG_ERROR("Failed to clear device fault");
-                }
-                return result == 1;  // true成功, false失败
-            }
-        }
-    }
-    LOG_ERROR("Clear fault operation timed out");
-    return false;
+    return comm_->ClearFault();
 }
 
 bool DexHand::InitJoint() {
     LOG_INFO("Initializing joint positions");
-
-    std::uint8_t command = 0x01;
-    std::uint8_t state = 0xFF;
-    int size = sizeof(std::uint8_t);
-    std::uint8_t result = 0;  // 初始化为0
-    int ret = -1;
-    int times = 100;
-    ret = ethercat_comm_->SDOWrite(1, 0x2003, 0x01, size, &command, EC_TIMEOUTRXM);
-    if (ret > 0) {
-        while (times--) {
-            ret = ethercat_comm_->SDORead(1, 0x2003, 0x02, &size, &state, EC_TIMEOUTRXM);
-            if (ret > 0 && state == 0) {  // 执行完成
-                ret = ethercat_comm_->SDORead(1, 0x2003, 0x03, &size, &result, EC_TIMEOUTRXM);
-                if (result == 1) {
-                    LOG_INFO("Joint initialization completed successfully");
-                } else {
-                    LOG_ERROR("Joint initialization failed");
-                }
-                return result == 1;  // true成功, false失败
-            }
-        }
-    }
-    LOG_ERROR("Joint initialization timed out");
-    return false;
+    return comm_->InitJoint();
 }
 
 bool DexHand::OpenTactile() {
-    std::uint8_t command = 0x01;
-    int size = sizeof(std::uint8_t);
-    int result = -1;
-    result = ethercat_comm_->SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
-    if (result > 0) {
-        return true;
-    }
-    return false;
+    return comm_->OpenTactile();
 }
 
 bool DexHand::CloseTactile() {
-    std::uint8_t command = 0x02;
-    int size = sizeof(std::uint8_t);
-    int result = -1;
-    result = ethercat_comm_->SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
-    if (result > 0) {
-        return true;
-    }
-    return false;
+    return comm_->CloseTactile();
 }
 
 bool DexHand::ZeroTactile() {
-    std::uint8_t command = 0x04;
-    std::uint8_t state = 0xFF;
-    int size = sizeof(std::uint8_t);
-    int result = -1;
-    result = ethercat_comm_->SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
-    result = ethercat_comm_->SDORead(1, 0x2004, 0x03, &size, &state, EC_TIMEOUTRXM);
-    if (result > 0) {
-        return true;
-    }
-    return false;
+    return comm_->ZeroTactile();
 }
 
 void DexHand::SetJointsCallback(std::function<void(const std::vector<Joint>&)> cb) {
@@ -446,117 +279,6 @@ void DexHand::SetHandStateCallback(std::function<void(const HandState&)> cb) {
 
 void DexHand::SetTactileDataCallback(std::function<void(const TactileData&)> cb) {
     callback_manager_->SetTactileDataCallback(cb);
-}
-
-void DexHand::OnRawDataReceived(const uint8_t* data, size_t size) {
-    // 直接解析PDO数据（与GetJoints()相同的解析逻辑）
-    std::vector<Joint> parsed_joints;
-    HandState parsed_temperature;
-
-    if (data == nullptr || size == 0) {
-        LOG_WARNING("Received invalid data: null or empty");
-        return;  // 无效数据
-    }
-
-    size_t offset = 0;
-    uint8_t hand_state, hand_error;
-    int16_t temperature;
-
-    // 解析手部状态和温度
-    memcpy(&hand_state, data + offset, sizeof(hand_state));
-    offset += sizeof(hand_state);
-
-    memcpy(&hand_error, data + offset, sizeof(hand_error));
-    offset += sizeof(hand_error);
-
-    memcpy(&temperature, data + offset, sizeof(temperature));
-    offset += sizeof(temperature);
-
-    parsed_temperature.state = static_cast<State>(hand_state);
-    parsed_temperature.error = static_cast<ErrorCode>(hand_error);
-    parsed_temperature.temperature = temperature;
-
-    // 解析关节数据
-    parsed_joints.resize(static_cast<int>(JointId::NUM_JOINTS));
-    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); i++) {
-        uint8_t joint_state, joint_error;
-        float joint_angle;
-        uint8_t joint_velocity, joint_torque;
-
-        memcpy(&joint_state, data + offset, sizeof(joint_state));
-        offset += sizeof(joint_state);
-
-        memcpy(&joint_error, data + offset, sizeof(joint_error));
-        offset += sizeof(joint_error);
-
-        memcpy(&joint_angle, data + offset, sizeof(joint_angle));
-        offset += sizeof(joint_angle);
-
-        memcpy(&joint_velocity, data + offset, sizeof(joint_velocity));
-        offset += sizeof(joint_velocity);
-
-        memcpy(&joint_torque, data + offset, sizeof(joint_torque));
-        offset += sizeof(joint_torque);
-
-        parsed_joints[i].id = static_cast<JointId>(i);
-        parsed_joints[i].state = static_cast<State>(joint_state);
-        parsed_joints[i].error = static_cast<ErrorCode>(joint_error);
-        // 转换角度为度
-        joint_angle = joint_angle * (180.0f / static_cast<float>(M_PI));
-        parsed_joints[i].angle = joint_angle;
-        parsed_joints[i].velocity = joint_velocity;
-        parsed_joints[i].torque = joint_torque;
-    }
-
-    // 触发回调（纯回调模式，SDK不保存缓存）
-    callback_manager_->UpdateJoints(parsed_joints);
-    callback_manager_->UpdateTemperature(parsed_temperature);
-
-    // 解析触觉数据并触发回调
-    // 触觉数据紧跟在关节数据后面，无需硬编码偏移量
-    // 格式：[state(1B)][error(1B)][拇指合力6B][拇指分布力156B][食指合力6B][食指分布力93B]...
-    if (offset < size) {  // 确保 offset 小于总大小
-        TactileData tactile_data;
-
-        // 解析触觉传感器状态（2 字节）
-        if (offset + 2 <= size) {
-            tactile_data.sensor_state = data[offset];
-            tactile_data.sensor_error = data[offset + 1];
-            offset += 2;
-        }
-
-        // 辅助 lambda：解析单个手指的触觉数据
-        auto ParseFingerTactile = [&offset, data, size, &tactile_data](
-            FingerTactileData& finger_data, FingerType finger, int bit_offset) {
-            // 1. 从 sensor_state 按位提取状态
-            finger_data.state = (tactile_data.sensor_state & (1 << bit_offset)) != 0;
-
-            // 2. 解析合力数据（固定 6 字节）
-            if (offset + 6 <= size) {
-                finger_data.resultant_force = ParseResultantForce(data + offset);
-                offset += 6;
-            }
-
-            // 3. 解析分布力数据（可变长度）
-            int sensor_count = GetTactileSensorCount(finger);
-            int sample_size = sensor_count * 3;
-
-            if (offset + sample_size <= size) {
-                finger_data.distributed_forces = ParseSampleForces(data + offset, sensor_count);
-                offset += sample_size;
-            }
-        };
-
-        // 按顺序解析每个手指的触觉数据
-        ParseFingerTactile(tactile_data.thumb,  FingerType::THUMB, 0);
-        ParseFingerTactile(tactile_data.index,  FingerType::FF,    1);
-        ParseFingerTactile(tactile_data.middle, FingerType::MF,    2);
-        ParseFingerTactile(tactile_data.ring,   FingerType::RF,    3);
-        ParseFingerTactile(tactile_data.pinky,  FingerType::LF,    4);
-
-        // 触发一次性回调，包含所有触觉数据
-        callback_manager_->UpdateTactileData(tactile_data);
-    }
 }
 
 /**
@@ -577,55 +299,34 @@ int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
     const int retry_count = 10;
     const int retry_delay_ms = 1000;
     std::string last_version = device_info_.software_version;
-    std::uint8_t command = 0x5A;
-    std::uint8_t state = 0xFF;
-    std::uint8_t result = 0xFF;
-    int size = sizeof(std::uint8_t);
-    int ret = -1;
-    ret = ethercat_comm_->SDOWrite(1, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM);
-    if (ret > 0) {
-        ret = ethercat_comm_->SDORead(1, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM);
-        if (ret > 0 && state == 0) {  // 执行完成
-            ret = ethercat_comm_->SDORead(1, 0x2005, 0x03, &size, &result, EC_TIMEOUTRXM);
-        }
-    }
-    if (result == 1)  // 1成功,2失败
-    {
-        // BootUpdate 内部已释放文件锁，保持 is_connected_ = true（期望重连成功）
-        ret = ethercat_comm_->BootUpdate(ifname.c_str(), slave, filename.c_str(), progressCallback);
-        if (ret == 1) {
-            // 固件更新成功，尝试重连
-            for (int i = 0; i < retry_count; i++) {
-                progressCallback(100);
-                std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
-                if (Connect(comm_type_, device_name_)) {
-                    // 重连成功，is_connected_ 保持为 true
-                    if (last_version < device_info_.software_version) {
-                        return 1;
-                    } else {
-                        return -12;
-                    }
+    int ret = comm_->BootUpdate(ifname, slave, filename, progressCallback);
+    if (ret == 1) {
+        for (int i = 0; i < retry_count; i++) {
+            progressCallback(100);
+            std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
+
+            if (Connect(device_name_)) {
+                if (last_version < device_info_.software_version) {
+                    return 1;
+                } else {
+                    return -12;
                 }
             }
-            // 所有重试都失败，确认无法重连，设置 is_connected_ = false
-            ethercat_comm_->Disconnect();
-            return -11;
-        } else {
-            // 固件更新失败，尝试重连
-            for (int i = 0; i < retry_count; i++) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
-
-                if (Connect(comm_type_, device_name_)) {
-                    return ret;
-                }
-            }
-            // 重连失败，设置 is_connected_ = false
-            ethercat_comm_->Disconnect();
-            return ret;
         }
+        comm_->Disconnect();
+        return -11;
+    } else {
+        for (int i = 0; i < retry_count; i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
+
+            if (Connect(device_name_)) {
+                return ret;
+            }
+        }
+        comm_->Disconnect();
+        return ret;
     }
-    return 0;
 }
 
 // 关节限制静态表 (仅包含可控关节, 单位: 度)

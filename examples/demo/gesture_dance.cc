@@ -118,6 +118,8 @@ std::vector<JointCommand> MakeOK() {
 
 // ========== 动作执行函数 ==========
 
+bool HandZero(DexHand& hand);
+
 bool ThumbTouch(DexHand& hand) {
     const std::vector<std::vector<JointCommand>> poses = {
         MakeThumbTouchLittle(), MakeThumbTouchRing(),
@@ -179,8 +181,8 @@ bool SecondAction(DexHand& hand) {
 // ========== 主函数 ==========
 int main() {
     std::cout << "***** 枭尧灵巧手 SDK - 手势舞功能演示 *****\n" << std::endl;
-    DexHand hand;
-    bool connected = hand.Connect(CommType::ETHERCAT, "auto");
+    DexHand hand(CommType::ETHERCAT);
+    bool connected = hand.Connect("auto");
     if (!connected) {
         std::cout << "\n[扫描结束] 未能连接到灵巧手。" << std::endl;
         return 1;

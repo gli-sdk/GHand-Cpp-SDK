@@ -22,7 +22,7 @@ using TactileDataCallback = std::function<void(const TactileData&)>;
  */
 class DexHand {
 public:
-    explicit DexHand();
+    explicit DexHand(CommType comm_type = CommType::ETHERCAT);
     ~DexHand();
 
     // 禁止拷贝
@@ -35,7 +35,7 @@ public:
      * @param comm_type 通信类型（默认 ETHERCAT）
      * @return 成功返回 true
      */
-    bool AutoConnect(CommType comm_type = CommType::ETHERCAT);
+    bool AutoConnect();
 
     /**
      * @brief 连接到指定设备
@@ -43,8 +43,7 @@ public:
      * @param device_name 设备名称（"auto" 表示自动搜索）
      * @return 成功返回 true
      */
-    bool Connect(CommType comm_type = CommType::ETHERCAT,
-                const std::string& device_name = "auto");
+    bool Connect(const std::string& device_name = "auto");
 
     /**
      * @brief 断开连接

@@ -292,10 +292,10 @@ int main() {
     using namespace xiaoyao;
 
     // 1. 创建灵巧手实例
-    DexHand hand;
+    DexHand hand(CommType::ETHERCAT);
 
     // 2. 连接设备（自动搜索）
-    if (!hand.AutoConnect(CommType::ETHERCAT)) {
+    if (!hand.AutoConnect()) {
         std::cerr << "连接失败！" << std::endl;
         return 1;
     }
@@ -332,11 +332,11 @@ int main() {
     LOG_INFO("灵巧手 SDK 示例程序启动");
 
     // 创建实例
-    DexHand hand;
+    DexHand hand(CommType::ETHERCAT);
 
     // 连接设备
     LOG_INFO("正在连接设备...");
-    if (!hand.AutoConnect(CommType::ETHERCAT)) {
+    if (!hand.AutoConnect()) {
         LOG_ERROR("连接失败！");
         return 1;
     }
@@ -397,12 +397,10 @@ int main() {
 ##### `Connect()` - 连接到指定设备
 
 ```cpp
-bool Connect(CommType comm_type = CommType::ETHERCAT,
-             const std::string& device_name = "auto");
+bool Connect(const std::string& device_name = "auto");
 ```
 
 **参数：**
-- `comm_type`: 通信类型（ETHERCAT/CANFD/RS485）
 - `device_name`: 设备名称，"auto" 表示自动搜索
 
 **返回值：**
@@ -410,15 +408,15 @@ bool Connect(CommType comm_type = CommType::ETHERCAT,
 
 **示例：**
 ```cpp
-DexHand hand;
+DexHand hand(CommType::ETHERCAT);
 
 // 自动连接
-if (hand.Connect(CommType::ETHERCAT, "auto")) {
+if (hand.Connect("auto")) {
     // 连接成功
 }
 
 // 指定网卡连接
-if (hand.Connect(CommType::ETHERCAT, "\\Device\\NPF_{GUID}")) {
+if (hand.Connect("\\Device\\NPF_{GUID}")) {
     // 连接成功
 }
 ```
@@ -428,11 +426,11 @@ if (hand.Connect(CommType::ETHERCAT, "\\Device\\NPF_{GUID}")) {
 ##### `AutoConnect()` - 自动连接设备
 
 ```cpp
-bool AutoConnect(CommType comm_type = CommType::ETHERCAT);
+bool AutoConnect();
 ```
 
 **参数：**
-- `comm_type`: 通信类型
+- 无
 
 **返回值：**
 - 成功返回 `true`，失败返回 `false`
@@ -441,9 +439,9 @@ bool AutoConnect(CommType comm_type = CommType::ETHERCAT);
 
 **示例：**
 ```cpp
-DexHand hand;
+DexHand hand(CommType::ETHERCAT);
 
-if (hand.AutoConnect(CommType::ETHERCAT)) {
+if (hand.AutoConnect()) {
     std::cout << "自动连接成功！" << std::endl;
 }
 ```
@@ -495,7 +493,7 @@ std::map<std::string, std::string> SearchAdapters() const;
 
 **示例：**
 ```cpp
-DexHand hand;
+DexHand hand(CommType::ETHERCAT);
 auto adapters = hand.SearchAdapters();
 
 std::cout << "找到 " << adapters.size() << " 个适配器:" << std::endl;
@@ -685,7 +683,7 @@ bool InitJoint();
 
 **示例：**
 ```cpp
-hand.AutoConnect(CommType::ETHERCAT);
+hand.AutoConnect();
 hand.InitJoint();  // 初始化关节
 ```
 
@@ -983,10 +981,10 @@ int main() {
 
     LOG_INFO("程序启动");
 
-    DexHand hand;
+    DexHand hand(CommType::ETHERCAT);
 
     LOG_INFO("正在连接设备...");
-    if (!hand.AutoConnect(CommType::ETHERCAT)) {
+    if (!hand.AutoConnect()) {
         LOG_ERROR("连接失败");
         return 1;
     }
@@ -1039,11 +1037,11 @@ int main() {
 int main() {
     using namespace xiaoyao;
 
-    DexHand hand;
+    DexHand hand(CommType::ETHERCAT);
 
     // 连接设备
     std::cout << "正在通过 EtherCAT 连接灵巧手..." << std::endl;
-    bool success = hand.AutoConnect(CommType::ETHERCAT);
+    bool success = hand.AutoConnect();
 
     if (!success) {
         std::cerr << "错误: 无法连接到灵巧手！" << std::endl;
@@ -1127,11 +1125,11 @@ void DisplayJoints(const std::vector<Joint>& joints) {
 }
 
 int main() {
-    DexHand hand;
+    DexHand hand(CommType::ETHERCAT);
 
     // 连接设备
     std::cout << "正在连接设备..." << std::endl;
-    if (!hand.AutoConnect(CommType::ETHERCAT)) {
+    if (!hand.AutoConnect()) {
         std::cerr << "连接失败！" << std::endl;
         return 1;
     }
@@ -1189,11 +1187,11 @@ int main() {
 using namespace xiaoyao;
 
 int main() {
-    DexHand hand;
+    DexHand hand(CommType::ETHERCAT);
 
     // 连接设备
     std::cout << "正在连接设备..." << std::endl;
-    if (!hand.AutoConnect(CommType::ETHERCAT)) {
+    if (!hand.AutoConnect()) {
         std::cerr << "连接失败！" << std::endl;
         return 1;
     }
@@ -1315,9 +1313,9 @@ bool ExecuteGesture(DexHand& hand, GestureType gesture, uint8_t speed = 100, uin
 }
 
 int main() {
-    DexHand hand;
+    DexHand hand(CommType::ETHERCAT);
 
-    if (!hand.AutoConnect(CommType::ETHERCAT)) {
+    if (!hand.AutoConnect()) {
         std::cerr << "连接失败！" << std::endl;
         return 1;
     }
@@ -1393,16 +1391,16 @@ struct HandInstance {
 class MultiDexHandController {
 public:
     bool Initialize() {
-        DexHand temp_hand;
+        DexHand temp_hand(CommType::ETHERCAT);
         auto adapters = temp_hand.SearchAdapters();
 
         std::cout << "找到 " << adapters.size() << " 个适配器" << std::endl;
 
         for (const auto& adapter : adapters) {
             auto instance = std::make_unique<HandInstance>();
-            instance->hand = std::make_unique<DexHand>();
+            instance->hand = std::make_unique<DexHand>(CommType::ETHERCAT);
 
-            if (instance->hand->Connect(CommType::ETHERCAT, adapter.first)) {
+            if (instance->hand->Connect(adapter.first)) {
                 instance->name = "hand_" + std::to_string(hands_.size());
                 instance->connected = true;
                 instance->info = instance->hand->GetDeviceInfo();
@@ -1517,9 +1515,9 @@ void DisplayJointIdList() {
 }
 
 int main() {
-    DexHand hand;
+    DexHand hand(CommType::ETHERCAT);
 
-    if (!hand.AutoConnect(CommType::ETHERCAT)) {
+    if (!hand.AutoConnect()) {
         std::cerr << "连接失败！" << std::endl;
         return 1;
     }

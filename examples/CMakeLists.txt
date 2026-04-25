@@ -8,51 +8,94 @@ function(copy_dll_for_target target_name)
             "$<TARGET_FILE_DIR:${target_name}>"
         COMMENT "Copying xiaoyao.dll to ${target_name} directory"
     )
+    if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/lib/windows/zlgcan.dll")
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/lib/windows/zlgcan.dll"
+                "$<TARGET_FILE_DIR:${target_name}>"
+            COMMENT "Copying zlgcan.dll to ${target_name} directory"
+        )
+    endif()
+    if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/lib/windows/kerneldlls")
+        file(GLOB KERNEL_DLLS "${CMAKE_SOURCE_DIR}/lib/windows/kerneldlls/*.dll")
+        if(KERNEL_DLLS)
+            add_custom_command(TARGET ${target_name} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${KERNEL_DLLS}
+                    "$<TARGET_FILE_DIR:${target_name}>"
+                COMMENT "Copying kerneldlls to ${target_name} directory"
+            )
+        endif()
+    endif()
 endfunction()
 
 # 01. 基础连接示例
-add_executable(basic_connection tutorial/basic_connection.cc)
+add_executable(basic_connection tutorial/ethercat/basic_connection.cc)
 target_link_libraries(basic_connection xiaoyao)
 target_include_directories(basic_connection PRIVATE ${CMAKE_SOURCE_DIR}/include)
 copy_dll_for_target(basic_connection)
 
-# 02. 关节运动示例
-add_executable(move_joints tutorial/move_joints.cc)
+# 02. CANFD 连接示例
+add_executable(canfd_connection tutorial/canfd/basic_connection.cc)
+target_link_libraries(canfd_connection xiaoyao)
+target_include_directories(canfd_connection PRIVATE ${CMAKE_SOURCE_DIR}/include)
+copy_dll_for_target(canfd_connection)
+
+# 03. EtherCAT 关节运动示例
+add_executable(move_joints tutorial/ethercat/move_joints.cc)
 target_link_libraries(move_joints xiaoyao)
 target_include_directories(move_joints PRIVATE ${CMAKE_SOURCE_DIR}/include)
 copy_dll_for_target(move_joints)
 
-# 03. 触觉回调示例
-add_executable(tactile_callback tutorial/tactile_callback.cc)
+# CANFD 关节运动示例
+add_executable(canfd_move_joints tutorial/canfd/move_joints.cc)
+target_link_libraries(canfd_move_joints xiaoyao)
+target_include_directories(canfd_move_joints PRIVATE ${CMAKE_SOURCE_DIR}/include)
+copy_dll_for_target(canfd_move_joints)
+
+# 04. 触觉回调示例
+add_executable(tactile_callback tutorial/ethercat/tactile_callback.cc)
 target_link_libraries(tactile_callback xiaoyao)
 target_include_directories(tactile_callback PRIVATE ${CMAKE_SOURCE_DIR}/include)
 copy_dll_for_target(tactile_callback)
 
-# 04. 预设手势示例
+# 05. 预设手势示例
 add_executable(preset_gesture demo/preset_gesture.cc)
 target_link_libraries(preset_gesture xiaoyao)
 target_include_directories(preset_gesture PRIVATE ${CMAKE_SOURCE_DIR}/include)
 copy_dll_for_target(preset_gesture)
 
-# 05. 多手控制示例
-add_executable(multi_hand tutorial/multi_hand.cc)
+# 06. 多手控制示例
+add_executable(multi_hand tutorial/ethercat/multi_hand.cc)
 target_link_libraries(multi_hand xiaoyao)
 target_include_directories(multi_hand PRIVATE ${CMAKE_SOURCE_DIR}/include)
 copy_dll_for_target(multi_hand)
 
-# 06. 交互式关节控制示例
-add_executable(interactive_joint_control tutorial/interactive_joint_control.cc)
+# 07. 交互式关节控制示例
+add_executable(interactive_joint_control tutorial/ethercat/interactive_joint_control.cc)
 target_link_libraries(interactive_joint_control xiaoyao)
 target_include_directories(interactive_joint_control PRIVATE ${CMAKE_SOURCE_DIR}/include)
 copy_dll_for_target(interactive_joint_control)
 
-# 07. 数据手套控制示例 (仅 Windows)
+# 08. 数据手套控制示例 (仅 Windows)
 if(WIN32)
-    add_executable(glove_control tutorial/glove_control.cc)
+    add_executable(glove_control tutorial/ethercat/glove_control.cc)
     target_link_libraries(glove_control xiaoyao ws2_32)
     target_include_directories(glove_control PRIVATE ${CMAKE_SOURCE_DIR}/include)
     copy_dll_for_target(glove_control)
 endif()
+
+# 09. 速度控制示例
+add_executable(speed_control tutorial/ethercat/speed_control.cc)
+target_link_libraries(speed_control xiaoyao)
+target_include_directories(speed_control PRIVATE ${CMAKE_SOURCE_DIR}/include)
+copy_dll_for_target(speed_control)
+
+# 10. 力矩控制示例
+add_executable(torque_control tutorial/ethercat/torque_control.cc)
+target_link_libraries(torque_control xiaoyao)
+target_include_directories(torque_control PRIVATE ${CMAKE_SOURCE_DIR}/include)
+copy_dll_for_target(torque_control)
 
 # 手势舞演示
 add_executable(gesture_dance demo/gesture_dance.cc)

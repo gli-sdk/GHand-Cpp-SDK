@@ -13,7 +13,7 @@
 namespace xiaoyao {
 namespace internal {
 
-class EtherCATComm;
+class IComm;
 class DexHandCallbackManager;
 
 /**
@@ -24,12 +24,12 @@ class DexHandCallbackManager;
  */
 class DexHand {
 public:
-    DexHand();
+    explicit DexHand(CommType comm_type);
     ~DexHand();
 
     // 连接管理
-    bool AutoConnect(CommType comm_type);
-    bool Connect(CommType comm_type, const std::string& device_name);
+    bool AutoConnect();
+    bool Connect(const std::string& device_name);
     bool Disconnect();
     bool IsConnected() const;
 
@@ -61,13 +61,13 @@ public:
                    std::function<void(int)> progressCallback);
 
  private:
-    bool ConnectToDevice(CommType comm_type, const std::string& device_name);
-    void OnRawDataReceived(const uint8_t* data, size_t size);
+    bool ConnectToDevice(const std::string& device_name);
+    void SetupCallbacks();
     void ClampJointAngle(JointCommand& joint);
     void ClampJointVelocity(JointCommand& joint);
     void ClampJointTorque(JointCommand& joint);
 
-    std::unique_ptr<EtherCATComm> ethercat_comm_;
+    std::unique_ptr<IComm> comm_;
     std::unique_ptr<DexHandCallbackManager> callback_manager_;
 
     mutable HandType hand_type_;

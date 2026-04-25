@@ -182,9 +182,9 @@ int main() {
     std::cout << "========================================" << std::endl;
 
     // Connect to device
-    xiaoyao::DexHand hand;
+    xiaoyao::DexHand hand(xiaoyao::CommType::ETHERCAT);
     std::cout << "\nConnecting to dexterous hand..." << std::endl;
-    if (!hand.AutoConnect(xiaoyao::CommType::ETHERCAT)) {
+    if (!hand.AutoConnect()) {
         std::cerr << "Failed to connect!" << std::endl;
         return 1;
     }

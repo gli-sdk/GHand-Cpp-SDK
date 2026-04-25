@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "file_lock.h"
+#include "icomm.h"
 
 namespace xiaoyao {
 namespace internal {
@@ -33,15 +34,43 @@ constexpr size_t kFirmwareBufferSize = 8 * 1024 * 1024;
  * 该类处理所有EtherCAT通信相关的实现细节。
  * 通过Pimpl模式和internal命名空间与公共API分离。
  */
-class EtherCATComm {
+class EtherCATComm : public IComm {
 public:
     EtherCATComm();
-    ~EtherCATComm();
+    ~EtherCATComm() override;
 
-    static std::map<std::string, std::string> SearchAdapters();
-    int Connect(std::string device_name);
-    int Disconnect();
+    // ===== IComm 接口实现 =====
+    int Connect(const std::string& device_name) override;
+    int Disconnect() override;
+    bool IsConnected() const override {
+        return is_connected_;
+    }
+    std::map<std::string, std::string> SearchAdapters() override;
 
+    DeviceInfo GetDeviceInfo() override;
+    HandType GetHandType() override;
+
+    bool MoveJoints(const std::vector<JointCommand>& joints,
+                    ControlMode mode) override;
+    void Stop() override;
+
+    bool ClearFault() override;
+    bool InitJoint() override;
+
+    bool OpenTactile() override;
+    bool CloseTactile() override;
+    bool ZeroTactile() override;
+
+    void SetJointsCallback(JointsCallback cb) override;
+    void SetHandStateCallback(HandStateCallback cb) override;
+    void SetTactileDataCallback(TactileDataCallback cb) override;
+
+    int BootUpdate(const std::string& device_name,
+                   uint16_t slave,
+                   const std::string& filename,
+                   std::function<void(int)> progress) override;
+
+    // ===== 底层 EtherCAT API（保留供内部使用）=====
     int SDORead(std::uint16_t slave,
                 std::uint16_t index,
                 std::uint8_t subindex,
@@ -62,27 +91,6 @@ public:
                   uint8_t* data);
 
     uint8_t* ReadTxPDO(uint16_t slave);
-    bool IsConnected() const {
-        return is_connected_;
-    }
-
-    static void SetDataCallback(std::function<void(const uint8_t*, size_t)> callback) {
-        std::lock_guard<std::mutex> lock(data_callback_mutex_);
-        data_callback_ = callback;
-    }
-
-    static void NotifyDataReceived(const uint8_t* data, size_t size) {
-        std::lock_guard<std::mutex> lock(data_callback_mutex_);
-        if (data_callback_) {
-            data_callback_(data, size);
-        }
-    }
-
-    int BootUpdate(const std::string& ifname,
-                   uint16_t slave,
-                   const std::string& filename,
-                   std::function<void(int)> progressCallback);
-
 
  private:
     static std::mutex context_mutex_;
@@ -121,8 +129,16 @@ public:
     static void FoeProgressHook(uint16_t slave, int32_t packetnumber, int32_t totalsize);
 
     static std::function<void(int)> state_update_callback_;
-    static std::function<void(const uint8_t*, size_t)> data_callback_;
-    static std::mutex data_callback_mutex_;
+    static EtherCATComm* active_instance_;
+
+    // 实例级别的结构化数据回调
+    JointsCallback joints_callback_;
+    HandStateCallback hand_state_callback_;
+    TactileDataCallback tactile_callback_;
+    std::mutex callback_mutex_;
+
+    // 解析 PDO 原始数据并触发结构化回调
+    void ParseAndNotify(const uint8_t* data, size_t size);
 };
 
 }  // namespace internal

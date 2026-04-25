@@ -1,6 +1,11 @@
 // 在包含任何头文件之前禁用 inline 宏冲突错误
 #ifdef _WIN32
+    #define _USE_MATH_DEFINES
     #pragma warning(disable: 4005)
+#endif
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
 #endif
 
 #include "ethercat_comm.h"
@@ -22,6 +27,7 @@
 #include <iostream>
 #include <sstream>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #define EC_TIMEOUTMON 500
@@ -50,8 +56,7 @@ std::mutex EtherCATComm::rt_context_mutex_;
 FileLock EtherCATComm::device_lock_;  // 设备锁静态成员定义
 std::function<void(int)> EtherCATComm::state_update_callback_ = nullptr;
 std::function<void(int)> EtherCATComm::progress_callback_ = nullptr;
-std::function<void(const uint8_t*, size_t)> EtherCATComm::data_callback_ = nullptr;
-std::mutex EtherCATComm::data_callback_mutex_;
+EtherCATComm* EtherCATComm::active_instance_ = nullptr;
 
 // static LockFreeQueue<std::pair<std::vector<uint8>, uint16>, 32> pdo_queue_;
 static uint8 rxpdo_buffer_[80];
@@ -97,7 +102,7 @@ std::map<std::string, std::string> EtherCATComm::SearchAdapters() {
     return adapter_names;
 }
 
-int EtherCATComm::Connect(std::string device_name) {
+int EtherCATComm::Connect(const std::string& device_name) {
     LOG_INFO("EtherCAT connecting to: " << device_name);
 
     std::lock_guard<std::mutex> lock(context_mutex_);
@@ -168,6 +173,7 @@ int EtherCATComm::Connect(std::string device_name) {
 
     inOP = 1;
     is_connected_ = true;
+    active_instance_ = this;
 
     return 0;
 }
@@ -175,6 +181,7 @@ int EtherCATComm::Connect(std::string device_name) {
 int EtherCATComm::Disconnect() {
     StopThreads();
     std::lock_guard<std::mutex> lock(context_mutex_);
+    active_instance_ = nullptr;
     inOP = 0;
     is_connected_ = false;
     dorun = 0;
@@ -350,7 +357,7 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
                 wkc = ecx_receive_processdata(&ctx_, EC_TIMEOUTRET);
 
                 // 快速复制PDO数据用于回调
-                if (wkc >= expectedWKC && data_callback_) {
+                if (wkc >= expectedWKC && active_instance_) {
                     // 获取slave 1的输入数据（PDO）
                     uint8_t* inputs = ctx_.slavelist[1].inputs;
                     pdo_size = ctx_.slavelist[1].Ibytes;
@@ -364,8 +371,8 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
             }
 
             // 在锁外调用回调（避免阻塞实时线程）
-            if (pdo_copy != nullptr && data_callback_) {
-                NotifyDataReceived(pdo_copy, pdo_size);
+            if (pdo_copy != nullptr && active_instance_) {
+                active_instance_->ParseAndNotify(pdo_copy, pdo_size);
                 delete[] pdo_copy;
             }
 
@@ -473,16 +480,25 @@ bool EtherCATComm::InputBin(const char* fname, int* length) {
 int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
                              const std::string& file_path,
                              std::function<void(int)> progressCallback) {
-    // ifname 参数保留以便将来使用，但当前未使用
-    (void)ifname;  // 抑制未使用参数警告
-    // std::lock_guard<std::mutex> lock(context_mutex_);
+    (void)ifname;
 
-    // 注意：此方法会释放文件锁但不修改 is_connected_ 标志
-    // 原因：固件更新后期望重连成功，从用户视角看设备仍是"已连接"状态
-    // 只有在确认重连失败后，才由调用方设置 is_connected_ = false
+    // 预检查：写入 0x5A 到 0x2005:0x01
+    std::uint8_t command = 0x5A;
+    std::uint8_t state = 0xFF;
+    int size = sizeof(std::uint8_t);
+    std::uint8_t result = 0xFF;
+    int ret = SDOWrite(1, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM);
+    if (ret > 0) {
+        ret = SDORead(1, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM);
+        if (ret > 0 && state == 0) {
+            ret = SDORead(1, 0x2005, 0x03, &size, &result, EC_TIMEOUTRXM);
+        }
+    }
+    if (result != 1) {
+        return 0;
+    }
 
     if (slave <= 0 || slave > ctx_.slavecount) {
-        // Slave validation失败，无需释放锁（未使用设备）
         return -1;
     }
     int filesize = 0;
@@ -514,19 +530,16 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
             int update_result =
                 ecx_FOEwrite(&ctx_, slave, file_name, 0, filesize, &file_buffer, EC_TIMEOUTSTATE);
 
-            // 释放文件锁以允许重连，但保持 is_connected_ = true（期望重连成功）
             LOG_DEBUG("Releasing device lock after firmware update (result: " << update_result << ")");
             device_lock_.Release();
 
             return update_result;
         } else {
-            // 文件读取失败，释放锁
             LOG_DEBUG("Releasing device lock after firmware file read failure");
             device_lock_.Release();
             return -2;
         }
     } else {
-        // 状态转换失败，释放锁
         LOG_DEBUG("Releasing device lock after BOOT state transition failure");
         device_lock_.Release();
         return -1;
@@ -562,5 +575,376 @@ void EtherCATComm::FoeProgressHook(uint16 slave, int32 packetnumber, int32 total
         }
     }
 }
+
+// ===== IComm 业务接口实现 =====
+
+void EtherCATComm::SetJointsCallback(JointsCallback cb) {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    joints_callback_ = cb;
+}
+
+void EtherCATComm::SetHandStateCallback(HandStateCallback cb) {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    hand_state_callback_ = cb;
+}
+
+void EtherCATComm::SetTactileDataCallback(TactileDataCallback cb) {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    tactile_callback_ = cb;
+}
+
+DeviceInfo EtherCATComm::GetDeviceInfo() {
+    DeviceInfo info;
+    std::uint8_t value[255] = {0};
+    int size = sizeof(value);
+    int result = -1;
+
+    result = SDORead(1, 0x1008, 0x00, &size, &value, EC_TIMEOUTRXM);
+    if (result == 1) {
+        info.device_name = std::string(reinterpret_cast<char*>(value));
+    }
+
+    memset(value, 0, sizeof(value));
+    result = SDORead(1, 0x1009, 0x00, &size, &value, EC_TIMEOUTRXM);
+    if (result == 1) {
+        info.hardware_version = std::string(reinterpret_cast<char*>(value));
+    }
+
+    memset(value, 0, sizeof(value));
+    result = SDORead(1, 0x100A, 0x00, &size, &value, EC_TIMEOUTRXM);
+    if (result == 1) {
+        info.software_version = std::string(reinterpret_cast<char*>(value));
+    }
+
+    memset(value, 0, sizeof(value));
+    result = SDORead(1, 0x1018, 0x04, &size, &value, EC_TIMEOUTRXM);
+    if (result == 1) {
+        unsigned int serial_num = 0;
+        serial_num |= static_cast<unsigned char>(value[0]);
+        serial_num |= static_cast<unsigned char>(value[1]) << 8;
+        serial_num |= static_cast<unsigned char>(value[2]) << 16;
+        serial_num |= static_cast<unsigned char>(value[3]) << 24;
+        info.serial_number = serial_num;
+    }
+
+    std::uint8_t motor_ver[3] = {0};
+    int motor_size = sizeof(std::uint8_t);
+    int motor_result[3] = {0};
+    motor_result[0] = SDORead(1, 0x2007, 0x01, &motor_size, &motor_ver[0], EC_TIMEOUTRXM);
+    motor_result[1] = SDORead(1, 0x2007, 0x02, &motor_size, &motor_ver[1], EC_TIMEOUTRXM);
+    motor_result[2] = SDORead(1, 0x2007, 0x03, &motor_size, &motor_ver[2], EC_TIMEOUTRXM);
+    if (motor_result[0] == 1 && motor_result[1] == 1 && motor_result[2] == 1) {
+        info.motor_driver_version =
+            std::to_string(motor_ver[0]) + "." +
+            std::to_string(motor_ver[1]) + "." +
+            std::to_string(motor_ver[2]);
+    }
+
+    return info;
+}
+
+HandType EtherCATComm::GetHandType() {
+    std::uint8_t value = 0;
+    int size = sizeof(value);
+    int result = SDORead(1, 0x2001, 0x00, &size, &value, EC_TIMEOUTRXM);
+
+    if (result == 1) {
+        switch (value) {
+            case 1: return HandType::LEFT;
+            case 2: return HandType::RIGHT;
+            default: return HandType::NONE;
+        }
+    }
+    return HandType::NONE;
+}
+
+bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
+                              ControlMode mode) {
+    if (!IsConnected()) {
+        LOG_ERROR("Cannot move joints: device not connected");
+        return false;
+    }
+    if (joints.empty()) {
+        LOG_WARNING("MoveJoints called with empty joint list");
+        return false;
+    }
+
+    std::unordered_map<int, JointCommand> joint_map;
+    for (const auto& joint : joints) {
+        if (static_cast<int>(joint.id) < static_cast<int>(JointId::NUM_JOINTS)) {
+            joint_map[static_cast<int>(joint.id)] = joint;
+        }
+    }
+
+    uint8_t buffer[80] = {0};
+    size_t offset = 0;
+
+    uint8_t mode_byte = static_cast<uint8_t>(mode);
+    memcpy(buffer + offset, &mode_byte, sizeof(mode_byte));
+    offset += sizeof(mode_byte);
+
+    uint8_t stop = 0;
+    memcpy(buffer + offset, &stop, sizeof(stop));
+    offset += sizeof(stop);
+
+    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); i++) {
+        if (i == static_cast<int>(JointId::THUMB_DIP) ||
+            i == static_cast<int>(JointId::FF_DIP) ||
+            i == static_cast<int>(JointId::MF_DIP) ||
+            i == static_cast<int>(JointId::RF_DIP) ||
+            i == static_cast<int>(JointId::LF_DIP)) {
+            continue;
+        }
+
+        float angle = 0.0f;
+        uint8_t velocity = 0;
+        uint8_t torque = 0;
+
+        auto it = joint_map.find(i);
+        if (it != joint_map.end()) {
+            angle = it->second.angle;
+            velocity = it->second.velocity;
+            torque = it->second.torque;
+        }
+
+        angle = angle * (static_cast<float>(M_PI) / 180.0f);
+        memcpy(buffer + offset, &angle, sizeof(angle));
+        offset += sizeof(angle);
+        memcpy(buffer + offset, &velocity, sizeof(velocity));
+        offset += sizeof(velocity);
+        memcpy(buffer + offset, &torque, sizeof(torque));
+        offset += sizeof(torque);
+    }
+
+    LOG_INFO("Sending PDO data");
+    SendRxPDO(1, ECT_SDO_RXPDOASSIGN, sizeof(buffer), buffer);
+    return true;
+}
+
+void EtherCATComm::Stop() {
+    LOG_INFO("Sending stop command");
+    uint8_t buffer[80] = {0};
+    buffer[1] = 1;
+    SendRxPDO(1, ECT_SDO_RXPDOASSIGN, sizeof(buffer), buffer);
+}
+
+bool EtherCATComm::ClearFault() {
+    LOG_INFO("Clearing device fault");
+
+    std::uint8_t command = 0x01;
+    std::uint8_t state = 0xFF;
+    int size = sizeof(std::uint8_t);
+    std::uint8_t result = 0;
+    int ret = -1;
+    int times = 100;
+    ret = SDOWrite(1, 0x2002, 0x01, size, &command, EC_TIMEOUTRXM);
+    if (ret > 0) {
+        while (times--) {
+            ret = SDORead(1, 0x2002, 0x02, &size, &state, EC_TIMEOUTRXM);
+            if (ret > 0 && state == 0) {
+                ret = SDORead(1, 0x2002, 0x03, &size, &result, EC_TIMEOUTRXM);
+                return result == 1;
+            }
+        }
+    }
+    LOG_ERROR("Clear fault operation timed out");
+    return false;
+}
+
+bool EtherCATComm::InitJoint() {
+    LOG_INFO("Initializing joint positions");
+
+    std::uint8_t command = 0x01;
+    std::uint8_t state = 0xFF;
+    int size = sizeof(std::uint8_t);
+    std::uint8_t result = 0;
+    int ret = -1;
+    int times = 100;
+    ret = SDOWrite(1, 0x2003, 0x01, size, &command, EC_TIMEOUTRXM);
+    if (ret > 0) {
+        while (times--) {
+            ret = SDORead(1, 0x2003, 0x02, &size, &state, EC_TIMEOUTRXM);
+            if (ret > 0 && state == 0) {
+                ret = SDORead(1, 0x2003, 0x03, &size, &result, EC_TIMEOUTRXM);
+                return result == 1;
+            }
+        }
+    }
+    LOG_ERROR("Joint initialization timed out");
+    return false;
+}
+
+bool EtherCATComm::OpenTactile() {
+    std::uint8_t command = 0x01;
+    int size = sizeof(std::uint8_t);
+    int result = SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
+    return result > 0;
+}
+
+bool EtherCATComm::CloseTactile() {
+    std::uint8_t command = 0x02;
+    int size = sizeof(std::uint8_t);
+    int result = SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
+    return result > 0;
+}
+
+bool EtherCATComm::ZeroTactile() {
+    std::uint8_t command = 0x04;
+    std::uint8_t state = 0xFF;
+    int size = sizeof(std::uint8_t);
+    int result = SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
+    result = SDORead(1, 0x2004, 0x03, &size, &state, EC_TIMEOUTRXM);
+    return result > 0;
+}
+
+// ===== PDO 解析辅助函数 =====
+namespace {
+
+Force ParseResultantForce(const uint8_t* data) {
+    Force resultant;
+    resultant.x = 0.0f;
+    resultant.y = 0.0f;
+    resultant.z = 0.0f;
+
+    if (data != nullptr) {
+        int16_t raw_x = static_cast<int16_t>(data[0] | (data[1] << 8));
+        resultant.x = static_cast<float>(static_cast<int8_t>(raw_x & 0xFF)) * 0.1f;
+
+        int16_t raw_y = static_cast<int16_t>(data[2] | (data[3] << 8));
+        resultant.y = static_cast<float>(static_cast<int8_t>(raw_y & 0xFF)) * 0.1f;
+
+        uint16_t raw_z = static_cast<uint16_t>(data[4] | (data[5] << 8));
+        resultant.z = static_cast<float>(static_cast<uint8_t>(raw_z & 0xFF)) * 0.1f;
+    }
+
+    return resultant;
+}
+
+std::vector<Force> ParseSampleForces(const uint8_t* data, int sensor_count) {
+    std::vector<Force> forces;
+    forces.reserve(sensor_count);
+
+    if (data != nullptr && sensor_count > 0) {
+        for (int i = 0; i < sensor_count; i++) {
+            Force sample_force;
+            sample_force.x = static_cast<float>(static_cast<int8_t>(data[i * 3])) * 0.1f;
+            sample_force.y = static_cast<float>(static_cast<int8_t>(data[i * 3 + 1])) * 0.1f;
+            sample_force.z = static_cast<float>(static_cast<uint8_t>(data[i * 3 + 2])) * 0.1f;
+            forces.push_back(sample_force);
+        }
+    }
+
+    return forces;
+}
+
+int GetTactileSensorCount(FingerType finger) {
+    return (finger == FingerType::THUMB) ? 52 : 31;
+}
+
+}  // anonymous namespace
+
+void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
+    std::vector<Joint> parsed_joints;
+    HandState parsed_temperature;
+
+    if (data == nullptr || size == 0) {
+        LOG_WARNING("Received invalid data: null or empty");
+        return;
+    }
+
+    size_t offset = 0;
+    uint8_t hand_state, hand_error;
+    int16_t temperature;
+
+    memcpy(&hand_state, data + offset, sizeof(hand_state));
+    offset += sizeof(hand_state);
+
+    memcpy(&hand_error, data + offset, sizeof(hand_error));
+    offset += sizeof(hand_error);
+
+    memcpy(&temperature, data + offset, sizeof(temperature));
+    offset += sizeof(temperature);
+
+    parsed_temperature.state = static_cast<State>(hand_state);
+    parsed_temperature.error = static_cast<ErrorCode>(hand_error);
+    parsed_temperature.temperature = temperature;
+
+    parsed_joints.resize(static_cast<int>(JointId::NUM_JOINTS));
+    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); i++) {
+        uint8_t joint_state, joint_error;
+        float joint_angle;
+        uint8_t joint_velocity, joint_torque;
+
+        memcpy(&joint_state, data + offset, sizeof(joint_state));
+        offset += sizeof(joint_state);
+
+        memcpy(&joint_error, data + offset, sizeof(joint_error));
+        offset += sizeof(joint_error);
+
+        memcpy(&joint_angle, data + offset, sizeof(joint_angle));
+        offset += sizeof(joint_angle);
+
+        memcpy(&joint_velocity, data + offset, sizeof(joint_velocity));
+        offset += sizeof(joint_velocity);
+
+        memcpy(&joint_torque, data + offset, sizeof(joint_torque));
+        offset += sizeof(joint_torque);
+
+        parsed_joints[i].id = static_cast<JointId>(i);
+        parsed_joints[i].state = static_cast<State>(joint_state);
+        parsed_joints[i].error = static_cast<ErrorCode>(joint_error);
+        joint_angle = joint_angle * (180.0f / static_cast<float>(M_PI));
+        parsed_joints[i].angle = joint_angle;
+        parsed_joints[i].velocity = joint_velocity;
+        parsed_joints[i].torque = joint_torque;
+    }
+
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    if (joints_callback_) {
+        joints_callback_(parsed_joints);
+    }
+    if (hand_state_callback_) {
+        hand_state_callback_(parsed_temperature);
+    }
+
+    if (offset < size) {
+        TactileData tactile_data;
+
+        if (offset + 2 <= size) {
+            tactile_data.sensor_state = data[offset];
+            tactile_data.sensor_error = data[offset + 1];
+            offset += 2;
+        }
+
+        auto ParseFingerTactile = [&offset, data, size, &tactile_data](
+            FingerTactileData& finger_data, FingerType finger, int bit_offset) {
+            finger_data.state = (tactile_data.sensor_state & (1 << bit_offset)) != 0;
+
+            if (offset + 6 <= size) {
+                finger_data.resultant_force = ParseResultantForce(data + offset);
+                offset += 6;
+            }
+
+            int sensor_count = GetTactileSensorCount(finger);
+            int sample_size = sensor_count * 3;
+
+            if (offset + sample_size <= size) {
+                finger_data.distributed_forces = ParseSampleForces(data + offset, sensor_count);
+                offset += sample_size;
+            }
+        };
+
+        ParseFingerTactile(tactile_data.thumb,  FingerType::THUMB, 0);
+        ParseFingerTactile(tactile_data.index,  FingerType::FF,    1);
+        ParseFingerTactile(tactile_data.middle, FingerType::MF,    2);
+        ParseFingerTactile(tactile_data.ring,   FingerType::RF,    3);
+        ParseFingerTactile(tactile_data.pinky,  FingerType::LF,    4);
+
+        if (tactile_callback_) {
+            tactile_callback_(tactile_data);
+        }
+    }
+}
+
 }  // namespace internal
 }  // namespace xiaoyao

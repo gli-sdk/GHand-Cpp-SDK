@@ -1,0 +1,648 @@
+#ifdef _WIN32
+    #define _USE_MATH_DEFINES
+#endif
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#include "canfd_comm.h"
+#include "logger.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+
+namespace xiaoyao {
+namespace internal {
+
+// 关节限制静态表 (仅包含可控关节, 单位: 度)
+// 与 DexHand::kJointLimits_ 保持一致
+static const std::map<JointId, std::pair<float, float>> kJointLimits = {
+    {JointId::THUMB_PIP, {0.0f, 66.0f}},
+    {JointId::THUMB_MCP, {0.0f, 50.0f}},
+    {JointId::THUMB_SWING, {20.0f, 90.0f}},
+    {JointId::THUMB_ROTATION, {-10.0f, 60.0f}},
+    {JointId::FF_PIP, {0.0f, 80.0f}},
+    {JointId::FF_MCP, {0.0f, 90.0f}},
+    {JointId::FF_SWING, {-10.0f, 10.0f}},
+    {JointId::MF_PIP, {0.0f, 90.0f}},
+    {JointId::MF_MCP, {0.0f, 90.0f}},
+    {JointId::RF_PIP, {0.0f, 90.0f}},
+    {JointId::RF_MCP, {0.0f, 90.0f}},
+    {JointId::LF_PIP, {0.0f, 74.0f}},
+    {JointId::LF_MCP, {0.0f, 90.0f}}
+};
+
+CANFDComm::CANFDComm() : driver_(CreateZLGDriver()) {}
+
+CANFDComm::~CANFDComm() {
+    Disconnect();
+}
+
+// device_name: ZLG 设备标识符，支持以下格式：
+//   1) "ZCAN_USBCANFD_100U:0:0"  标准 ZLG 格式（型号:设备索引:通道索引）
+//   2) "42:0:0"                  数字型号格式
+// 亦可通过 hand.SearchAdapters() 枚举可用设备后使用返回的 key 连接。
+int CANFDComm::Connect(const std::string& device_name) {
+    LOG_INFO("CANFD connecting to: " << device_name);
+
+    if (!driver_) {
+        LOG_ERROR("CANFD driver not available");
+        return -1;
+    }
+
+    if (driver_->Open(device_name, 1000000, 5000000) != 0) {
+        LOG_ERROR("Failed to open CANFD channel: " << device_name);
+        return -2;
+    }
+
+    connected_.store(true);
+    rx_running_ = true;
+    rx_thread_ = std::thread(&CANFDComm::ReceiveThread, this);
+
+    // 读取真实设备 ID（覆盖默认 0x71）
+    std::vector<uint8_t> resp;
+    if (SendRecvCmd(canfd::GET_SLAVE_ID, nullptr, 0, &resp, 1000) && !resp.empty()) {
+        device_id_ = resp[0];
+        LOG_INFO("CANFD device ID detected: 0x" << std::hex << static_cast<int>(device_id_));
+    } else {
+        LOG_WARNING("Failed to read device ID, using default 0x71");
+    }
+
+    // 订阅主动上报
+    SubscribeActiveReport(canfd::REPORT_JOINTS, 10);   // 10ms = 100Hz
+    SubscribeActiveReport(canfd::REPORT_TACTILE, 50);  // 50ms = 20Hz
+
+    return 0;
+}
+
+int CANFDComm::Disconnect() {
+    LOG_INFO("CANFD disconnecting");
+
+    if (IsConnected()) {
+        UnsubscribeActiveReport(canfd::REPORT_JOINTS);
+        UnsubscribeActiveReport(canfd::REPORT_TACTILE);
+    }
+
+    connected_.store(false);
+    rx_running_ = false;
+    if (rx_thread_.joinable()) {
+        rx_thread_.join();
+    }
+
+    if (driver_) {
+        driver_->Close();
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(response_mutex_);
+        waiting_fc_ = 0;
+        response_ready_ = true;
+        response_cv_.notify_one();
+    }
+
+    LOG_INFO("CANFD disconnected");
+    return 0;
+}
+
+std::map<std::string, std::string> CANFDComm::SearchAdapters() {
+    if (driver_) {
+        return driver_->EnumerateAdapters();
+    }
+    return {};
+}
+
+// ===== 设备信息 =====
+
+DeviceInfo CANFDComm::GetDeviceInfo() {
+    DeviceInfo info;
+    std::vector<uint8_t> resp;
+
+    if (SendRecvCmd(canfd::GET_DEVICE_NAME, nullptr, 0, &resp)) {
+        info.device_name = std::string(reinterpret_cast<char*>(resp.data()), resp.size());
+    }
+    if (SendRecvCmd(canfd::GET_HW_VERSION, nullptr, 0, &resp)) {
+        info.hardware_version = std::string(reinterpret_cast<char*>(resp.data()), resp.size());
+    }
+    if (SendRecvCmd(canfd::GET_SW_VERSION, nullptr, 0, &resp)) {
+        info.software_version = std::string(reinterpret_cast<char*>(resp.data()), resp.size());
+    }
+    if (SendRecvCmd(canfd::GET_SERIAL, nullptr, 0, &resp) && resp.size() >= 4) {
+        info.serial_number =
+            static_cast<unsigned int>(resp[0]) |
+            (static_cast<unsigned int>(resp[1]) << 8) |
+            (static_cast<unsigned int>(resp[2]) << 16) |
+            (static_cast<unsigned int>(resp[3]) << 24);
+    }
+
+    return info;
+}
+
+HandType CANFDComm::GetHandType() {
+    std::vector<uint8_t> resp;
+    if (SendRecvCmd(canfd::GET_HAND_TYPE, nullptr, 0, &resp) && !resp.empty()) {
+        switch (resp[0]) {
+            case 1: return HandType::LEFT;
+            case 2: return HandType::RIGHT;
+            default: return HandType::NONE;
+        }
+    }
+    return HandType::NONE;
+}
+
+// ===== 运动控制 =====
+
+bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
+                           ControlMode mode) {
+    if (!IsConnected()) {
+        LOG_ERROR("Cannot move joints: device not connected");
+        return false;
+    }
+    if (joints.empty()) {
+        LOG_WARNING("MoveJoints called with empty joint list");
+        return false;
+    }
+
+    // 构建 63B 参数 (CANFD 单帧 payload 上限，不含功能码)
+    // 布局与固件约定保持一致：
+    //   Byte[0]  data[1] : 模式+急停
+    //   Byte[1]  data[2] : 电机索引+控制数量
+    //   Byte[2]  data[3] : 大拇指 PIP 角度低字节
+    //   Byte[3]  data[4] : 大拇指 PIP 角度高字节
+    //   Byte[4]  data[5] : 大拇指 PIP 速度
+    //   Byte[5]  data[6] : 大拇指 PIP 力矩
+    //   ... 按 JointId 枚举顺序依次正序填充 ...
+    //   Byte[52] data[53]: 小指 MCP 力矩
+    //   Byte[53..62]     : 0，满足 CANFD 物理层要求
+    uint8_t param[63] = {0};
+    param[0] = static_cast<uint8_t>(mode);
+    param[1] = 13;  // 从 THUMB_PIP 开始，共 13 个可控关节
+
+    size_t buf_offset = 2;
+    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); ++i) {
+        if (buf_offset + 3 >= sizeof(param)) break;
+
+        JointId id = static_cast<JointId>(i);
+        // 跳过 DIP 关节（不可控）
+        if (id == JointId::THUMB_DIP ||
+            id == JointId::FF_DIP ||
+            id == JointId::MF_DIP ||
+            id == JointId::RF_DIP ||
+            id == JointId::LF_DIP) {
+            continue;
+        }
+
+        // 查找该关节是否有命令（传入列表已按 DexHand 补全为 18 个）
+        float angle = 0.0f;
+        uint8_t velocity = 0;
+        uint8_t torque = 0;
+        for (const auto& joint : joints) {
+            if (joint.id == id) {
+                angle = joint.angle;
+                velocity = joint.velocity;
+                torque = joint.torque;
+                break;
+            }
+        }
+
+        uint16_t raw_angle = AngleToRaw(angle, id);
+        param[buf_offset++] = static_cast<uint8_t>(raw_angle & 0xFF);
+        param[buf_offset++] = static_cast<uint8_t>((raw_angle >> 8) & 0xFF);
+        param[buf_offset++] = velocity;
+        param[buf_offset++] = torque;
+    }
+
+    return SendCmdOnly(canfd::CONTROL_JOINTS, param, sizeof(param));
+}
+
+void CANFDComm::Stop() {
+    if (!IsConnected()) return;
+
+    uint8_t param[63] = {0};
+    param[0] = 0x01;  // 急停标志
+
+    SendCmdOnly(canfd::CONTROL_JOINTS, param, sizeof(param));
+}
+
+// ===== 系统操作 =====
+
+bool CANFDComm::ClearFault() {
+    if (!SendCmdOnly(canfd::CLEAR_FAULT, nullptr, 0)) {
+        return false;
+    }
+
+    // 轮询状态直到完成
+    int retries = 100;
+    while (retries-- > 0) {
+        std::vector<uint8_t> state_resp, error_resp;
+        if (SendRecvCmd(canfd::GET_BOARD_STATE, nullptr, 0, &state_resp) &&
+            SendRecvCmd(canfd::GET_BOARD_ERROR, nullptr, 0, &error_resp)) {
+            if (!state_resp.empty() && state_resp[0] == 0 &&
+                !error_resp.empty() && error_resp[0] == 0) {
+                return true;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    LOG_ERROR("Clear fault operation timed out");
+    return false;
+}
+
+bool CANFDComm::InitJoint() {
+    if (!SendCmdOnly(canfd::INIT_JOINT, nullptr, 0)) {
+        return false;
+    }
+
+    int retries = 100;
+    while (retries-- > 0) {
+        std::vector<uint8_t> state_resp, error_resp;
+        if (SendRecvCmd(canfd::GET_BOARD_STATE, nullptr, 0, &state_resp) &&
+            SendRecvCmd(canfd::GET_BOARD_ERROR, nullptr, 0, &error_resp)) {
+            if (!state_resp.empty() && state_resp[0] == 0 &&
+                !error_resp.empty() && error_resp[0] == 0) {
+                return true;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    LOG_ERROR("Joint initialization timed out");
+    return false;
+}
+
+// ===== 触觉传感器 =====
+
+bool CANFDComm::OpenTactile() {
+    std::vector<uint8_t> resp;
+    return SendRecvCmd(canfd::OPEN_TACTILE, nullptr, 0, &resp) &&
+           !resp.empty() && resp[0] == 1;
+}
+
+bool CANFDComm::CloseTactile() {
+    std::vector<uint8_t> resp;
+    return SendRecvCmd(canfd::CLOSE_TACTILE, nullptr, 0, &resp) &&
+           !resp.empty() && resp[0] == 1;
+}
+
+bool CANFDComm::ZeroTactile() {
+    std::vector<uint8_t> resp;
+    return SendRecvCmd(canfd::ZERO_TACTILE, nullptr, 0, &resp) &&
+           !resp.empty() && resp[0] == 1;
+}
+
+// ===== 数据回调 =====
+
+void CANFDComm::SetJointsCallback(JointsCallback cb) {
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    joints_cb_ = cb;
+}
+
+void CANFDComm::SetHandStateCallback(HandStateCallback cb) {
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    hand_state_cb_ = cb;
+}
+
+void CANFDComm::SetTactileDataCallback(TactileDataCallback cb) {
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    tactile_cb_ = cb;
+}
+
+// ===== 固件更新 =====
+
+int CANFDComm::BootUpdate(const std::string& device_name,
+                          uint16_t slave,
+                          const std::string& filename,
+                          std::function<void(int)> progress) {
+    (void)device_name;
+    (void)slave;
+    (void)filename;
+    (void)progress;
+    LOG_WARNING("BootUpdate not supported on CANFD in Phase 1");
+    return -1;
+}
+
+// ===== 内部协议方法 =====
+
+bool CANFDComm::SendRecvCmd(canfd::FunctionCode fc,
+                            const uint8_t* param,
+                            uint8_t param_len,
+                            std::vector<uint8_t>* response,
+                            int timeout_ms) {
+    if (!driver_ || !IsConnected()) return false;
+
+    // 1. 登记等待状态
+    {
+        std::lock_guard<std::mutex> lock(response_mutex_);
+        waiting_fc_ = fc;
+        response_ready_ = false;
+        response_payload_.clear();
+    }
+
+    // 2. 构造完整数据（1 字节 FC + 全部参数，支持多帧）
+    std::vector<uint8_t> full_data;
+    full_data.reserve(1 + param_len);
+    full_data.push_back(static_cast<uint8_t>(fc));
+    if (param && param_len > 0) {
+        size_t offset = full_data.size();
+        full_data.resize(offset + param_len);
+        memcpy(full_data.data() + offset, param, param_len);
+    }
+
+    // 明确区分单帧/多帧发送
+    bool sent = false;
+    if (full_data.size() <= 64) {
+        sent = SendSingleFrame(full_data.data(), static_cast<uint8_t>(full_data.size()));
+    } else {
+        sent = SendMultiFrame(full_data.data(), static_cast<uint8_t>(full_data.size()));
+    }
+    if (!sent) {
+        std::lock_guard<std::mutex> lock(response_mutex_);
+        waiting_fc_ = 0;
+        return false;
+    }
+
+    // 3. 阻塞等待响应（支持多帧组包）
+    {
+        std::unique_lock<std::mutex> lock(response_mutex_);
+        response_cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+            [&] { return response_ready_; });
+        if (!response_ready_) {
+            waiting_fc_ = 0;
+            return false;  // 超时或 Disconnect 强制唤醒
+        }
+
+        // 异常保护：Disconnect 强制唤醒时 payload 可能为空
+        if (response_payload_.empty()) {
+            waiting_fc_ = 0;
+            return false;
+        }
+
+        // 去掉首字节功能码，返回纯 payload
+        *response = std::vector<uint8_t>(response_payload_.begin() + 1,
+                                         response_payload_.end());
+        waiting_fc_ = 0;
+        return true;
+    }
+}
+
+bool CANFDComm::SendCmdOnly(canfd::FunctionCode fc,
+                                      const uint8_t* param,
+                                      uint8_t param_len) {
+    if (!driver_ || !IsConnected()) return false;
+
+    std::vector<uint8_t> full_data;
+    full_data.reserve(1 + param_len);
+    full_data.push_back(static_cast<uint8_t>(fc));
+    if (param && param_len > 0) {
+        size_t offset = full_data.size();
+        full_data.resize(offset + param_len);
+        memcpy(full_data.data() + offset, param, param_len);
+    }
+
+    if (full_data.size() <= 64) {
+        return SendSingleFrame(full_data.data(), static_cast<uint8_t>(full_data.size()));
+    } else {
+        return SendMultiFrame(full_data.data(), static_cast<uint8_t>(full_data.size()));
+    }
+}
+
+bool CANFDComm::SendSingleFrame(const uint8_t* data, uint8_t total_len) {
+    if (!driver_) return false;
+
+    canfd::Frame frame;
+    frame.id = canfd::ArbitrationId(canfd::COMMAND, device_id_, 0, 1).raw;
+    memcpy(frame.data, data, total_len);
+
+    // 填充到 CANFD 合法长度
+    const uint8_t valid_lens[] = {0,1,2,3,4,5,6,7,8,12,16,20,24,32,48,64};
+    frame.len = 64;
+    for (uint8_t vl : valid_lens) {
+        if (vl >= total_len) {
+            frame.len = vl;
+            break;
+        }
+    }
+
+    frame.is_fd = true;
+    frame.is_extended = true;
+
+    return driver_->Send(frame) == 0;
+}
+
+bool CANFDComm::SendMultiFrame(const uint8_t* data, uint8_t total_len) {
+    if (!driver_) return false;
+
+    uint8_t offset = 0;
+    uint8_t frame_idx = 0;
+    uint8_t total_frames = (total_len + 63) / 64;  // 向上取整
+
+    while (offset < total_len) {
+        uint8_t chunk = std::min<uint8_t>(total_len - offset, 64);
+
+        canfd::Frame frame;
+        frame.id = canfd::ArbitrationId(canfd::COMMAND, device_id_, frame_idx, total_frames).raw;
+        memcpy(frame.data, data + offset, chunk);
+
+        // 填充到 CANFD 合法长度
+        if (frame_idx < total_frames - 1) {
+            frame.len = 64;
+        } else {
+            const uint8_t valid_lens[] = {0,1,2,3,4,5,6,7,8,12,16,20,24,32,48,64};
+            for (uint8_t vl : valid_lens) {
+                if (vl >= chunk) {
+                    frame.len = vl;
+                    break;
+                }
+            }
+        }
+
+        frame.is_fd = true;
+        frame.is_extended = true;
+
+        if (driver_->Send(frame) != 0) {
+            return false;
+        }
+
+        offset += chunk;
+        frame_idx++;
+    }
+    return true;
+}
+
+// ===== 接收线程 =====
+
+void CANFDComm::ReceiveThread() {
+    while (rx_running_) {
+        canfd::Frame frame;
+        int result = driver_->Receive(frame, 100);  // 100ms timeout
+        if (result != 0) continue;
+
+        canfd::ArbitrationId arb(frame.id);
+
+        // 只处理目标设备的帧
+        if (arb.device_id() != device_id_ && device_id_!=0)
+            continue;
+
+        // 按 (device_id, FrameType) 分组组包，隔离 RESPONSE / ACTIVE_REPORT
+        auto key = std::make_pair(device_id_, arb.frame_type());
+        std::vector<uint8_t> payload;
+        bool complete = false;
+        {
+            std::lock_guard<std::mutex> lock(asm_mutex_);
+            complete = assemblers_[key].Feed(frame, &payload);
+        }
+
+        if (!complete) continue;
+
+        if (arb.frame_type() == canfd::RESPONSE) {
+            // 响应组包完成，按功能码唤醒等待方
+            std::lock_guard<std::mutex> lock(response_mutex_);
+            if (waiting_fc_ != 0 && !payload.empty() && payload[0] == waiting_fc_) {
+                response_payload_ = std::move(payload);
+                response_ready_ = true;
+                response_cv_.notify_one();
+            }
+        } else if (arb.frame_type() == canfd::ACTIVE_REPORT) {
+            // 主动上报组包完成，解析
+            if (!payload.empty()) {
+                ProcessActiveReport(payload, static_cast<canfd::FunctionCode>(payload[0]));
+            }
+        }
+    }
+}
+
+void CANFDComm::ProcessActiveReport(const std::vector<uint8_t>& payload,
+                                    canfd::FunctionCode fc) {
+    switch (fc) {
+        case canfd::REPORT_JOINTS:
+            ParseJointStates(payload.data() + 1, payload.size() - 1);
+            break;
+        case canfd::REPORT_TACTILE:
+            ParseTactileForce(payload.data() + 1, payload.size() - 1);
+            break;
+        case canfd::REPORT_ERROR:
+            ParseHandError(payload.data() + 1, payload.size() - 1);
+            break;
+        default:
+            break;
+    }
+}
+
+bool CANFDComm::SubscribeActiveReport(canfd::FunctionCode fc, uint8_t period_ms) {
+    uint8_t param[1] = {period_ms};
+    return SendCmdOnly(fc, param, 1);
+}
+
+bool CANFDComm::UnsubscribeActiveReport(canfd::FunctionCode fc) {
+    uint8_t param[1] = {0};
+    return SendCmdOnly(fc, param, 1);
+}
+
+// ===== 数据解析 =====
+
+void CANFDComm::ParseJointStates(const uint8_t* data, size_t len) {
+    constexpr size_t kJointDataSize = 108;  // 18 joints * 6 bytes
+    if (len < kJointDataSize) return;
+
+    std::vector<Joint> joints(static_cast<int>(JointId::NUM_JOINTS));
+    // HandState hand_state;
+
+    size_t offset = 0;
+    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); i++) {
+        uint8_t joint_state = data[offset++];
+        uint8_t joint_error = data[offset++];
+        uint16_t raw_angle = data[offset] | (data[offset + 1] << 8);
+        offset += 2;
+        uint8_t joint_velocity = data[offset++];
+        uint8_t joint_torque = data[offset++];
+
+        joints[i].id = static_cast<JointId>(i);
+        joints[i].state = static_cast<State>(joint_state);
+        joints[i].error = static_cast<ErrorCode>(joint_error);
+        joints[i].angle = RawToAngle(raw_angle, static_cast<JointId>(i));
+        joints[i].velocity = static_cast<int8_t>(joint_velocity);
+        joints[i].torque = static_cast<int8_t>(joint_torque);
+    }
+
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    if (joints_cb_) joints_cb_(joints);
+    // if (hand_state_cb_) hand_state_cb_(hand_state);
+}
+
+void CANFDComm::ParseTactileForce(const uint8_t* data, size_t len) {
+    // 30 bytes: 5 fingers * (x:2B + y:2B + z:2B)
+    constexpr size_t kTactileForceSize = 30;
+    if (len < kTactileForceSize) return;
+
+    TactileData tactile;
+    size_t offset = 0;
+
+    auto ParseFinger = [&](FingerTactileData& finger) {
+        int16_t raw_x = static_cast<int16_t>(data[offset] | (data[offset + 1] << 8));
+        offset += 2;
+        int16_t raw_y = static_cast<int16_t>(data[offset] | (data[offset + 1] << 8));
+        offset += 2;
+        int16_t raw_z = static_cast<int16_t>(data[offset] | (data[offset + 1] << 8));
+        offset += 2;
+
+        finger.resultant_force.x = raw_x * 0.1f;
+        finger.resultant_force.y = raw_y * 0.1f;
+        finger.resultant_force.z = raw_z * 0.1f;
+    };
+
+    ParseFinger(tactile.thumb);
+    ParseFinger(tactile.index);
+    ParseFinger(tactile.middle);
+    ParseFinger(tactile.ring);
+    ParseFinger(tactile.pinky);
+
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    if (tactile_cb_) tactile_cb_(tactile);
+}
+
+void CANFDComm::ParseHandError(const uint8_t* data, size_t len) {
+    HandState hand_state;
+    if (len >= 1) {
+        hand_state.state = static_cast<State>(data[0]);
+    }
+    if (len >= 2) {
+        hand_state.error = static_cast<ErrorCode>(data[1]);
+    }
+    if (len >= 4) {
+        int16_t temp = static_cast<int16_t>(data[2] | (data[3] << 8));
+        hand_state.temperature = temp;
+    }
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    if (hand_state_cb_) hand_state_cb_(hand_state);
+}
+
+// ===== 角度转换 =====
+
+float CANFDComm::RawToAngle(uint16_t raw, JointId id) {
+    auto it = kJointLimits.find(id);
+    if (it == kJointLimits.end()) return 0.0f;
+
+    float min_angle = it->second.first;
+    float max_angle = it->second.second;
+    float angle_deg = min_angle + (raw / 1000.0f) * (max_angle - min_angle);
+    return angle_deg;
+}
+
+uint16_t CANFDComm::AngleToRaw(float angle_rad, JointId id) {
+    auto it = kJointLimits.find(id);
+    if (it == kJointLimits.end()) return 0;
+
+    float min_angle = it->second.first;
+    float max_angle = it->second.second;
+    float angle_deg = angle_rad ;
+
+    if (angle_deg < min_angle) angle_deg = min_angle;
+    if (angle_deg > max_angle) angle_deg = max_angle;
+
+    uint16_t raw = static_cast<uint16_t>(((angle_deg - min_angle) / (max_angle - min_angle)) * 1000.0f);
+    if (raw > 1000) raw = 1000;
+    return raw;
+}
+
+} // namespace internal
+} // namespace xiaoyao
