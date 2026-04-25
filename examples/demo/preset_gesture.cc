@@ -1,4 +1,7 @@
 #include "xiaoyao/xiaoyao.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <iostream>
 #include <iomanip>
 #include <thread>
@@ -38,7 +41,7 @@ const std::unordered_map<GestureType, std::unordered_map<xiaoyao::JointId, float
         GestureType::OPEN_HAND,
         {
             {xiaoyao::JointId::THUMB_PIP, 0.0f}, {xiaoyao::JointId::THUMB_MCP, 0.0f},
-            {xiaoyao::JointId::THUMB_SWING, 0.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
+            {xiaoyao::JointId::THUMB_SWING, 20.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
             {xiaoyao::JointId::FF_PIP, 0.0f}, {xiaoyao::JointId::FF_MCP, 0.0f},
             {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 0.0f},
             {xiaoyao::JointId::MF_MCP, 0.0f}, {xiaoyao::JointId::RF_PIP, 0.0f},
@@ -74,7 +77,7 @@ const std::unordered_map<GestureType, std::unordered_map<xiaoyao::JointId, float
         GestureType::THUMBS_UP,
         {
             {xiaoyao::JointId::THUMB_PIP, 0.0f}, {xiaoyao::JointId::THUMB_MCP, 0.0f},
-            {xiaoyao::JointId::THUMB_SWING, 0.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
+            {xiaoyao::JointId::THUMB_SWING, 20.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
             {xiaoyao::JointId::FF_PIP, 65.0f}, {xiaoyao::JointId::FF_MCP, 55.0f},
             {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 65.0f},
             {xiaoyao::JointId::MF_MCP, 55.0f}, {xiaoyao::JointId::RF_PIP, 65.0f},
@@ -86,7 +89,7 @@ const std::unordered_map<GestureType, std::unordered_map<xiaoyao::JointId, float
         GestureType::SIX_SIGN,
         {
             {xiaoyao::JointId::THUMB_PIP, 0.0f}, {xiaoyao::JointId::THUMB_MCP, 0.0f},
-            {xiaoyao::JointId::THUMB_SWING, 0.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
+            {xiaoyao::JointId::THUMB_SWING, 20.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
             {xiaoyao::JointId::FF_PIP, 65.0f}, {xiaoyao::JointId::FF_MCP, 55.0f},
             {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 65.0f},
             {xiaoyao::JointId::MF_MCP, 55.0f}, {xiaoyao::JointId::RF_PIP, 65.0f},
