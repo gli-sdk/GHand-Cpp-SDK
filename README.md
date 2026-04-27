@@ -132,7 +132,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 
 # 运行示例（需要 root 权限访问网卡）
-sudo ./examples/basic_connection
+sudo ./examples/tutorial/basic_connection
 ```
 
 ## 系统要求
