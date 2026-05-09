@@ -32,11 +32,15 @@ void DisplayJoints(const std::vector<Joint>& joints) {
 int main() {
     xiaoyao::ConfigureConsole(xiaoyao::LogLevel::INFO);
 
-    DexHand hand(ProductType::GHAND, CommType::CANFD);
+    auto hand = DexHand::Create(ProductType::GHAND, CommType::CANFD);
+    if (!hand) {
+        std::cerr << "Failed to create DexHand" << std::endl;
+        return -1;
+    }
 
     // 1. 搜索可用的 CANFD 适配器
     std::cout << "Searching for CANFD adapters..." << std::endl;
-    std::map<std::string, std::string> adapters = hand.SearchAdapters();
+    std::map<std::string, std::string> adapters = hand->SearchAdapters();
     if (adapters.empty()) {
         std::cout << "No CANFD adapters found." << std::endl;
         return -1;
@@ -47,7 +51,7 @@ int main() {
         std::cout << "  " << adapter.first << " -> " << adapter.second << std::endl;
     }
 
-    bool success = hand.Connect("auto");
+    bool success = hand->Connect("auto");
     if (!success) {
         std::cout << "Failed to connect to CANFD device!" << std::endl;
         return -1;
@@ -56,11 +60,11 @@ int main() {
     std::cout << "Successfully connected via CANFD!" << std::endl;
 
     //// 4. 注册关节状态回调（CANFD 主动上报）
-    hand.SetJointsCallback(DisplayJoints);
+    hand->SetJointsCallback(DisplayJoints);
     std::cout << "Joint state callback registered (receiving active reports)." << std::endl;
 
     // 5. 设置控制模式并运动关节
-    hand.SetControlMode(ControlMode::POSITION);
+    hand->SetControlMode(ControlMode::POSITION);
 
     std::vector<JointCommand> joints = {
         {JointId::THUMB_MCP, 30.0f, 100, 100},
@@ -68,7 +72,7 @@ int main() {
     };
 
     std::cout << "\nMoving joints (FF_MCP=30, FF_PIP=45)..." << std::endl;
-    if (hand.MoveJoints(joints)) {
+    if (hand->MoveJoints(joints)) {
         std::cout << "Joints moved successfully!" << std::endl;
 
         // 保持 5 秒，期间会打印主动上报的关节状态
@@ -80,14 +84,14 @@ int main() {
             {JointId::FF_PIP, 0.0f, 100, 100},
         };
         std::cout << "Resetting joints..." << std::endl;
-        hand.MoveJoints(reset);
+        hand->MoveJoints(reset);
         std::this_thread::sleep_for(std::chrono::seconds(2));
     } else {
         std::cout << "Failed to move joints!" << std::endl;
     }
 
     // 6. 断开连接
-    hand.Disconnect();
+    hand->Disconnect();
     std::cout << "\nConnection closed." << std::endl;
 
     return 0;

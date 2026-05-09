@@ -31,21 +31,25 @@ void DisplayJoints(const std::vector<xiaoyao::Joint>& joints) {
 }
 
 int main() {
-    xiaoyao::DexHand hand(xiaoyao::ProductType::GHAND, xiaoyao::CommType::ETHERCAT);
+    auto hand = xiaoyao::DexHand::Create(xiaoyao::ProductType::GHAND, xiaoyao::CommType::ETHERCAT);
+    if (!hand) {
+        std::cerr << "Failed to create DexHand" << std::endl;
+        return -1;
+    }
 
     // 尝试通过ETHERCAT连接灵巧手
     std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
-    bool success = hand.AutoConnect();
+    bool success = hand->AutoConnect();
 
     if (success) {
         std::cout << "Successfully connected to the dexterous hand!" << std::endl;
 
         // 注册关节状态回调以实时显示关节数据
-        hand.SetJointsCallback(DisplayJoints);
+        hand->SetJointsCallback(DisplayJoints);
         std::cout << "Joint display callback registered." << std::endl;
 
         // 设置控制模式为位置模式（默认）
-        hand.SetControlMode(xiaoyao::ControlMode::POSITION);
+        hand->SetControlMode(xiaoyao::ControlMode::POSITION);
 
         // 定义关节命令：控制所有13个关节
         // DIP关节会被自动跳过，无需控制
@@ -55,7 +59,7 @@ int main() {
         };
 
         std::cout << "Moving joints..." << std::endl;
-        bool move_success = hand.MoveJoints(joints);
+        bool move_success = hand->MoveJoints(joints);
 
         if (move_success) {
             std::cout << "Joints moved successfully!" << std::endl;
@@ -70,13 +74,13 @@ int main() {
             };
 
             std::cout << "Resetting joint positions..." << std::endl;
-            hand.MoveJoints(reset_joints);
+            hand->MoveJoints(reset_joints);
             std::this_thread::sleep_for(std::chrono::seconds(2));
         } else {
             std::cout << "Failed to move joints!" << std::endl;
         }
 
-        hand.Disconnect();
+        hand->Disconnect();
         std::cout << "Connection closed." << std::endl;
     } else {
         std::cout << "Failed to connect to the dexterous hand!" << std::endl;

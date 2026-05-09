@@ -135,11 +135,15 @@ int main() {
     std::cout << "  Xiaoyao Dexterous Hand SDK - Interactive Joint Control    " << std::endl;
     std::cout << "========================================" << std::endl;
 
-    DexHand hand(ProductType::GHAND, CommType::ETHERCAT);
+    auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    if (!hand) {
+        std::cerr << "Failed to create DexHand" << std::endl;
+        return -1;
+    }
 
     // Connect device
     std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
-    bool success = hand.AutoConnect();
+    bool success = hand->AutoConnect();
 
     if (!success) {
         std::cerr << "Error: Unable to connect to dexterous hand!" << std::endl;
@@ -149,8 +153,8 @@ int main() {
     std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
 
     // Display device information
-    DeviceInfo info = hand.GetDeviceInfo();
-    HandType hand_type = hand.GetHandType();
+    DeviceInfo info = hand->GetDeviceInfo();
+    HandType hand_type = hand->GetHandType();
     std::cout << "\nDevice Information:" << std::endl;
     std::cout << "  Device Name: " << info.device_name << std::endl;
     std::cout << "  Hardware Version: " << info.hardware_version << std::endl;
@@ -159,12 +163,12 @@ int main() {
     std::cout << "  Hand Type: " << ToString(hand_type) << std::endl;
 
     // Set control mode to position mode
-    hand.SetControlMode(ControlMode::POSITION);
+    hand->SetControlMode(ControlMode::POSITION);
 
     // Register joint data callback (for reading feedback)
     std::vector<Joint> last_joints;
     bool joints_received = false;
-    hand.SetJointsCallback([&](const std::vector<Joint>& joints) {
+    hand->SetJointsCallback([&](const std::vector<Joint>& joints) {
         last_joints = joints;
         joints_received = true;
     });
@@ -244,7 +248,7 @@ int main() {
             }
 
             // Send joint commands
-            bool move_success = hand.MoveJoints(joints);
+            bool move_success = hand->MoveJoints(joints);
 
             if (move_success) {
                 std::cout << "✓ Command sent successfully" << std::endl;
@@ -287,7 +291,7 @@ int main() {
 
     // Disconnect
     std::cout << "\nDisconnecting..." << std::endl;
-    hand.Disconnect();
+    hand->Disconnect();
     std::cout << "✓ Disconnected" << std::endl;
 
     std::cout << "\nProgram ended. Thank you for using!" << std::endl;

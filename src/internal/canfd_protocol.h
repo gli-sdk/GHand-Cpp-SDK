@@ -95,6 +95,8 @@ public:
 
 private:
     std::vector<uint8_t> buffer_;
+    std::vector<uint16_t> frame_offsets_;
+    std::vector<uint8_t> frame_lens_;
     uint8_t expected_total_ = 0;
     uint16_t received_mask_ = 0;
     std::chrono::steady_clock::time_point first_frame_time_;

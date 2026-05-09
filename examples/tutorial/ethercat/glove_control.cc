@@ -299,9 +299,17 @@ int main() {
     std::cout << "\n✓ Listening for data on " << UDP_IP << ":" << UDP_PORT << "..." << std::endl;
 
     // Connect dexterous hand
-    DexHand hand(ProductType::GHAND, CommType::ETHERCAT);
+    auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    if (!hand) {
+        std::cerr << "Failed to create DexHand" << std::endl;
+        closesocket(sock);
+#ifdef _WIN32
+        WSACleanup();
+#endif
+        return 1;
+    }
     std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
-    bool success = hand.AutoConnect();
+    bool success = hand->AutoConnect();
 
     if (!success) {
         std::cerr << "Error: Unable to connect to dexterous hand!" << std::endl;
@@ -330,7 +338,7 @@ int main() {
     // Register joint data callback (for displaying feedback)
     std::vector<Joint> last_joints;
     bool joints_received = false;
-    hand.SetJointsCallback([&](const std::vector<Joint>& joints) {
+    hand->SetJointsCallback([&](const std::vector<Joint>& joints) {
         last_joints = joints;
         joints_received = true;
     });
@@ -422,7 +430,7 @@ int main() {
                         ClipAngle(left_hand.pinky.mcp_bend, 0, 70), speed, torque});
 
                     // Send joint commands
-                    hand.MoveJoints(joints);
+                    hand->MoveJoints(joints);
 
                     // Display joint status every 100 frames
                     if (data_count % 100 == 0 && joints_received && !last_joints.empty()) {
@@ -440,7 +448,7 @@ int main() {
 
     // Cleanup
     std::cout << "\nCleaning up resources..." << std::endl;
-    hand.Disconnect();
+    hand->Disconnect();
     closesocket(sock);
 #ifdef _WIN32
     WSACleanup();

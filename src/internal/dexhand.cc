@@ -15,6 +15,35 @@
 #include <iomanip>
 #include <sstream>
 
+namespace {
+
+bool IsVersionNewer(const std::string& old_ver, const std::string& new_ver) {
+    auto parse = [](const std::string& ver) {
+        std::vector<int> parts;
+        std::stringstream ss(ver);
+        std::string part;
+        while (std::getline(ss, part, '.')) {
+            try {
+                parts.push_back(std::stoi(part));
+            } catch (...) {
+                parts.push_back(0);
+            }
+        }
+        return parts;
+    };
+    auto old_parts = parse(old_ver);
+    auto new_parts = parse(new_ver);
+    for (size_t i = 0; i < (std::max)(old_parts.size(), new_parts.size()); ++i) {
+        int old_v = i < old_parts.size() ? old_parts[i] : 0;
+        int new_v = i < new_parts.size() ? new_parts[i] : 0;
+        if (new_v > old_v) return true;
+        if (new_v < old_v) return false;
+    }
+    return false;
+}
+
+} // anonymous namespace
+
 namespace xiaoyao {
 namespace internal {
 
@@ -50,7 +79,6 @@ DexHand::DexHand(ProductType product_type, CommType comm_type)
 DexHand::~DexHand() = default;
 
 void DexHand::SetupCallbacks() {
-    if (!comm_) return;
     comm_->SetJointsCallback(
         [this](const std::vector<Joint>& joints) {
             callback_manager_->UpdateJoints(joints);
@@ -131,7 +159,7 @@ bool DexHand::Disconnect() {
 }
 
 bool DexHand::IsConnected() const {
-    return comm_ && comm_->IsConnected();
+    return comm_->IsConnected();
 }
 
 std::map<std::string, std::string> DexHand::SearchAdapters() const {
@@ -227,16 +255,6 @@ void DexHand::SetTactileDataCallback(std::function<void(const TactileData&)> cb)
     callback_manager_->SetTactileDataCallback(cb);
 }
 
-/**
- * @brief Boot update firmware
- *
- * @param ifname Network interface name
- * @param slave Slave station number
- * @param filename Firmware file path
- * @param progressCallback Progress callback function used to report update progress percentage
- * @return int Update result: 1-success, -11-connection timeout, -12-version not updated, other
- * values indicate update failure
- */
 int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
                         const std::string& filename,
                         std::function<void(int)> progressCallback) {
@@ -253,7 +271,7 @@ int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
             std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
             if (Connect(device_name_)) {
-                if (last_version < device_info_.software_version) {
+                if (IsVersionNewer(last_version, device_info_.software_version)) {
                     return 1;
                 } else {
                     return -12;

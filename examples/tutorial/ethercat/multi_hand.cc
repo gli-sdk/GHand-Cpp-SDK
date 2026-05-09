@@ -13,8 +13,12 @@ int main() {
     std::cout << "========================================\n";
 
     // Search for network adapters
-    DexHand temp_hand(ProductType::GHAND, CommType::ETHERCAT);
-    std::map<std::string, std::string> adapters = temp_hand.SearchAdapters();
+    auto temp_hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    if (!temp_hand) {
+        std::cerr << "Failed to create DexHand" << std::endl;
+        return -1;
+    }
+    std::map<std::string, std::string> adapters = temp_hand->SearchAdapters();
 
     if (adapters.empty()) {
         std::cerr << "No available network adapters found\n";
@@ -34,7 +38,7 @@ int main() {
     std::cout << "\nAttempting to connect devices...\n";
     for (const auto& adapter : adapters) {
         const std::string& name = adapter.first;
-        auto hand = std::make_unique<DexHand>(ProductType::GHAND, CommType::ETHERCAT);
+        auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
         if (hand->Connect(name)) {
             hands.push_back(std::move(hand));
             std::cout << "  ✓ Connected device: " << name << '\n';

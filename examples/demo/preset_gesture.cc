@@ -182,20 +182,24 @@ int main() {
     std::cout << "========================================" << std::endl;
 
     // Connect to device
-    xiaoyao::DexHand hand(xiaoyao::ProductType::GHAND, xiaoyao::CommType::ETHERCAT);
+    auto hand = xiaoyao::DexHand::Create(xiaoyao::ProductType::GHAND, xiaoyao::CommType::ETHERCAT);
+    if (!hand) {
+        std::cerr << "Failed to create DexHand" << std::endl;
+        return -1;
+    }
     std::cout << "\nConnecting to dexterous hand..." << std::endl;
-    if (!hand.AutoConnect()) {
+    if (!hand->AutoConnect()) {
         std::cerr << "Failed to connect!" << std::endl;
         return 1;
     }
     std::cout << "Connected successfully" << std::endl;
 
     // Set control mode
-    hand.SetControlMode(xiaoyao::ControlMode::POSITION);
+    hand->SetControlMode(xiaoyao::ControlMode::POSITION);
 
     // Register callbacks for error detection
-    hand.SetJointsCallback(OnJointsUpdate);
-    hand.SetHandStateCallback(OnHandStateUpdate);
+    hand->SetJointsCallback(OnJointsUpdate);
+    hand->SetHandStateCallback(OnHandStateUpdate);
 
     // Gesture sequence
     const std::vector<GestureType> gestures = {
@@ -234,7 +238,7 @@ int main() {
             auto it = GESTURE_DEFINITIONS.find(gesture);
             if (it != GESTURE_DEFINITIONS.end()) {
                 auto joints = CreateJointsFromGesture(it->second);
-                hand.MoveJoints(joints);
+                hand->MoveJoints(joints);
             }
 
             // Wait for completion with error checking
@@ -274,14 +278,14 @@ int main() {
     if (has_error) {
         PrintError();
         std::cerr << "\nStopping all motion and clearing fault..." << std::endl;
-        hand.Stop();
-        hand.ClearFault();
+        hand->Stop();
+        hand->ClearFault();
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
     // Cleanup
     std::cout << "\nDisconnecting..." << std::endl;
-    hand.Disconnect();
+    hand->Disconnect();
     std::cout << "Disconnected. Thank you!" << std::endl;
 
     return has_error ? 1 : 0;

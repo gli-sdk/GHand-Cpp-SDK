@@ -28,6 +28,8 @@ public:
     explicit DexHand(ProductType product_type, CommType comm_type);
     ~DexHand();
 
+    bool IsValid() const { return comm_ != nullptr; }
+
     // 连接管理
     bool AutoConnect();
     bool Connect(const std::string& device_name);
@@ -61,14 +63,12 @@ public:
                    const std::string& filename,
                    std::function<void(int)> progressCallback);
 
- protected:
-    void ClampJointAngle(JointCommand& joint);
-    void ClampJointVelocity(JointCommand& joint);
-    void ClampJointTorque(JointCommand& joint);
-
  private:
     bool ConnectToDevice(const std::string& device_name);
     void SetupCallbacks();
+    void ClampJointAngle(JointCommand& joint);
+    void ClampJointVelocity(JointCommand& joint);
+    void ClampJointTorque(JointCommand& joint);
 
     std::unique_ptr<IComm> comm_;
     std::unique_ptr<DexHandCallbackManager> callback_manager_;
@@ -78,8 +78,8 @@ public:
     ControlMode control_mode_;
     CommType comm_type_;
     ProductType product_type_;
-    ProductConfig config_;
     std::string device_name_;
+    ProductConfig config_;
 };
 
 }  // namespace internal

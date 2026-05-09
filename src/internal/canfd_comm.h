@@ -74,7 +74,6 @@ private:
     bool SubscribeActiveReport(canfd::FunctionCode fc, uint8_t period_ms);
     bool UnsubscribeActiveReport(canfd::FunctionCode fc);
 
-protected:
     void ParseJointStates(const uint8_t* data, size_t len);
     void ParseTactileForce(const uint8_t* data, size_t len);
     void ParseHandError(const uint8_t* data, size_t len);

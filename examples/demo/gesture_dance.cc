@@ -181,8 +181,12 @@ bool SecondAction(DexHand& hand) {
 // ========== 主函数 ==========
 int main() {
     std::cout << "***** 枭尧灵巧手 SDK - 手势舞功能演示 *****\n" << std::endl;
-    DexHand hand(ProductType::GHAND, CommType::ETHERCAT);
-    bool connected = hand.Connect("auto");
+    auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    if (!hand) {
+        std::cerr << "Failed to create DexHand" << std::endl;
+        return -1;
+    }
+    bool connected = hand->Connect("auto");
     if (!connected) {
         std::cout << "\n[扫描结束] 未能连接到灵巧手。" << std::endl;
         return 1;
@@ -198,12 +202,12 @@ int main() {
 
         std::cout << "\n--- 第 " << gesture_cycle << " 轮手势演示开始 ---" << std::endl;
 
-        if (!FirstAction(hand)) {
+        if (!FirstAction(*hand)) {
             std::cout << "第 " << gesture_cycle << " 轮演示中的第一组动作执行失败" << std::endl;
             break;
         }
 
-        if (!SecondAction(hand)) {
+        if (!SecondAction(*hand)) {
             std::cout << "第 " << gesture_cycle << " 轮演示中的第二组动作执行失败" << std::endl;
             break;
         }
@@ -215,7 +219,7 @@ int main() {
         }
     }
 
-    hand.Disconnect();
+    hand->Disconnect();
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     std::cout << "\n--- 演示结束，断开连接 ---" << std::endl;
     return 0;

@@ -18,11 +18,15 @@ int main() {
     std::cout << "  Xiaoyao Dexterous Hand SDK - Speed Control Demo        " << std::endl;
     std::cout << "========================================" << std::endl;
 
-    DexHand hand(ProductType::GHAND, CommType::ETHERCAT);
+    auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    if (!hand) {
+        std::cerr << "Failed to create DexHand" << std::endl;
+        return -1;
+    }
 
     // Connect device
     std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
-    bool success = hand.AutoConnect();
+    bool success = hand->AutoConnect();
 
     if (!success) {
         std::cerr << "Error: Unable to connect to dexterous hand!" << std::endl;
@@ -32,7 +36,7 @@ int main() {
     std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
 
     // Set control mode to position mode
-    hand.SetControlMode(ControlMode::POSITION);
+    hand->SetControlMode(ControlMode::POSITION);
 
     // ========== Demo 1: Fist movement with different speeds ==========
     std::cout << "\n========== Demo 1: Fist movement with different speeds ==========" << std::endl;
@@ -81,7 +85,7 @@ int main() {
         for (auto& joint : fist_joints) {
             joint.velocity = speed;
         }
-        hand.MoveJoints(fist_joints);
+        hand->MoveJoints(fist_joints);
 
         // Wait for movement completion (faster speed = shorter wait time)
         int wait_time = 1500 + (100 - speed) * 10;
@@ -93,7 +97,7 @@ int main() {
         for (auto& joint : open_joints) {
             joint.velocity = speed;
         }
-        hand.MoveJoints(open_joints);
+        hand->MoveJoints(open_joints);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));
         std::cout << std::endl;
@@ -111,7 +115,7 @@ int main() {
         for (auto& joint : fist_joints) {
             joint.velocity = speed;
         }
-        hand.MoveJoints(fist_joints);
+        hand->MoveJoints(fist_joints);
 
         // Wait
         std::this_thread::sleep_for(std::chrono::milliseconds(800));
@@ -120,7 +124,7 @@ int main() {
         for (auto& joint : open_joints) {
             joint.velocity = speed;
         }
-        hand.MoveJoints(open_joints);
+        hand->MoveJoints(open_joints);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(800));
     }
@@ -151,11 +155,11 @@ int main() {
     };
 
     std::cout << ">>> Executing wave fist (thumb fastest, little finger slowest)" << std::endl;
-    hand.MoveJoints(wave_fist);
+    hand->MoveJoints(wave_fist);
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
     std::cout << ">>> Opening hand" << std::endl;
-    hand.MoveJoints(open_joints);
+    hand->MoveJoints(open_joints);
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
     // ========== Demo completed ==========
@@ -168,7 +172,7 @@ int main() {
 
     // Disconnect
     std::cout << "\nDisconnecting..." << std::endl;
-    hand.Disconnect();
+    hand->Disconnect();
     std::cout << "✓ Disconnected" << std::endl;
 
     std::cout << "\nDemo completed. Thank you for using!" << std::endl;

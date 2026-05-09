@@ -30,7 +30,11 @@ int main() {
     // 启用 ANSI 转义序列
     EnableAnsiColors();
 
-    xiaoyao::DexHand hand(xiaoyao::ProductType::GHAND, xiaoyao::CommType::ETHERCAT);
+    auto hand = xiaoyao::DexHand::Create(xiaoyao::ProductType::GHAND, xiaoyao::CommType::ETHERCAT);
+    if (!hand) {
+        std::cerr << "Failed to create DexHand" << std::endl;
+        return -1;
+    }
 
     // ANSI 转义序列用于固定位置显示
     // \033[H: 移动到屏幕左上角
@@ -42,7 +46,7 @@ int main() {
     bool first_print = true;
 
     // 注册触觉数据回调（一次性）
-    hand.SetTactileDataCallback([&first_print, CLEAR_SCREEN, MOVE_CURSOR](const xiaoyao::TactileData& data) {
+    hand->SetTactileDataCallback([&first_print, CLEAR_SCREEN, MOVE_CURSOR](const xiaoyao::TactileData& data) {
         if (first_print) {
             // 第一次打印，显示标题
             std::cout << CLEAR_SCREEN;
@@ -98,19 +102,19 @@ int main() {
 
     // 尝试通过ETHERCAT连接灵巧手
     std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
-    bool success = hand.AutoConnect();
+    bool success = hand->AutoConnect();
 
     if (success) {
         std::cout << "Successfully connected to the dexterous hand!" << std::endl;
 
         // 打开触觉
-        hand.OpenTactile();
+        hand->OpenTactile();
 
         // 数据自动推送，无需轮询
         std::this_thread::sleep_for(std::chrono::seconds(30));
 
-        hand.CloseTactile();
-        hand.Disconnect();
+        hand->CloseTactile();
+        hand->Disconnect();
         std::cout << "Connection closed." << std::endl;
     } else {
         std::cout << "Failed to connect to the dexterous hand!" << std::endl;

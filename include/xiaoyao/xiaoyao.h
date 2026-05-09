@@ -22,7 +22,8 @@ using TactileDataCallback = std::function<void(const TactileData&)>;
  */
 class DexHand {
 public:
-    DexHand(ProductType product_type, CommType comm_type = CommType::ETHERCAT);
+    static std::unique_ptr<DexHand> Create(ProductType product_type,
+                                            CommType comm_type = CommType::ETHERCAT);
     ~DexHand();
 
     // 禁止拷贝
@@ -142,6 +143,7 @@ public:
                    std::function<void(int)> progressCallback);
 
  private:
+    DexHand(ProductType product_type, CommType comm_type);
     class Impl;  // Pimpl 模式
     std::unique_ptr<Impl> impl_;
 };

@@ -6,14 +6,24 @@ namespace xiaoyao {
 // Pimpl 实现
 class DexHand::Impl {
 public:
-    explicit Impl(ProductType product_type, CommType comm_type)
-        : hand_(product_type, comm_type) {}
+    explicit Impl(ProductType pt, CommType ct)
+        : hand_(pt, ct) {}
+    bool IsValid() const { return hand_.IsValid(); }
     internal::DexHand hand_;
 };
 
+// 工厂函数
+std::unique_ptr<DexHand> DexHand::Create(ProductType pt, CommType ct) {
+    auto hand = std::unique_ptr<DexHand>(new DexHand(pt, ct));
+    if (!hand->impl_->IsValid()) {
+        return nullptr;
+    }
+    return hand;
+}
+
 // 构造/析构
-DexHand::DexHand(ProductType product_type, CommType comm_type)
-    : impl_(new Impl(product_type, comm_type)) {}
+DexHand::DexHand(ProductType pt, CommType ct)
+    : impl_(new Impl(pt, ct)) {}
 DexHand::~DexHand() {}
 
 // 转发所有调用

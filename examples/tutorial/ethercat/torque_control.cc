@@ -23,11 +23,15 @@ int main() {
     std::cout << "  Xiaoyao Dexterous Hand SDK - Torque Control Demo        " << std::endl;
     std::cout << "========================================" << std::endl;
 
-    DexHand hand(ProductType::GHAND, CommType::ETHERCAT);
+    auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    if (!hand) {
+        std::cerr << "Failed to create DexHand" << std::endl;
+        return -1;
+    }
 
     // Connect device
     std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
-    bool success = hand.AutoConnect();
+    bool success = hand->AutoConnect();
 
     if (!success) {
         std::cerr << "Error: Unable to connect to dexterous hand!" << std::endl;
@@ -37,7 +41,7 @@ int main() {
     std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
 
     // Set control mode to position mode
-    hand.SetControlMode(ControlMode::POSITION);
+    hand->SetControlMode(ControlMode::POSITION);
 
     // ========== Demo 1: Fist movement with different torque levels ==========
     std::cout << "\n========== Demo 1: Fist movement with different torque levels ==========" << std::endl;
@@ -86,7 +90,7 @@ int main() {
         for (auto& joint : fist_joints) {
             joint.torque = torque;
         }
-        hand.MoveJoints(fist_joints);
+        hand->MoveJoints(fist_joints);
 
         // Wait for movement completion
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
@@ -97,7 +101,7 @@ int main() {
         for (auto& joint : open_joints) {
             joint.torque = torque;
         }
-        hand.MoveJoints(open_joints);
+        hand->MoveJoints(open_joints);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         std::cout << std::endl;
@@ -129,11 +133,11 @@ int main() {
     for (auto& joint : ok_joints) {
         joint.torque = 30;
     }
-    hand.MoveJoints(ok_joints);
+    hand->MoveJoints(ok_joints);
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
     // Open hand
-    hand.MoveJoints(open_joints);
+    hand->MoveJoints(open_joints);
     std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
     // Firm pinch
@@ -141,11 +145,11 @@ int main() {
     for (auto& joint : ok_joints) {
         joint.torque = 80;
     }
-    hand.MoveJoints(ok_joints);
+    hand->MoveJoints(ok_joints);
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
     // Open hand
-    hand.MoveJoints(open_joints);
+    hand->MoveJoints(open_joints);
     std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
     // ========== Demo 3: Different torque for different fingers ==========
@@ -174,11 +178,11 @@ int main() {
     };
 
     std::cout << ">>> Executing two-finger pinch (thumb and index finger at 90% torque, other fingers at 30-50% torque)" << std::endl;
-    hand.MoveJoints(pinch_grip);
+    hand->MoveJoints(pinch_grip);
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
     std::cout << ">>> Opening hand" << std::endl;
-    hand.MoveJoints(open_joints);
+    hand->MoveJoints(open_joints);
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
     // ========== Demo 4: Gradual torque control ==========
@@ -193,7 +197,7 @@ int main() {
         for (auto& joint : fist_joints) {
             joint.torque = torque;
         }
-        hand.MoveJoints(fist_joints);
+        hand->MoveJoints(fist_joints);
 
         // Wait
         std::this_thread::sleep_for(std::chrono::milliseconds(800));
@@ -202,7 +206,7 @@ int main() {
         for (auto& joint : open_joints) {
             joint.torque = torque;
         }
-        hand.MoveJoints(open_joints);
+        hand->MoveJoints(open_joints);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(800));
     }
@@ -219,7 +223,7 @@ int main() {
 
     // Disconnect
     std::cout << "\nDisconnecting..." << std::endl;
-    hand.Disconnect();
+    hand->Disconnect();
     std::cout << "✓ Disconnected" << std::endl;
 
     std::cout << "\nDemo completed. Thank you for using!" << std::endl;
