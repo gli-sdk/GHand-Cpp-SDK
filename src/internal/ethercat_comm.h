@@ -22,6 +22,7 @@
 
 #include "file_lock.h"
 #include "icomm.h"
+#include "product_config.h"
 
 namespace xiaoyao {
 namespace internal {
@@ -36,7 +37,7 @@ constexpr size_t kFirmwareBufferSize = 8 * 1024 * 1024;
  */
 class EtherCATComm : public IComm {
 public:
-    EtherCATComm();
+    explicit EtherCATComm(const ProductConfig& config);
     ~EtherCATComm() override;
 
     // ===== IComm 接口实现 =====
@@ -139,6 +140,8 @@ public:
 
     // 解析 PDO 原始数据并触发结构化回调
     void ParseAndNotify(const uint8_t* data, size_t size);
+
+    const ProductConfig& config_;
 };
 
 }  // namespace internal

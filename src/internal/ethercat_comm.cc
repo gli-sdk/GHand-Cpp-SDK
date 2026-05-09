@@ -61,7 +61,7 @@ EtherCATComm* EtherCATComm::active_instance_ = nullptr;
 // static LockFreeQueue<std::pair<std::vector<uint8>, uint16>, 32> pdo_queue_;
 static uint8 rxpdo_buffer_[80];
 static std::atomic<bool> print_debug_info{false};
-EtherCATComm::EtherCATComm() {}
+EtherCATComm::EtherCATComm(const ProductConfig& config) : config_(config) {}
 
 EtherCATComm::~EtherCATComm() {}
 
@@ -676,31 +676,23 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
         }
     }
 
-    uint8_t buffer[80] = {0};
+    std::vector<uint8_t> buffer(config_.protocol_joint_data_size + 2, 0);
     size_t offset = 0;
 
     uint8_t mode_byte = static_cast<uint8_t>(mode);
-    memcpy(buffer + offset, &mode_byte, sizeof(mode_byte));
+    memcpy(buffer.data() + offset, &mode_byte, sizeof(mode_byte));
     offset += sizeof(mode_byte);
 
     uint8_t stop = 0;
-    memcpy(buffer + offset, &stop, sizeof(stop));
+    memcpy(buffer.data() + offset, &stop, sizeof(stop));
     offset += sizeof(stop);
 
-    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); i++) {
-        if (i == static_cast<int>(JointId::THUMB_DIP) ||
-            i == static_cast<int>(JointId::FF_DIP) ||
-            i == static_cast<int>(JointId::MF_DIP) ||
-            i == static_cast<int>(JointId::RF_DIP) ||
-            i == static_cast<int>(JointId::LF_DIP)) {
-            continue;
-        }
-
+    for (const auto& joint_id : config_.valid_joints) {
         float angle = 0.0f;
         uint8_t velocity = 0;
         uint8_t torque = 0;
 
-        auto it = joint_map.find(i);
+        auto it = joint_map.find(static_cast<int>(joint_id));
         if (it != joint_map.end()) {
             angle = it->second.angle;
             velocity = it->second.velocity;
@@ -708,24 +700,26 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
         }
 
         angle = angle * (static_cast<float>(M_PI) / 180.0f);
-        memcpy(buffer + offset, &angle, sizeof(angle));
+        memcpy(buffer.data() + offset, &angle, sizeof(angle));
         offset += sizeof(angle);
-        memcpy(buffer + offset, &velocity, sizeof(velocity));
+        memcpy(buffer.data() + offset, &velocity, sizeof(velocity));
         offset += sizeof(velocity);
-        memcpy(buffer + offset, &torque, sizeof(torque));
+        memcpy(buffer.data() + offset, &torque, sizeof(torque));
         offset += sizeof(torque);
     }
 
     LOG_INFO("Sending PDO data");
-    SendRxPDO(1, ECT_SDO_RXPDOASSIGN, sizeof(buffer), buffer);
+    SendRxPDO(1, ECT_SDO_RXPDOASSIGN, buffer.size(), buffer.data());
     return true;
 }
 
 void EtherCATComm::Stop() {
     LOG_INFO("Sending stop command");
-    uint8_t buffer[80] = {0};
-    buffer[1] = 1;
-    SendRxPDO(1, ECT_SDO_RXPDOASSIGN, sizeof(buffer), buffer);
+    std::vector<uint8_t> buffer(config_.protocol_joint_data_size + 2, 0);
+    if (buffer.size() > 1) {
+        buffer[1] = 1;
+    }
+    SendRxPDO(1, ECT_SDO_RXPDOASSIGN, buffer.size(), buffer.data());
 }
 
 bool EtherCATComm::ClearFault() {
@@ -837,10 +831,6 @@ std::vector<Force> ParseSampleForces(const uint8_t* data, int sensor_count) {
     return forces;
 }
 
-int GetTactileSensorCount(FingerType finger) {
-    return (finger == FingerType::THUMB) ? 52 : 31;
-}
-
 }  // anonymous namespace
 
 void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
@@ -869,8 +859,8 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
     parsed_temperature.error = static_cast<ErrorCode>(hand_error);
     parsed_temperature.temperature = temperature;
 
-    parsed_joints.resize(static_cast<int>(JointId::NUM_JOINTS));
-    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); i++) {
+    parsed_joints.reserve(config_.valid_joints.size());
+    for (const auto& joint_id : config_.valid_joints) {
         uint8_t joint_state, joint_error;
         float joint_angle;
         uint8_t joint_velocity, joint_torque;
@@ -890,13 +880,14 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
         memcpy(&joint_torque, data + offset, sizeof(joint_torque));
         offset += sizeof(joint_torque);
 
-        parsed_joints[i].id = static_cast<JointId>(i);
-        parsed_joints[i].state = static_cast<State>(joint_state);
-        parsed_joints[i].error = static_cast<ErrorCode>(joint_error);
-        joint_angle = joint_angle * (180.0f / static_cast<float>(M_PI));
-        parsed_joints[i].angle = joint_angle;
-        parsed_joints[i].velocity = joint_velocity;
-        parsed_joints[i].torque = joint_torque;
+        Joint joint;
+        joint.id = joint_id;
+        joint.state = static_cast<State>(joint_state);
+        joint.error = static_cast<ErrorCode>(joint_error);
+        joint.angle = joint_angle * (180.0f / static_cast<float>(M_PI));
+        joint.velocity = joint_velocity;
+        joint.torque = joint_torque;
+        parsed_joints.push_back(joint);
     }
 
     std::lock_guard<std::mutex> lock(callback_mutex_);
@@ -907,7 +898,7 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
         hand_state_callback_(parsed_temperature);
     }
 
-    if (offset < size) {
+    if (config_.has_tactile && offset < size) {
         TactileData tactile_data;
 
         if (offset + 2 <= size) {
@@ -916,7 +907,7 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
             offset += 2;
         }
 
-        auto ParseFingerTactile = [&offset, data, size, &tactile_data](
+        auto ParseFingerTactile = [&offset, data, size, &tactile_data, this](
             FingerTactileData& finger_data, FingerType finger, int bit_offset) {
             finger_data.state = (tactile_data.sensor_state & (1 << bit_offset)) != 0;
 
@@ -925,7 +916,8 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
                 offset += 6;
             }
 
-            int sensor_count = GetTactileSensorCount(finger);
+            auto it = config_.tactile_sensor_counts.find(finger);
+            int sensor_count = (it != config_.tactile_sensor_counts.end()) ? it->second : 0;
             int sample_size = sensor_count * 3;
 
             if (offset + sample_size <= size) {

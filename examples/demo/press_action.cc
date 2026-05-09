@@ -97,7 +97,7 @@ bool HandZero(DexHand& hand) {
 
 int main() {
     std::cout << "***** 枭尧灵巧手 SDK - 按压功能演示 *****\n" << std::endl;
-    DexHand hand(CommType::ETHERCAT);
+    DexHand hand(ProductType::GHAND, CommType::ETHERCAT);
     bool connected = hand.Connect("auto");
     if (!connected) {
         std::cout << "\n[扫描结束] 未能连接到灵巧手。" << std::endl;

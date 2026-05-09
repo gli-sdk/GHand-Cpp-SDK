@@ -122,6 +122,18 @@ enum class JointId : uint8_t {
  */
 std::string ToString(JointId id);
 
+// ===== 产品类型定义 =====
+enum class ProductType : uint8_t {
+    GHAND,
+    GHAND_LITE
+};
+
+/**
+ * @brief 获取产品类型的字符串表示（用于调试/日志）
+ * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ */
+std::string ToString(ProductType type);
+
 // ===== 通信类型定义 =====
 enum class CommType : uint8_t {
     ETHERCAT,

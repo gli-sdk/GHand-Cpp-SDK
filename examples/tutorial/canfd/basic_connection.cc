@@ -4,7 +4,7 @@
 using namespace xiaoyao;
 
 int main() {
-    DexHand hand(CommType::CANFD);
+    DexHand hand(ProductType::GHAND, CommType::CANFD);
 
     // 尝试通过CANFD自动连接灵巧手
     std::cout << "Connecting to dexterous hand via CANFD..." << std::endl;

@@ -30,7 +30,7 @@ int main() {
     // 启用 ANSI 转义序列
     EnableAnsiColors();
 
-    xiaoyao::DexHand hand(xiaoyao::CommType::ETHERCAT);
+    xiaoyao::DexHand hand(xiaoyao::ProductType::GHAND, xiaoyao::CommType::ETHERCAT);
 
     // ANSI 转义序列用于固定位置显示
     // \033[H: 移动到屏幕左上角

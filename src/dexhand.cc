@@ -6,12 +6,14 @@ namespace xiaoyao {
 // Pimpl 实现
 class DexHand::Impl {
 public:
-    explicit Impl(CommType comm_type) : hand_(comm_type) {}
+    explicit Impl(ProductType product_type, CommType comm_type)
+        : hand_(product_type, comm_type) {}
     internal::DexHand hand_;
 };
 
 // 构造/析构
-DexHand::DexHand(CommType comm_type) : impl_(new Impl(comm_type)) {}
+DexHand::DexHand(ProductType product_type, CommType comm_type)
+    : impl_(new Impl(product_type, comm_type)) {}
 DexHand::~DexHand() {}
 
 // 转发所有调用

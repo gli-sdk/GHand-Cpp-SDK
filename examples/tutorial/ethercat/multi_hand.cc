@@ -13,7 +13,7 @@ int main() {
     std::cout << "========================================\n";
 
     // Search for network adapters
-    DexHand temp_hand(CommType::ETHERCAT);
+    DexHand temp_hand(ProductType::GHAND, CommType::ETHERCAT);
     std::map<std::string, std::string> adapters = temp_hand.SearchAdapters();
 
     if (adapters.empty()) {
@@ -34,7 +34,7 @@ int main() {
     std::cout << "\nAttempting to connect devices...\n";
     for (const auto& adapter : adapters) {
         const std::string& name = adapter.first;
-        auto hand = std::make_unique<DexHand>(CommType::ETHERCAT);
+        auto hand = std::make_unique<DexHand>(ProductType::GHAND, CommType::ETHERCAT);
         if (hand->Connect(name)) {
             hands.push_back(std::move(hand));
             std::cout << "  ✓ Connected device: " << name << '\n';

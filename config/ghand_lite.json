@@ -1,0 +1,27 @@
+{
+  "name": "ghand_lite",
+  "valid_joints": [
+    "THUMB_PIP", "THUMB_MCP", "THUMB_SWING",
+    "FF_PIP", "FF_MCP", "FF_SWING",
+    "MF_PIP", "MF_MCP",
+    "RF_PIP", "RF_MCP",
+    "LF_PIP", "LF_MCP"
+  ],
+  "joint_limits": {
+    "THUMB_PIP": [0.0, 66.0],
+    "THUMB_MCP": [0.0, 50.0],
+    "THUMB_SWING": [20.0, 90.0],
+    "FF_PIP": [0.0, 80.0],
+    "FF_MCP": [0.0, 90.0],
+    "FF_SWING": [-10.0, 10.0],
+    "MF_PIP": [0.0, 90.0],
+    "MF_MCP": [0.0, 90.0],
+    "RF_PIP": [0.0, 90.0],
+    "RF_MCP": [0.0, 90.0],
+    "LF_PIP": [0.0, 74.0],
+    "LF_MCP": [0.0, 90.0]
+  },
+  "has_tactile": false,
+  "tactile_sensor_counts": {},
+  "protocol_joint_data_size": 72
+}

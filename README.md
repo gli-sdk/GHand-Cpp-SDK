@@ -47,7 +47,7 @@ xiaoyao-sdk-cpp/
 ### 2. 创建实例并连接
 
 ```cpp
-xiaoyao::DexHand hand;
+xiaoyao::DexHand hand(xiaoyao::ProductType::GHAND, xiaoyao::CommType::ETHERCAT);
 
 if (!hand.Connect(xiaoyao::CommType::ETHERCAT, "auto")) {
     printf("连接失败\n");

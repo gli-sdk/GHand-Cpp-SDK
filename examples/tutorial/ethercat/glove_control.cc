@@ -299,7 +299,7 @@ int main() {
     std::cout << "\n✓ Listening for data on " << UDP_IP << ":" << UDP_PORT << "..." << std::endl;
 
     // Connect dexterous hand
-    DexHand hand(CommType::ETHERCAT);
+    DexHand hand(ProductType::GHAND, CommType::ETHERCAT);
     std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
     bool success = hand.AutoConnect();
 

@@ -135,7 +135,7 @@ int main() {
     std::cout << "  Xiaoyao Dexterous Hand SDK - Interactive Joint Control    " << std::endl;
     std::cout << "========================================" << std::endl;
 
-    DexHand hand(CommType::ETHERCAT);
+    DexHand hand(ProductType::GHAND, CommType::ETHERCAT);
 
     // Connect device
     std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
@@ -231,7 +231,7 @@ int main() {
                     int joint_id = pair.first;
                     const JointParams& params = pair.second;
 
-                    // Use angle directly (degrees), MoveJoints will convert to radians internally
+                    // Use angle directly (degrees)
                     joints.push_back({
                         static_cast<JointId>(joint_id),
                         params.angle,

@@ -4,6 +4,7 @@
 #include "icomm.h"
 #include "canfd_protocol.h"
 #include "canfd_driver.h"
+#include "product_config.h"
 #include <atomic>
 #include <condition_variable>
 #include <map>
@@ -22,7 +23,7 @@ namespace internal {
  */
 class CANFDComm : public IComm {
 public:
-    CANFDComm();
+    explicit CANFDComm(const ProductConfig& config);
     ~CANFDComm() override;
 
     // IComm 接口实现
@@ -73,19 +74,23 @@ private:
     bool SubscribeActiveReport(canfd::FunctionCode fc, uint8_t period_ms);
     bool UnsubscribeActiveReport(canfd::FunctionCode fc);
 
+protected:
     void ParseJointStates(const uint8_t* data, size_t len);
     void ParseTactileForce(const uint8_t* data, size_t len);
     void ParseHandError(const uint8_t* data, size_t len);
 
-    static float RawToAngle(uint16_t raw, JointId id);
-    static uint16_t AngleToRaw(float angle_deg, JointId id);
+    float RawToAngle(uint16_t raw, JointId id);
+    uint16_t AngleToRaw(float angle_deg, JointId id);
 
+private:
     std::unique_ptr<CANFDDriver> driver_;
     uint8_t device_id_ = 0x00;
     std::atomic<bool> connected_{false};
 
     std::thread rx_thread_;
     std::atomic<bool> rx_running_{false};
+
+    const ProductConfig& config_;
 
     // 请求-响应匹配（单槽等待）
     std::mutex response_mutex_;

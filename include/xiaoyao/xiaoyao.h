@@ -22,7 +22,7 @@ using TactileDataCallback = std::function<void(const TactileData&)>;
  */
 class DexHand {
 public:
-    explicit DexHand(CommType comm_type = CommType::ETHERCAT);
+    DexHand(ProductType product_type, CommType comm_type = CommType::ETHERCAT);
     ~DexHand();
 
     // 禁止拷贝

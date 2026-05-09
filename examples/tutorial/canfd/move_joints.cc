@@ -32,7 +32,7 @@ void DisplayJoints(const std::vector<Joint>& joints) {
 int main() {
     xiaoyao::ConfigureConsole(xiaoyao::LogLevel::INFO);
 
-    DexHand hand(CommType::CANFD);
+    DexHand hand(ProductType::GHAND, CommType::CANFD);
 
     // 1. 搜索可用的 CANFD 适配器
     std::cout << "Searching for CANFD adapters..." << std::endl;

@@ -31,7 +31,7 @@ void DisplayJoints(const std::vector<xiaoyao::Joint>& joints) {
 }
 
 int main() {
-    xiaoyao::DexHand hand(xiaoyao::CommType::ETHERCAT);
+    xiaoyao::DexHand hand(xiaoyao::ProductType::GHAND, xiaoyao::CommType::ETHERCAT);
 
     // 尝试通过ETHERCAT连接灵巧手
     std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;

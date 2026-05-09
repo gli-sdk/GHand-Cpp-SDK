@@ -3,6 +3,15 @@
 
 namespace xiaoyao {
 
+// ===== ProductType =====
+std::string ToString(ProductType type) {
+    switch (type) {
+        case ProductType::GHAND:      return "GHAND";
+        case ProductType::GHAND_LITE: return "GHAND_LITE";
+        default:                      return "UNKNOWN";
+    }
+}
+
 // ===== HandType =====
 std::string ToString(HandType type) {
     switch (type) {

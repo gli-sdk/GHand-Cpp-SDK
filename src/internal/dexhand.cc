@@ -4,6 +4,7 @@
 #include "ethercat_comm.h"
 #include "dexhand_callback_manager.h"
 #include "logger.h"
+#include "product_config_loader.h"
 
 #include <cmath>
 #include <cstring>
@@ -17,79 +18,24 @@
 namespace xiaoyao {
 namespace internal {
 
-// ===== 触觉数据解析辅助函数（内部使用） =====
-namespace {
-
-/**
- * @brief 解析合力数据
- * @param data PDO 数据缓冲区（至少 6 字节）
- * @return 合力向量
- */
-Force ParseResultantForce(const uint8_t* data) {
-    Force resultant;
-    resultant.x = 0.0f;
-    resultant.y = 0.0f;
-    resultant.z = 0.0f;
-
-    if (data != nullptr) {
-        int16_t raw_x = static_cast<int16_t>(data[0] | (data[1] << 8));
-        resultant.x = static_cast<float>(static_cast<int8_t>(raw_x & 0xFF)) * 0.1f;
-
-        int16_t raw_y = static_cast<int16_t>(data[2] | (data[3] << 8));
-        resultant.y = static_cast<float>(static_cast<int8_t>(raw_y & 0xFF)) * 0.1f;
-
-        uint16_t raw_z = static_cast<uint16_t>(data[4] | (data[5] << 8));
-        resultant.z = static_cast<float>(static_cast<uint8_t>(raw_z & 0xFF)) * 0.1f;
-    }
-
-    return resultant;
-}
-
-/**
- * @brief 解析分布力数据
- * @param data PDO 数据缓冲区
- * @param sensor_count 传感器数量（大拇指 52，其他 31）
- * @return 分布力向量数组
- */
-std::vector<Force> ParseSampleForces(const uint8_t* data, int sensor_count) {
-    std::vector<Force> forces;
-    forces.reserve(sensor_count);
-
-    if (data != nullptr && sensor_count > 0) {
-        for (int i = 0; i < sensor_count; i++) {
-            Force sample_force;
-            sample_force.x = static_cast<float>(static_cast<int8_t>(data[i * 3])) * 0.1f;
-            sample_force.y = static_cast<float>(static_cast<int8_t>(data[i * 3 + 1])) * 0.1f;
-            sample_force.z = static_cast<float>(static_cast<uint8_t>(data[i * 3 + 2])) * 0.1f;
-            forces.push_back(sample_force);
-        }
-    }
-
-    return forces;
-}
-
-/**
- * @brief 获取手指的分布力传感器数量
- * @param finger 手指类型
- * @return 传感器数量（大拇指 52，其他 31）
- */
-int GetTactileSensorCount(FingerType finger) {
-    return (finger == FingerType::THUMB) ? 52 : 31;
-}
-
-}  // anonymous namespace
-
-DexHand::DexHand(CommType comm_type)
+DexHand::DexHand(ProductType product_type, CommType comm_type)
     : hand_type_(HandType::NONE),
       control_mode_(ControlMode::POSITION),
       comm_type_(comm_type),
+      product_type_(product_type),
       device_name_("") {
+    config_ = LoadProductConfig(product_type);
+    if (config_.name.empty()) {
+        LOG_ERROR("Failed to load product config for product type: " << ToString(product_type));
+        return;
+    }
+
     switch (comm_type) {
         case CommType::ETHERCAT:
-            comm_ = std::unique_ptr<EtherCATComm>(new EtherCATComm());
+            comm_ = std::unique_ptr<EtherCATComm>(new EtherCATComm(config_));
             break;
         case CommType::CANFD:
-            comm_ = std::unique_ptr<CANFDComm>(new CANFDComm());
+            comm_ = std::unique_ptr<CANFDComm>(new CANFDComm(config_));
             break;
         case CommType::RS485:
         default:
@@ -221,7 +167,7 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
 
     LOG_DEBUG("Moving " << joints.size() << " joints");
 
-    // 构建完整关节命令表（全部 18 个关节），未传入的补 0
+    // 构建完整关节命令表，未传入的补 0
     std::vector<JointCommand> full_joints;
     full_joints.reserve(static_cast<int>(JointId::NUM_JOINTS));
     for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); ++i) {
@@ -329,31 +275,10 @@ int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
     }
 }
 
-// 关节限制静态表 (仅包含可控关节, 单位: 度)
-const std::map<JointId, std::pair<float, float>> DexHand::kJointLimits_ = {
-    // 大拇指
-    {JointId::THUMB_PIP, {0.0f, 66.0f}},
-    {JointId::THUMB_MCP, {0.0f, 50.0f}},
-    {JointId::THUMB_SWING, {20.0f, 90.0f}},
-    {JointId::THUMB_ROTATION, {-10.0f, 60.0f}},
-    // 食指
-    {JointId::FF_PIP, {0.0f, 80.0f}},
-    {JointId::FF_MCP, {0.0f, 90.0f}},
-    {JointId::FF_SWING, {-10.0f, 10.0f}},
-    // 中指
-    {JointId::MF_PIP, {0.0f, 90.0f}},
-    {JointId::MF_MCP, {0.0f, 90.0f}},
-    // 无名指
-    {JointId::RF_PIP, {0.0f, 90.0f}},
-    {JointId::RF_MCP, {0.0f, 90.0f}},
-    // 小指
-    {JointId::LF_PIP, {0.0f, 74.0f}},
-    {JointId::LF_MCP, {0.0f, 90.0f}}
-};
 
 void DexHand::ClampJointAngle(JointCommand& joint) {
-    auto it = kJointLimits_.find(joint.id);
-    if (it == kJointLimits_.end()) return;  // 未找到限制(如DIP关节)
+    auto it = config_.joint_limits.find(joint.id);
+    if (it == config_.joint_limits.end()) return;  // 未找到限制(如DIP关节)
 
     const float min_angle = it->second.first;
     const float max_angle = it->second.second;

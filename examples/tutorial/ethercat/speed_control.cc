@@ -18,7 +18,7 @@ int main() {
     std::cout << "  Xiaoyao Dexterous Hand SDK - Speed Control Demo        " << std::endl;
     std::cout << "========================================" << std::endl;
 
-    DexHand hand(CommType::ETHERCAT);
+    DexHand hand(ProductType::GHAND, CommType::ETHERCAT);
 
     // Connect device
     std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;

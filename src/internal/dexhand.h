@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "product_config.h"
 #include "xiaoyao/types.h"
 
 namespace xiaoyao {
@@ -24,7 +25,7 @@ class DexHandCallbackManager;
  */
 class DexHand {
 public:
-    explicit DexHand(CommType comm_type);
+    explicit DexHand(ProductType product_type, CommType comm_type);
     ~DexHand();
 
     // 连接管理
@@ -60,12 +61,14 @@ public:
                    const std::string& filename,
                    std::function<void(int)> progressCallback);
 
- private:
-    bool ConnectToDevice(const std::string& device_name);
-    void SetupCallbacks();
+ protected:
     void ClampJointAngle(JointCommand& joint);
     void ClampJointVelocity(JointCommand& joint);
     void ClampJointTorque(JointCommand& joint);
+
+ private:
+    bool ConnectToDevice(const std::string& device_name);
+    void SetupCallbacks();
 
     std::unique_ptr<IComm> comm_;
     std::unique_ptr<DexHandCallbackManager> callback_manager_;
@@ -74,10 +77,9 @@ public:
     mutable DeviceInfo device_info_;
     ControlMode control_mode_;
     CommType comm_type_;
+    ProductType product_type_;
+    ProductConfig config_;
     std::string device_name_;
-
-    // 关节限制静态表 (仅包含可控关节)
-    static const std::map<JointId, std::pair<float, float>> kJointLimits_;
 };
 
 }  // namespace internal

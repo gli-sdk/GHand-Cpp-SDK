@@ -16,25 +16,8 @@
 namespace xiaoyao {
 namespace internal {
 
-// 关节限制静态表 (仅包含可控关节, 单位: 度)
-// 与 DexHand::kJointLimits_ 保持一致
-static const std::map<JointId, std::pair<float, float>> kJointLimits = {
-    {JointId::THUMB_PIP, {0.0f, 66.0f}},
-    {JointId::THUMB_MCP, {0.0f, 50.0f}},
-    {JointId::THUMB_SWING, {20.0f, 90.0f}},
-    {JointId::THUMB_ROTATION, {-10.0f, 60.0f}},
-    {JointId::FF_PIP, {0.0f, 80.0f}},
-    {JointId::FF_MCP, {0.0f, 90.0f}},
-    {JointId::FF_SWING, {-10.0f, 10.0f}},
-    {JointId::MF_PIP, {0.0f, 90.0f}},
-    {JointId::MF_MCP, {0.0f, 90.0f}},
-    {JointId::RF_PIP, {0.0f, 90.0f}},
-    {JointId::RF_MCP, {0.0f, 90.0f}},
-    {JointId::LF_PIP, {0.0f, 74.0f}},
-    {JointId::LF_MCP, {0.0f, 90.0f}}
-};
-
-CANFDComm::CANFDComm() : driver_(CreateZLGDriver()) {}
+CANFDComm::CANFDComm(const ProductConfig& config)
+    : driver_(CreateZLGDriver()), config_(config) {}
 
 CANFDComm::~CANFDComm() {
     Disconnect();
@@ -72,7 +55,9 @@ int CANFDComm::Connect(const std::string& device_name) {
 
     // 订阅主动上报
     SubscribeActiveReport(canfd::REPORT_JOINTS, 10);   // 10ms = 100Hz
-    SubscribeActiveReport(canfd::REPORT_TACTILE, 50);  // 50ms = 20Hz
+    if (config_.has_tactile) {
+        SubscribeActiveReport(canfd::REPORT_TACTILE, 50);  // 50ms = 20Hz
+    }
 
     return 0;
 }
@@ -82,7 +67,9 @@ int CANFDComm::Disconnect() {
 
     if (IsConnected()) {
         UnsubscribeActiveReport(canfd::REPORT_JOINTS);
-        UnsubscribeActiveReport(canfd::REPORT_TACTILE);
+        if (config_.has_tactile) {
+            UnsubscribeActiveReport(canfd::REPORT_TACTILE);
+        }
     }
 
     connected_.store(false);
@@ -541,14 +528,13 @@ bool CANFDComm::UnsubscribeActiveReport(canfd::FunctionCode fc) {
 // ===== 数据解析 =====
 
 void CANFDComm::ParseJointStates(const uint8_t* data, size_t len) {
-    constexpr size_t kJointDataSize = 108;  // 18 joints * 6 bytes
-    if (len < kJointDataSize) return;
+    if (len < config_.protocol_joint_data_size) return;
 
-    std::vector<Joint> joints(static_cast<int>(JointId::NUM_JOINTS));
-    // HandState hand_state;
+    std::vector<Joint> joints;
+    joints.reserve(config_.valid_joints.size());
 
     size_t offset = 0;
-    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); i++) {
+    for (const auto& joint_id : config_.valid_joints) {
         uint8_t joint_state = data[offset++];
         uint8_t joint_error = data[offset++];
         uint16_t raw_angle = data[offset] | (data[offset + 1] << 8);
@@ -556,12 +542,14 @@ void CANFDComm::ParseJointStates(const uint8_t* data, size_t len) {
         uint8_t joint_velocity = data[offset++];
         uint8_t joint_torque = data[offset++];
 
-        joints[i].id = static_cast<JointId>(i);
-        joints[i].state = static_cast<State>(joint_state);
-        joints[i].error = static_cast<ErrorCode>(joint_error);
-        joints[i].angle = RawToAngle(raw_angle, static_cast<JointId>(i));
-        joints[i].velocity = static_cast<int8_t>(joint_velocity);
-        joints[i].torque = static_cast<int8_t>(joint_torque);
+        Joint joint;
+        joint.id = joint_id;
+        joint.state = static_cast<State>(joint_state);
+        joint.error = static_cast<ErrorCode>(joint_error);
+        joint.angle = RawToAngle(raw_angle, joint_id);
+        joint.velocity = static_cast<int8_t>(joint_velocity);
+        joint.torque = static_cast<int8_t>(joint_torque);
+        joints.push_back(joint);
     }
 
     std::lock_guard<std::mutex> lock(cb_mutex_);
@@ -570,6 +558,8 @@ void CANFDComm::ParseJointStates(const uint8_t* data, size_t len) {
 }
 
 void CANFDComm::ParseTactileForce(const uint8_t* data, size_t len) {
+    if (!config_.has_tactile) return;
+
     // 30 bytes: 5 fingers * (x:2B + y:2B + z:2B)
     constexpr size_t kTactileForceSize = 30;
     if (len < kTactileForceSize) return;
@@ -619,8 +609,8 @@ void CANFDComm::ParseHandError(const uint8_t* data, size_t len) {
 // ===== 角度转换 =====
 
 float CANFDComm::RawToAngle(uint16_t raw, JointId id) {
-    auto it = kJointLimits.find(id);
-    if (it == kJointLimits.end()) return 0.0f;
+    auto it = config_.joint_limits.find(id);
+    if (it == config_.joint_limits.end()) return 0.0f;
 
     float min_angle = it->second.first;
     float max_angle = it->second.second;
@@ -629,8 +619,8 @@ float CANFDComm::RawToAngle(uint16_t raw, JointId id) {
 }
 
 uint16_t CANFDComm::AngleToRaw(float angle_rad, JointId id) {
-    auto it = kJointLimits.find(id);
-    if (it == kJointLimits.end()) return 0;
+    auto it = config_.joint_limits.find(id);
+    if (it == config_.joint_limits.end()) return 0;
 
     float min_angle = it->second.first;
     float max_angle = it->second.second;

@@ -4,7 +4,7 @@
 using namespace xiaoyao;
 
 int main() {
-    DexHand hand(CommType::ETHERCAT);
+    DexHand hand(ProductType::GHAND, CommType::ETHERCAT);
 
     // 尝试通过ETHERCAT自动连接灵巧手
     std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
