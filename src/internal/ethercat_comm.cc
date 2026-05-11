@@ -478,7 +478,8 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
     // 通过全局原子指针让 FoeProgressHook 能访问当前实例
     g_current_foe_instance.store(this);
     ecx_FOEdefinehook(&ctx_, reinterpret_cast<void*>(EtherCATComm::FoeProgressHook));
-
+    ctx_.slavelist[slave].state = EC_STATE_BOOT;
+    ecx_writestate(&ctx_, slave);
     if (ecx_statecheck(&ctx_, slave, EC_STATE_BOOT, EC_TIMEOUTSTATE * 10) == EC_STATE_BOOT) {
         if (InputBin(file_path.c_str(), &filesize)) {
             char file_name[] = "ECATFW__firmware";
