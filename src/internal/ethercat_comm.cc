@@ -343,10 +343,10 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
     }
 
     while (threads_started_) {
-         add_time_ns(&ts, cycletime + toff);
-         osal_monotonic_sleep(&ts);
+        //  add_time_ns(&ts, cycletime + toff);
+        //  osal_monotonic_sleep(&ts);
 
-        //std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
         if (dorun > 0) {
             cycle++;
