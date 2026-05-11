@@ -7,6 +7,13 @@
 #include <fstream>
 #include <sstream>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#include <limits.h>
+#endif
+
 namespace xiaoyao {
 namespace internal {
 
@@ -54,6 +61,49 @@ std::string StripComments(const std::string& content) {
     return result;
 }
 
+std::string GetSdkRootFromModule() {
+#ifdef _WIN32
+    HMODULE hMod = nullptr;
+    if (!GetModuleHandleExA(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+            (LPCSTR)&GetSdkRootFromModule,
+            &hMod)) {
+        return "";
+    }
+    char path[MAX_PATH];
+    if (GetModuleFileNameA(hMod, path, MAX_PATH) == 0) {
+        return "";
+    }
+    std::string dll_path(path);
+    size_t last_slash = dll_path.find_last_of("\\/");
+    if (last_slash != std::string::npos) {
+        std::string lib_dir = dll_path.substr(0, last_slash);
+        size_t parent_slash = lib_dir.find_last_of("\\/");
+        if (parent_slash != std::string::npos) {
+            return lib_dir.substr(0, parent_slash + 1);
+        }
+    }
+#else
+    Dl_info info;
+    if (dladdr((void*)&GetSdkRootFromModule, &info) == 0 || !info.dli_fname) {
+        return "";
+    }
+    char resolved[PATH_MAX];
+    if (realpath(info.dli_fname, resolved)) {
+        std::string so_path(resolved);
+        size_t last_slash = so_path.find_last_of('/');
+        if (last_slash != std::string::npos) {
+            std::string lib_dir = so_path.substr(0, last_slash);
+            size_t parent_slash = lib_dir.find_last_of('/');
+            if (parent_slash != std::string::npos) {
+                return lib_dir.substr(0, parent_slash + 1);
+            }
+        }
+    }
+#endif
+    return "";
+}
+
 std::vector<std::string> GetConfigSearchPaths() {
     std::vector<std::string> paths;
 
@@ -68,6 +118,11 @@ std::vector<std::string> GetConfigSearchPaths() {
 #endif
         }
         paths.emplace_back(path);
+    }
+
+    std::string sdk_root = GetSdkRootFromModule();
+    if (!sdk_root.empty()) {
+        paths.emplace_back(sdk_root + "config\\");
     }
 
     paths.emplace_back("./config/");

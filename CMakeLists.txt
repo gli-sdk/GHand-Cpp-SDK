@@ -132,6 +132,12 @@ install(DIRECTORY include/xiaoyao
     FILES_MATCHING PATTERN "*.h"
 )
 
+# 安装产品配置文件
+install(DIRECTORY config/
+    DESTINATION share/xiaoyao-sdk/config
+    FILES_MATCHING PATTERN "*.json"
+)
+
 # 安装文档
 install(FILES README.md CHANGELOG.md
     DESTINATION .
