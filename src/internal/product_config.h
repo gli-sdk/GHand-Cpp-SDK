@@ -22,7 +22,6 @@ struct ProductConfig {
     std::map<JointId, std::pair<float, float>> joint_limits;
     bool has_tactile = false;
     std::map<FingerType, int> tactile_sensor_counts;
-    size_t protocol_joint_data_size = 0;
 };
 
 }  // namespace internal

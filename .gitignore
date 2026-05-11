@@ -11,13 +11,10 @@
 *.obj
 *.pdb
 
-# SOEM build artifacts
-third_party/soem/build/
-third_party/soem/.git
 
 
 # 文档
-openspec/changes/
+openspec/
 IMPLEMENTATION_COMPLETE.md
 CRITICAL_FIX.md
 LOCK_MUTEX_TEST.md
@@ -28,3 +25,7 @@ CHANGELOG.md
 openspec/specs/software-licensing/spec.md
 docs/LOGGING.md
 docs/LINUX.md
+xiaoyao-sdk-cpp/
+docs/CPP_SDK_USER_GUIDE.md
+CLAUDE.md
+tests/

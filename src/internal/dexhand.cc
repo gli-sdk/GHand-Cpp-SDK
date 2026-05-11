@@ -195,25 +195,34 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
 
     LOG_DEBUG("Moving " << joints.size() << " joints");
 
-    // 构建完整关节命令表，未传入的补 0
-    std::vector<JointCommand> full_joints;
-    full_joints.reserve(static_cast<int>(JointId::NUM_JOINTS));
-    for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); ++i) {
-        full_joints.push_back({static_cast<JointId>(i), 0.0f, 0, 0});
+    // 按 valid_joints 顺序排列，仅包含可控关节（有 joint_limits 的）
+    std::map<JointId, JointCommand> joint_map;
+    for (const auto& joint : joints) {
+        JointCommand limited_joint = joint;
+        ClampJointAngle(limited_joint);
+        ClampJointVelocity(limited_joint);
+        ClampJointTorque(limited_joint);
+        joint_map[joint.id] = limited_joint;
     }
 
-    for (const auto& joint : joints) {
-        int idx = static_cast<int>(joint.id);
-        if (idx >= 0 && idx < static_cast<int>(JointId::NUM_JOINTS)) {
-            JointCommand limited_joint = joint;
-            ClampJointAngle(limited_joint);
-            ClampJointVelocity(limited_joint);
-            ClampJointTorque(limited_joint);
-            full_joints[idx] = limited_joint;
+    std::vector<JointCommand> ordered_joints;
+    ordered_joints.reserve(config_.joint_limits.size());
+    for (const auto& joint_id : config_.valid_joints) {
+        if (config_.joint_limits.find(joint_id) == config_.joint_limits.end()) continue;  // 跳过只读关节
+        auto it = joint_map.find(joint_id);
+        if (it != joint_map.end()) {
+            ordered_joints.push_back(it->second);
+        } else {
+            float default_angle = 0.0f;
+            auto limit = config_.joint_limits.find(joint_id);
+            if (limit != config_.joint_limits.end() && limit->second.first > 0.0f) {
+                default_angle = limit->second.first;
+            }
+            ordered_joints.push_back({joint_id, default_angle, 0, 0});
         }
     }
 
-    return comm_->MoveJoints(full_joints, control_mode_);
+    return comm_->MoveJoints(ordered_joints, control_mode_);
 }
 
 void DexHand::Stop() {

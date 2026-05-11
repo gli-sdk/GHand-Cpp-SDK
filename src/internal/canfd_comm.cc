@@ -16,6 +16,9 @@
 namespace xiaoyao {
 namespace internal {
 
+// 每关节数据尺寸:uint16 angle(2B) + uint8 velocity(1B) + uint8 torque(1B)
+constexpr size_t kCanfdJointDataSize = 4;
+
 CANFDComm::CANFDComm(const ProductConfig& config)
     : driver_(CreateZLGDriver()), config_(config) {}
 
@@ -528,7 +531,7 @@ bool CANFDComm::UnsubscribeActiveReport(canfd::FunctionCode fc) {
 // ===== 数据解析 =====
 
 void CANFDComm::ParseJointStates(const uint8_t* data, size_t len) {
-    if (len < config_.protocol_joint_data_size) return;
+    if (len < config_.valid_joints.size() * kCanfdJointDataSize) return;
 
     std::vector<Joint> joints;
     joints.reserve(config_.valid_joints.size());

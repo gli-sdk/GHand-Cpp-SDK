@@ -36,6 +36,9 @@
 namespace xiaoyao {
 namespace internal {
 
+// 每关节数据尺寸: float(4B) + uint8 velocity(1B) + uint8 torque(1B)
+constexpr size_t kEthercatJointDataSize = 6;
+
 OSAL_THREAD_HANDLE EtherCATComm::threadrt;
 OSAL_THREAD_HANDLE EtherCATComm::thread1;
 int EtherCATComm::expectedWKC;
@@ -669,43 +672,18 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
         return false;
     }
 
-    std::unordered_map<int, JointCommand> joint_map;
-    for (const auto& joint : joints) {
-        if (static_cast<int>(joint.id) < static_cast<int>(JointId::NUM_JOINTS)) {
-            joint_map[static_cast<int>(joint.id)] = joint;
-        }
-    }
-
-    std::vector<uint8_t> buffer(config_.protocol_joint_data_size + 2, 0);
+    std::vector<uint8_t> buffer(joints.size() * kEthercatJointDataSize + 2, 0);
     size_t offset = 0;
 
-    uint8_t mode_byte = static_cast<uint8_t>(mode);
-    memcpy(buffer.data() + offset, &mode_byte, sizeof(mode_byte));
-    offset += sizeof(mode_byte);
+    buffer[offset++] = static_cast<uint8_t>(mode);
+    buffer[offset++] = 0;  // stop
 
-    uint8_t stop = 0;
-    memcpy(buffer.data() + offset, &stop, sizeof(stop));
-    offset += sizeof(stop);
-
-    for (const auto& joint_id : config_.valid_joints) {
-        float angle = 0.0f;
-        uint8_t velocity = 0;
-        uint8_t torque = 0;
-
-        auto it = joint_map.find(static_cast<int>(joint_id));
-        if (it != joint_map.end()) {
-            angle = it->second.angle;
-            velocity = it->second.velocity;
-            torque = it->second.torque;
-        }
-
-        angle = angle * (static_cast<float>(M_PI) / 180.0f);
+    for (const auto& joint : joints) {
+        float angle = joint.angle * (static_cast<float>(M_PI) / 180.0f);
         memcpy(buffer.data() + offset, &angle, sizeof(angle));
         offset += sizeof(angle);
-        memcpy(buffer.data() + offset, &velocity, sizeof(velocity));
-        offset += sizeof(velocity);
-        memcpy(buffer.data() + offset, &torque, sizeof(torque));
-        offset += sizeof(torque);
+        buffer[offset++] = joint.velocity;
+        buffer[offset++] = joint.torque;
     }
 
     LOG_INFO("Sending PDO data");
@@ -715,7 +693,7 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
 
 void EtherCATComm::Stop() {
     LOG_INFO("Sending stop command");
-    std::vector<uint8_t> buffer(config_.protocol_joint_data_size + 2, 0);
+    std::vector<uint8_t> buffer(config_.valid_joints.size() * kEthercatJointDataSize + 2, 0);
     if (buffer.size() > 1) {
         buffer[1] = 1;
     }

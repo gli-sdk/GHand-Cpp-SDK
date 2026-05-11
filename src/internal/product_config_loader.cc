@@ -245,9 +245,7 @@ ProductConfig LoadProductConfig(ProductType product) {
             }
         }
 
-        config.protocol_joint_data_size = j.value("protocol_joint_data_size", 0);
-
-        if (config.name.empty() || config.valid_joints.empty() || config.protocol_joint_data_size == 0) {
+        if (config.name.empty() || config.valid_joints.empty()) {
             LOG_ERROR("Product config missing required fields in " << found_path);
             return ProductConfig();
         }
