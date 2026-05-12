@@ -2,7 +2,7 @@
 #define SRC_INTERNAL_PRODUCT_CONFIG_LOADER_H_
 
 #include "product_config.h"
-#include "xiaoyao/types.h"
+#include "ghand/types.h"
 
 namespace xiaoyao {
 namespace internal {

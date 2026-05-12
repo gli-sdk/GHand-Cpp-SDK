@@ -1,17 +1,17 @@
 #include <iostream>
 
-#include "xiaoyao/xiaoyao.h"
+#include "ghand/dexhand.h"
 using namespace xiaoyao;
 
 int main() {
-    auto hand = DexHand::Create(ProductType::GHAND, CommType::CANFD);
+    auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
     if (!hand) {
         std::cerr << "Failed to create DexHand" << std::endl;
         return -1;
     }
 
-    // 尝试通过CANFD自动连接灵巧手
-    std::cout << "Connecting to dexterous hand via CANFD..." << std::endl;
+    // 尝试通过ETHERCAT自动连接灵巧手
+    std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
     bool success = hand->AutoConnect();
 
     if (success) {

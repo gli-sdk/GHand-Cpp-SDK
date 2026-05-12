@@ -87,9 +87,8 @@ int CANFDComm::Disconnect() {
 
     {
         std::lock_guard<std::mutex> lock(response_mutex_);
-        waiting_fc_ = 0;
-        response_ready_ = true;
-        response_cv_.notify_one();
+        response_slots_.clear();
+        response_cv_.notify_all();
     }
 
     LOG_INFO("CANFD disconnected");
@@ -320,18 +319,17 @@ bool CANFDComm::SendRecvCmd(canfd::FunctionCode fc,
                             int timeout_ms) {
     if (!driver_ || !IsConnected()) return false;
 
-    // 1. 登记等待状态
+    // 1. 登记等待槽位
+    uint8_t fc_byte = static_cast<uint8_t>(fc);
     {
         std::lock_guard<std::mutex> lock(response_mutex_);
-        waiting_fc_ = fc;
-        response_ready_ = false;
-        response_payload_.clear();
+        response_slots_[fc_byte] = ResponseSlot{};
     }
 
     // 2. 构造完整数据（1 字节 FC + 全部参数，支持多帧）
     std::vector<uint8_t> full_data;
     full_data.reserve(1 + param_len);
-    full_data.push_back(static_cast<uint8_t>(fc));
+    full_data.push_back(fc_byte);
     if (param && param_len > 0) {
         size_t offset = full_data.size();
         full_data.resize(offset + param_len);
@@ -347,30 +345,29 @@ bool CANFDComm::SendRecvCmd(canfd::FunctionCode fc,
     }
     if (!sent) {
         std::lock_guard<std::mutex> lock(response_mutex_);
-        waiting_fc_ = 0;
+        response_slots_.erase(fc_byte);
         return false;
     }
 
-    // 3. 阻塞等待响应（支持多帧组包）
+    // 3. 阻塞等待本功能码的响应（支持多帧组包）
     {
         std::unique_lock<std::mutex> lock(response_mutex_);
-        response_cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms),
-            [&] { return response_ready_; });
-        if (!response_ready_) {
-            waiting_fc_ = 0;
-            return false;  // 超时或 Disconnect 强制唤醒
-        }
+        bool got_response = response_cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+            [&] {
+                auto it = response_slots_.find(fc_byte);
+                return it == response_slots_.end() || it->second.ready;
+            });
 
-        // 异常保护：Disconnect 强制唤醒时 payload 可能为空
-        if (response_payload_.empty()) {
-            waiting_fc_ = 0;
-            return false;
+        auto it = response_slots_.find(fc_byte);
+        if (!got_response || it == response_slots_.end() || !it->second.ready) {
+            response_slots_.erase(fc_byte);
+            return false;  // 超时或 Disconnect 清空
         }
 
         // 去掉首字节功能码，返回纯 payload
-        *response = std::vector<uint8_t>(response_payload_.begin() + 1,
-                                         response_payload_.end());
-        waiting_fc_ = 0;
+        *response = std::vector<uint8_t>(it->second.payload.begin() + 1,
+                                         it->second.payload.end());
+        response_slots_.erase(it);
         return true;
     }
 }
@@ -485,12 +482,16 @@ void CANFDComm::ReceiveThread() {
         if (!complete) continue;
 
         if (arb.frame_type() == canfd::RESPONSE) {
-            // 响应组包完成，按功能码唤醒等待方
+            // 响应组包完成，按功能码投递到对应槽位
             std::lock_guard<std::mutex> lock(response_mutex_);
-            if (waiting_fc_ != 0 && !payload.empty() && payload[0] == waiting_fc_) {
-                response_payload_ = std::move(payload);
-                response_ready_ = true;
-                response_cv_.notify_one();
+            if (!payload.empty()) {
+                uint8_t fc = payload[0];
+                auto it = response_slots_.find(fc);
+                if (it != response_slots_.end()) {
+                    it->second.payload = std::move(payload);
+                    it->second.ready = true;
+                    response_cv_.notify_all();
+                }
             }
         } else if (arb.frame_type() == canfd::ACTIVE_REPORT) {
             // 主动上报组包完成，解析

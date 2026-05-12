@@ -1,6 +1,7 @@
 #ifndef XIAOYAO_LOGGING_H_
 #define XIAOYAO_LOGGING_H_
 
+#include "export.h"
 #include <string>
 #include <sstream>
 
@@ -23,7 +24,7 @@ enum class LogLevel {
 
 // 前向声明 detail 命名空间
 namespace detail {
-void LogMessage(LogLevel level, const char* file, int line, const std::string& message);
+GHAND_API void LogMessage(LogLevel level, const char* file, int line, const std::string& message);
 }
 
 /**
@@ -33,7 +34,7 @@ void LogMessage(LogLevel level, const char* file, int line, const std::string& m
  *
  * @param level 日志级别，只接受 INFO 或 DEBUG
  */
-void ConfigureConsole(LogLevel level);
+GHAND_API void ConfigureConsole(LogLevel level);
 
 /**
  * @brief 配置文件日志输出
@@ -44,7 +45,7 @@ void ConfigureConsole(LogLevel level);
  * @param filename 日志文件路径
  * @param level 日志级别，默认为 DEBUG
  */
-void ConfigureFile(const std::string& filename, LogLevel level = LogLevel::DEBUG);
+GHAND_API void ConfigureFile(const std::string& filename, LogLevel level = LogLevel::DEBUG);
 
 }  // namespace xiaoyao
 

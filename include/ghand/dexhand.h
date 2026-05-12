@@ -1,6 +1,7 @@
 #ifndef XIAOYAO_H_
 #define XIAOYAO_H_
 
+#include "export.h"
 #include "types.h"
 #include "version.h"
 #include <functional>
@@ -9,6 +10,11 @@
 #include <vector>
 
 namespace xiaoyao {
+
+// 前向声明内部实现类
+namespace internal {
+class DexHand;
+}  // namespace internal
 
 // ========== 回调类型定义 ==========
 using JointsCallback = std::function<void(const std::vector<Joint>&)>;
@@ -20,7 +26,11 @@ using TactileDataCallback = std::function<void(const TactileData&)>;
  *
  * 这是唯一的公共 API 类，提供对机械手的完整控制。
  */
-class DexHand {
+#ifdef _WIN32
+#pragma warning(push)
+#pragma warning(disable: 4251)
+#endif
+class GHAND_API DexHand {
 public:
     static std::unique_ptr<DexHand> Create(ProductType product_type,
                                             CommType comm_type = CommType::ETHERCAT);
@@ -61,17 +71,17 @@ public:
      * @brief 搜索可用的通信适配器
      * @return 适配器名称映射表
      */
-    std::map<std::string, std::string> SearchAdapters() const;
+    std::map<std::string, std::string> SearchAdapters();
 
     /**
      * @brief 获取手部类型
      */
-    HandType GetHandType() const;
+    HandType GetHandType();
 
     /**
      * @brief 获取设备信息
      */
-    DeviceInfo GetDeviceInfo() const;
+    DeviceInfo GetDeviceInfo();
 
     // ========== 运动控制 ==========
     /**
@@ -144,10 +154,13 @@ public:
 
  private:
     DexHand(ProductType product_type, CommType comm_type);
-    class Impl;  // Pimpl 模式
-    std::unique_ptr<Impl> impl_;
+    std::unique_ptr<internal::DexHand> impl_;
 };
 
 }  // namespace xiaoyao
+
+#ifdef _WIN32
+#pragma warning(pop)
+#endif
 
 #endif  // XIAOYAO_H_

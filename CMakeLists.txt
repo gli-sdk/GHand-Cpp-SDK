@@ -9,7 +9,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(WIN32)
     add_compile_definitions(_WIN32)
     add_compile_definitions(_WINSOCKAPI_)
-    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
     # 设置 UTF-8 编码以支持中文字符串
     if(MSVC)
         add_compile_options("/utf-8")
@@ -63,18 +62,24 @@ set(GENERATED_INC "${GENERATED_DIR}/zlgcan_device_types.inc")
 file(WRITE ${GENERATED_INC} "${DEVICE_TYPE_INC}")
 include_directories(${GENERATED_DIR})
 
-# 查找源文件
-file(GLOB_RECURSE SOURCES
-    "src/*.cpp"
-    "src/*.cc"
-    "src/*.c"
-    "src/internal/*.cpp"
-    "src/internal/*.cc"
-    "src/internal/*.c"
+# 源文件列表（显式列出，避免 GLOB_RECURSE 在新增/删除文件时不同步）
+set(SOURCES
+    src/dexhand.cc
+    src/logging.cc
+    src/types.cc
+    src/internal/canfd_comm.cc
+    src/internal/canfd_driver_zlg.cc
+    src/internal/canfd_protocol.cc
+    src/internal/dexhand.cc
+    src/internal/dexhand_callback_manager.cc
+    src/internal/ethercat_comm.cc
+    src/internal/file_lock.cc
+    src/internal/product_config_loader.cc
 )
 
 # 创建动态库
 add_library(xiaoyao SHARED ${SOURCES})
+target_compile_definitions(xiaoyao PRIVATE XIAOYAO_BUILD)
 
 # 链接依赖库
 if(WIN32)
@@ -127,8 +132,8 @@ install(TARGETS xiaoyao
 )
 
 # 安装公共头文件
-install(DIRECTORY include/xiaoyao
-    DESTINATION include/xiaoyao
+install(DIRECTORY include/ghand
+    DESTINATION include/ghand
     FILES_MATCHING PATTERN "*.h"
 )
 

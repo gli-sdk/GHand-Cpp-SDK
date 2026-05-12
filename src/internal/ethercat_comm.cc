@@ -39,40 +39,32 @@ namespace internal {
 // 每关节数据尺寸: float(4B) + uint8 velocity(1B) + uint8 torque(1B)
 constexpr size_t kEthercatJointDataSize = 6;
 
-OSAL_THREAD_HANDLE EtherCATComm::threadrt;
-OSAL_THREAD_HANDLE EtherCATComm::thread1;
-int EtherCATComm::expectedWKC;
-int EtherCATComm::wkc;
-int EtherCATComm::mappingdone = 0;
-int EtherCATComm::dorun = 0;
-int EtherCATComm::inOP = 0;
-bool EtherCATComm::is_connected_ = false;
-int EtherCATComm::dowkccheck = 0;
-int EtherCATComm::currentgroup = 0;
-int EtherCATComm::cycle = 0;
-int64_t EtherCATComm::cycletime = 10000000;
-ecx_contextt EtherCATComm::ctx_;
-uint8 EtherCATComm::IOmap_[4096] = {0};
-bool EtherCATComm::threads_started_ = false;
-std::mutex EtherCATComm::context_mutex_;
-std::mutex EtherCATComm::rt_context_mutex_;
-FileLock EtherCATComm::device_lock_;  // 设备锁静态成员定义
-std::function<void(int)> EtherCATComm::state_update_callback_ = nullptr;
+// === 静态成员定义 ===
 std::function<void(int)> EtherCATComm::progress_callback_ = nullptr;
-EtherCATComm* EtherCATComm::active_instance_ = nullptr;
-
-// static LockFreeQueue<std::pair<std::vector<uint8>, uint16>, 32> pdo_queue_;
-static uint8 rxpdo_buffer_[80];
+EtherCATComm* EtherCATComm::foe_instance_ = nullptr;
 static std::atomic<bool> print_debug_info{false};
+
 EtherCATComm::EtherCATComm(const ProductConfig& config) : config_(config) {}
 
 EtherCATComm::~EtherCATComm() {}
 
+// === 静态线程包装函数 ===
+
+OSAL_THREAD_FUNC_RT EtherCATComm::EcatthreadWrapper(void* arg) {
+    auto* self = static_cast<EtherCATComm*>(arg);
+    self->Ecatthread();
+}
+
+OSAL_THREAD_FUNC EtherCATComm::EcatcheckWrapper(void* arg) {
+    auto* self = static_cast<EtherCATComm*>(arg);
+    self->Ecatcheck();
+}
+
 void EtherCATComm::StartThreads() {
     if (!threads_started_) {
-        dorun = 1;
-        osal_thread_create_rt(&threadrt, 128000, reinterpret_cast<void*>(Ecatthread), NULL);
-        osal_thread_create(&thread1, 128000, reinterpret_cast<void*>(Ecatcheck), NULL);
+        dorun_ = 1;
+        osal_thread_create_rt(&threadrt_, 128000, reinterpret_cast<void*>(EcatthreadWrapper), this);
+        osal_thread_create(&thread1_, 128000, reinterpret_cast<void*>(EcatcheckWrapper), this);
 
         threads_started_ = true;
     }
@@ -81,7 +73,7 @@ void EtherCATComm::StartThreads() {
 void EtherCATComm::StopThreads() {
     if (threads_started_) {
         threads_started_ = false;
-        dorun = 0;
+        dorun_ = 0;
         osal_usleep(10000);
     }
 }
@@ -141,12 +133,10 @@ int EtherCATComm::Connect(const std::string& device_name) {
         return -4;
     }
 
-    mappingdone = 1;
-    dorun = 1;
-    expectedWKC = (group->outputsWKC * 2) + group->inputsWKC;
+    mappingdone_ = 1;
+    dorun_ = 1;
+    expectedWKC_ = (group->outputsWKC * 2) + group->inputsWKC;
 
-    // ❌ 禁用DC分布式时钟同步
-    // 原因：单从站系统不需要DC同步，禁用后可避免窗口最小化时的周期波动
     ecx_configdc(&ctx_);
 
     for (int si = 1; si <= ctx_.slavecount; si++) {
@@ -174,9 +164,8 @@ int EtherCATComm::Connect(const std::string& device_name) {
         return -6;
     }
 
-    inOP = 1;
+    inOP_ = 1;
     is_connected_ = true;
-    active_instance_ = this;
 
     return 0;
 }
@@ -184,10 +173,9 @@ int EtherCATComm::Connect(const std::string& device_name) {
 int EtherCATComm::Disconnect() {
     StopThreads();
     std::lock_guard<std::mutex> lock(context_mutex_);
-    active_instance_ = nullptr;
-    inOP = 0;
+    inOP_ = 0;
     is_connected_ = false;
-    dorun = 0;
+    dorun_ = 0;
 
     memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
     rxpdo_buffer_[1] = {0x01};
@@ -206,14 +194,14 @@ void EtherCATComm::ResetContext() {
     memset(&ctx_, 0, sizeof(ecx_contextt));
     memset(&IOmap_, 0, 4096);
 
-    mappingdone = 0;
-    expectedWKC = 0;
-    wkc = 0;
-    cycle = 0;
-    currentgroup = 0;
-    dorun = 0;
-    inOP = 0;
-    dowkccheck = 0;
+    mappingdone_ = 0;
+    expectedWKC_ = 0;
+    wkc_ = 0;
+    cycle_ = 0;
+    currentgroup_ = 0;
+    dorun_ = 0;
+    inOP_ = 0;
+    dowkccheck_ = 0;
 }
 
 int EtherCATComm::SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,
@@ -243,8 +231,6 @@ int EtherCATComm::SDOWrite(std::uint16_t slave, std::uint16_t index, std::uint8_
         return -1;
     }
 
-    // 直接使用实时上下文进行 SDO 写操作
-    // 使用互斥锁保护
     std::lock_guard<std::mutex> lock(rt_context_mutex_);
 
     int retries = 3;
@@ -262,10 +248,6 @@ int EtherCATComm::SDOWrite(std::uint16_t slave, std::uint16_t index, std::uint8_
 }
 
 int EtherCATComm::SendRxPDO(uint16 slave, uint16 pdo_index, uint32 data_size, uint8* data) {
-    // SendRxPDO 使用无锁队列，不需要加锁
-    // 使用 rt_context_mutex_ 验证参数
-    // std::lock_guard<std::mutex> lock(rt_context_mutex_);
-
     if (!data || data_size <= 0 || slave <= 0 || slave > ctx_.slavecount) {
         return -1;
     }
@@ -274,31 +256,12 @@ int EtherCATComm::SendRxPDO(uint16 slave, uint16 pdo_index, uint32 data_size, ui
         return -1;
     }
 
-    // if (data_size <= ctx_.slavelist[slave].Obytes) {
-    //     memcpy(ctx_.slavelist[slave].outputs, data, data_size);
-    // }
     memcpy(rxpdo_buffer_, data, data_size);
 
-    // std::vector<uint8> data_copy(data, data + data_size);
-    // std::pair<std::vector<uint8>, uint16> pdo_item(data_copy, slave);
-    // if (data[1] == 1) {
-    //     // 清除 pdo_queue_ 队列
-    //     std::pair<std::vector<uint8>, uint16> temp_item;
-    //     while (pdo_queue_.Pop(temp_item)) {
-    //         // 继续弹出元素直到队列为空
-    //     }
-    // }
-
-    // if (!pdo_queue_.Push(pdo_item)) {
-    //     return -1;
-    // }
     return 1;
 }
 
 uint8_t* EtherCATComm::ReadTxPDO(uint16 slave) {
-    // 使用 rt_context_mutex_ 读取，避免与实时线程冲突
-    // std::lock_guard<std::mutex> lock(rt_context_mutex_);
-
     if (slave > 0 && slave <= ctx_.slavecount) {
         return ctx_.slavelist[slave].inputs;
     }
@@ -322,12 +285,12 @@ void EtherCATComm::ec_sync(int64 reftime, int64 cycletime, int64* offsettime) {
     *offsettime = (int64)((delta * 0.01f) + (integral * 0.00002f));
 }
 
-OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
+void EtherCATComm::Ecatthread() {
     ec_timet ts;
     int ht;
     static int64_t toff = 0;
 
-    while (!mappingdone) {
+    while (!mappingdone_) {
         osal_usleep(500);
     }
 
@@ -335,7 +298,6 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
     ht = (ts.tv_nsec / 1000000) + 1;
     ts.tv_nsec = ht * 1000000;
 
-    // 初始化 - 需要锁保护
     {
         std::lock_guard<std::mutex> lock(rt_context_mutex_);
         memcpy(ctx_.slavelist[1].outputs, rxpdo_buffer_, sizeof(rxpdo_buffer_));
@@ -343,29 +305,23 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
     }
 
     while (threads_started_) {
-        //  add_time_ns(&ts, cycletime + toff);
-        //  osal_monotonic_sleep(&ts);
-
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
-        if (dorun > 0) {
-            cycle++;
+        if (dorun_ > 0) {
+            cycle_++;
 
-            // 接收过程数据 - 需要锁保护
+            // 接收过程数据
             uint8_t* pdo_copy = nullptr;
             size_t pdo_size = 0;
 
             {
                 std::lock_guard<std::mutex> lock(rt_context_mutex_);
-                wkc = ecx_receive_processdata(&ctx_, EC_TIMEOUTRET);
+                wkc_ = ecx_receive_processdata(&ctx_, EC_TIMEOUTRET);
 
-                // 快速复制PDO数据用于回调
-                if (wkc >= expectedWKC && active_instance_) {
-                    // 获取slave 1的输入数据（PDO）
+                if (wkc_ >= expectedWKC_ && inOP_) {
                     uint8_t* inputs = ctx_.slavelist[1].inputs;
                     pdo_size = ctx_.slavelist[1].Ibytes;
 
-                    // 创建数据副本（避免在锁中调用回调）
                     if (pdo_size > 0) {
                         pdo_copy = new uint8_t[pdo_size];
                         memcpy(pdo_copy, inputs, pdo_size);
@@ -373,21 +329,19 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
                 }
             }
 
-            // 在锁外调用回调（避免阻塞实时线程）
-            if (pdo_copy != nullptr && active_instance_) {
-                active_instance_->ParseAndNotify(pdo_copy, pdo_size);
+            // 在锁外调用回调
+            if (pdo_copy != nullptr) {
+                ParseAndNotify(pdo_copy, pdo_size);
                 delete[] pdo_copy;
             }
 
-            if (wkc != expectedWKC) {
-                dowkccheck++;
-
+            if (wkc_ != expectedWKC_) {
+                dowkccheck_++;
             } else {
-                dowkccheck = 0;
+                dowkccheck_ = 0;
             }
 
             {
-                // 使用互斥锁保护发送操作，防止与接收/SDO冲突
                 std::lock_guard<std::mutex> lock(rt_context_mutex_);
                 memcpy(ctx_.slavelist[1].outputs, rxpdo_buffer_, sizeof(rxpdo_buffer_));
                 ecx_send_processdata(&ctx_);
@@ -396,27 +350,25 @@ OSAL_THREAD_FUNC_RT EtherCATComm::Ecatthread(void) {
     }
 }
 
-OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
+void EtherCATComm::Ecatcheck() {
     int slaveix;
     while (threads_started_) {
         osal_usleep(50000);
 
-        // 使用 try_lock 避免阻塞实时线程
-        if (inOP && ((dowkccheck > 2) || ctx_.grouplist[currentgroup].docheckstate)) {
+        if (inOP_ && ((dowkccheck_ > 2) || ctx_.grouplist[currentgroup_].docheckstate)) {
             std::unique_lock<std::mutex> lock(rt_context_mutex_, std::try_to_lock);
 
             if (!lock.owns_lock()) {
-                // 实时线程正在运行，跳过本次检查
                 continue;
             }
 
-            ctx_.grouplist[currentgroup].docheckstate = FALSE;
+            ctx_.grouplist[currentgroup_].docheckstate = FALSE;
             ecx_readstate(&ctx_);
             for (slaveix = 1; slaveix <= ctx_.slavecount; slaveix++) {
                 ec_slavet* slave = &ctx_.slavelist[slaveix];
 
-                if ((slave->group == currentgroup) && (slave->state != EC_STATE_OPERATIONAL)) {
-                    ctx_.grouplist[currentgroup].docheckstate = TRUE;
+                if ((slave->group == currentgroup_) && (slave->state != EC_STATE_OPERATIONAL)) {
+                    ctx_.grouplist[currentgroup_].docheckstate = TRUE;
                     if (slave->state == (EC_STATE_SAFE_OP + EC_STATE_ERROR)) {
                         slave->state = (EC_STATE_SAFE_OP + EC_STATE_ACK);
                         ecx_writestate(&ctx_, slaveix);
@@ -433,7 +385,7 @@ OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
                         ecx_statecheck(&ctx_, slaveix, EC_STATE_OPERATIONAL, EC_TIMEOUTRET);
                         if (slave->state == EC_STATE_NONE) {
                             slave->islost = TRUE;
-                            threads_started_ = false;  // 异常防止崩溃
+                            threads_started_ = false;
                             is_connected_ = false;
                             slave->mbxhandlerstate = ECT_MBXH_LOST;
                             if (slave->Ibytes) {
@@ -446,20 +398,21 @@ OSAL_THREAD_FUNC EtherCATComm::Ecatcheck(void) {
                     if (slave->state <= EC_STATE_INIT) {
                         if (ecx_recover_slave(&ctx_, slaveix, EC_TIMEOUTMON)) {
                             slave->islost = FALSE;
-                            threads_started_ = TRUE;
+                            threads_started_ = true;
                             is_connected_ = true;
                         }
                     } else {
                         slave->islost = FALSE;
-                        threads_started_ = TRUE;
+                        threads_started_ = true;
                         is_connected_ = true;
                     }
                 }
             }
-            dowkccheck = 0;
+            dowkccheck_ = 0;
         }
     }
 }
+
 bool EtherCATComm::InputBin(const char* fname, int* length) {
     FILE* fp = nullptr;
     int cc = 0, c;
@@ -473,13 +426,14 @@ bool EtherCATComm::InputBin(const char* fname, int* length) {
 #endif
 
     while (((c = fgetc(fp)) != EOF) && (cc < static_cast<int>(kFirmwareBufferSize))) {
-        file_buffer[cc++] = (uint8_t)c;
+        file_buffer_[cc++] = (uint8_t)c;
     }
 
     *length = cc;
     fclose(fp);
     return true;
 }
+
 int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
                              const std::string& file_path,
                              std::function<void(int)> progressCallback) {
@@ -505,10 +459,11 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
         return -1;
     }
     int filesize = 0;
-    inOP = 0;
-    dorun = 0;
+    inOP_ = 0;
+    dorun_ = 0;
     StopThreads();
     progress_callback_ = progressCallback;
+    foe_instance_ = this;
     ctx_.slavelist[0].state = EC_STATE_SAFE_OP;
     ecx_writestate(&ctx_, 0);
     ecx_statecheck(&ctx_, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
@@ -531,20 +486,23 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
         if (InputBin(file_path.c_str(), &filesize)) {
             char file_name[] = "ECATFW__firmware";
             int update_result =
-                ecx_FOEwrite(&ctx_, slave, file_name, 0, filesize, &file_buffer, EC_TIMEOUTSTATE);
+                ecx_FOEwrite(&ctx_, slave, file_name, 0, filesize, &file_buffer_, EC_TIMEOUTSTATE);
 
             LOG_DEBUG("Releasing device lock after firmware update (result: " << update_result << ")");
             device_lock_.Release();
 
+            foe_instance_ = nullptr;
             return update_result;
         } else {
             LOG_DEBUG("Releasing device lock after firmware file read failure");
             device_lock_.Release();
+            foe_instance_ = nullptr;
             return -2;
         }
     } else {
         LOG_DEBUG("Releasing device lock after BOOT state transition failure");
         device_lock_.Release();
+        foe_instance_ = nullptr;
         return -1;
     }
     return 0;
@@ -556,9 +514,8 @@ void EtherCATComm::FoeProgressHook(uint16 slave, int32 packetnumber, int32 total
     if (packetnumber != last_packet) {
         last_packet = packetnumber;
 
-        // 添加边界检查
-        if (slave > 0 && slave <= ctx_.slavecount) {
-            int maxdata = ctx_.slavelist[slave].mbx_l - 12;
+        if (foe_instance_ && slave > 0 && slave <= foe_instance_->ctx_.slavecount) {
+            int maxdata = foe_instance_->ctx_.slavelist[slave].mbx_l - 12;
             if (maxdata <= 0) return;
 
             int sent_data = packetnumber * maxdata;

@@ -91,12 +91,14 @@ private:
 
     const ProductConfig& config_;
 
-    // 请求-响应匹配（单槽等待）
+    // 请求-响应匹配（按功能码分槽，支持多请求并发）
+    struct ResponseSlot {
+        std::vector<uint8_t> payload;
+        bool ready = false;
+    };
     std::mutex response_mutex_;
     std::condition_variable response_cv_;
-    uint8_t waiting_fc_ = 0;
-    std::vector<uint8_t> response_payload_;
-    bool response_ready_ = false;
+    std::map<uint8_t, ResponseSlot> response_slots_;
 
     // 组包器（按 device_id + FrameType 隔离 RESPONSE / ACTIVE_REPORT）
     std::mutex asm_mutex_;

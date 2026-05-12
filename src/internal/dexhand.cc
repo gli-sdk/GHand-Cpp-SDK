@@ -48,8 +48,7 @@ namespace xiaoyao {
 namespace internal {
 
 DexHand::DexHand(ProductType product_type, CommType comm_type)
-    : hand_type_(HandType::NONE),
-      control_mode_(ControlMode::POSITION),
+    : control_mode_(ControlMode::POSITION),
       comm_type_(comm_type),
       product_type_(product_type),
       device_name_("") {
@@ -96,28 +95,9 @@ void DexHand::SetupCallbacks() {
 bool DexHand::ConnectToDevice(const std::string& device_name) {
     LOG_INFO("Connecting to device: " << device_name);
 
-    /*switch (comm_type_) {
-        case CommType::ETHERCAT: {
-            comm_ = std::unique_ptr<EtherCATComm>(new EtherCATComm());
-            break;
-        }
-        case CommType::CANFD: {
-            comm_ = std::unique_ptr<CANFDComm>(new CANFDComm());
-            break;
-        }
-        case CommType::RS485:
-        default:
-            LOG_WARNING("Unsupported communication type");
-            return false;
-    }
-
-    SetupCallbacks();*/
-
     int result = comm_->Connect(device_name);
     if (result == 0) {
         device_name_ = device_name;
-        GetDeviceInfo();
-        GetHandType();
         LOG_INFO("Successfully connected to device: " << device_name);
         return true;
     }
@@ -144,8 +124,6 @@ bool DexHand::Connect(const std::string& device_name) {
 bool DexHand::Disconnect() {
     LOG_INFO("Disconnecting from device");
 
-    hand_type_ = HandType::NONE;
-    device_info_ = DeviceInfo();
     Stop();
     int result = comm_->Disconnect();
 
@@ -167,13 +145,11 @@ std::map<std::string, std::string> DexHand::SearchAdapters() const {
 }
 
 HandType DexHand::GetHandType() const {
-    hand_type_ = comm_->GetHandType();
-    return hand_type_;
+    return comm_->GetHandType();
 }
 
 DeviceInfo DexHand::GetDeviceInfo() const {
-    device_info_ = comm_->GetDeviceInfo();
-    return device_info_;
+    return comm_->GetDeviceInfo();
 }
 
 void DexHand::SetControlMode(ControlMode mode) {
@@ -271,7 +247,7 @@ int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
 
     const int retry_count = 10;
     const int retry_delay_ms = 1000;
-    std::string last_version = device_info_.software_version;
+    std::string last_version = comm_->GetDeviceInfo().software_version;
 
     int ret = comm_->BootUpdate(ifname, slave, filename, progressCallback);
     if (ret == 1) {
@@ -280,7 +256,7 @@ int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
             std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
             if (Connect(device_name_)) {
-                if (IsVersionNewer(last_version, device_info_.software_version)) {
+                if (IsVersionNewer(last_version, comm_->GetDeviceInfo().software_version)) {
                     return 1;
                 } else {
                     return -12;

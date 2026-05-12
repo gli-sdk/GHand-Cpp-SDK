@@ -6,7 +6,7 @@
 #include <vector>
 #include <cmath>
 
-#include "xiaoyao/types.h"
+#include "ghand/types.h"
 
 namespace xiaoyao {
 namespace internal {

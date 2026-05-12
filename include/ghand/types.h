@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "export.h"
+
 namespace xiaoyao {
 
 // ===== 手部类型定义 =====
@@ -20,7 +22,7 @@ enum class HandType : uint8_t {
  * @brief 获取手部类型的字符串表示（用于调试/日志）
  * @warning 不应在实时控制循环中调用（有字符串处理开销）
  */
-std::string ToString(HandType type);
+std::string GHAND_API ToString(HandType type);
 
 // ===== 手指类型定义 =====
 enum class FingerType : uint8_t {
@@ -36,7 +38,7 @@ enum class FingerType : uint8_t {
  * @brief 获取手指类型的字符串表示（用于调试/日志）
  * @warning 不应在实时控制循环中调用（有字符串处理开销）
  */
-std::string ToString(FingerType finger);
+std::string GHAND_API ToString(FingerType finger);
 
 // ===== 力数据结构 =====
 struct Force {
@@ -59,7 +61,7 @@ enum class State : uint8_t {
  * @brief 获取状态的字符串表示（用于调试/日志）
  * @warning 不应在实时控制循环中调用（有字符串处理开销）
  */
-std::string ToString(State state);
+std::string GHAND_API ToString(State state);
 
 enum class ErrorCode : uint8_t {
     NORMAL = 0,
@@ -92,7 +94,7 @@ enum class ErrorCode : uint8_t {
  * @brief 获取错误码的字符串表示（用于调试/日志）
  * @warning 不应在实时控制循环中调用（有字符串处理开销）
  */
-std::string ToString(ErrorCode error);
+std::string GHAND_API ToString(ErrorCode error);
 
 enum class JointId : uint8_t {
     THUMB_DIP,
@@ -120,7 +122,7 @@ enum class JointId : uint8_t {
  * @brief 获取关节ID的字符串表示（用于调试/日志）
  * @warning 不应在实时控制循环中调用（有字符串处理开销）
  */
-std::string ToString(JointId id);
+std::string GHAND_API ToString(JointId id);
 
 // ===== 产品类型定义 =====
 enum class ProductType : uint8_t {
@@ -132,7 +134,7 @@ enum class ProductType : uint8_t {
  * @brief 获取产品类型的字符串表示（用于调试/日志）
  * @warning 不应在实时控制循环中调用（有字符串处理开销）
  */
-std::string ToString(ProductType type);
+std::string GHAND_API ToString(ProductType type);
 
 // ===== 通信类型定义 =====
 enum class CommType : uint8_t {
@@ -178,7 +180,7 @@ struct HandState {
      * @brief 获取手部状态的字符串表示（用于调试/日志）
      * @warning 不应在实时控制循环中调用（有字符串处理开销）
      */
-    std::string ToString() const;
+    GHAND_API std::string ToString() const;
 };
 
 /**
@@ -239,7 +241,7 @@ struct Joint {
      * @brief 获取关节状态的字符串表示（用于调试/日志）
      * @warning 不应在实时控制循环中调用（有字符串处理开销）
      */
-    std::string ToString() const;
+    GHAND_API std::string ToString() const;
 };
 
 }  // namespace xiaoyao

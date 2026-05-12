@@ -15,7 +15,7 @@
     const int SOCKET_ERROR = -1;
 #endif
 
-#include "xiaoyao/xiaoyao.h"
+#include "ghand/dexhand.h"
 #include <iostream>
 #include <iomanip>
 #include <thread>

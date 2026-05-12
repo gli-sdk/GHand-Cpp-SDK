@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "product_config.h"
-#include "xiaoyao/types.h"
+#include "ghand/types.h"
 
 namespace xiaoyao {
 namespace internal {
@@ -73,8 +73,6 @@ public:
     std::unique_ptr<IComm> comm_;
     std::unique_ptr<DexHandCallbackManager> callback_manager_;
 
-    mutable HandType hand_type_;
-    mutable DeviceInfo device_info_;
     ControlMode control_mode_;
     CommType comm_type_;
     ProductType product_type_;
