@@ -1,4 +1,5 @@
 {
+  "model": "G5",
   "name": "ghand",
   "valid_joints": [
     "THUMB_DIP", "THUMB_PIP", "THUMB_MCP", "THUMB_SWING", "THUMB_ROTATION",

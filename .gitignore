@@ -29,3 +29,4 @@ xiaoyao-sdk-cpp/
 docs/CPP_SDK_USER_GUIDE.md
 CLAUDE.md
 tests/
+.claudeignore
