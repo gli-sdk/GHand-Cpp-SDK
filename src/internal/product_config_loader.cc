@@ -1,6 +1,7 @@
 #include "product_config_loader.h"
 #include "logger.h"
 
+#include <algorithm>
 #include <nlohmann/json.hpp>
 
 #include <cstdlib>
@@ -10,8 +11,10 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
+#include <dirent.h>
 #include <dlfcn.h>
 #include <limits.h>
+#include <sys/stat.h>
 #endif
 
 namespace ghand {
@@ -19,8 +22,9 @@ namespace internal {
 
 std::string ProductTypeToFileName(ProductType type) {
     switch (type) {
-        case ProductType::G5:      return "G5.json";
-        default:                      return "";
+        case ProductType::G5:      return "XIAOYAO-Hand.json";
+        case ProductType::AUTO:    return "";  // AUTO mode defers config loading
+        default:                   return "";
     }
 }
 
@@ -203,6 +207,7 @@ ProductConfig LoadProductConfig(ProductType product) {
     try {
         nlohmann::json j = nlohmann::json::parse(json_content);
 
+        config.model = j.value("model", "");
         config.name = j.value("name", "");
 
         if (j.contains("joints") && j["joints"].is_array()) {
@@ -246,6 +251,112 @@ ProductConfig LoadProductConfig(ProductType product) {
     }
 
     return config;
+}
+
+bool NameMatches(const std::string& device_name, const std::string& config_name) {
+    if (config_name.empty() || device_name.empty()) return false;
+    if (device_name.size() != config_name.size()) return false;
+    auto ci_equal = [](char a, char b) { return std::tolower(a) == std::tolower(b); };
+    return std::equal(config_name.begin(), config_name.end(),
+                      device_name.begin(), ci_equal);
+}
+
+ProductConfig FindConfigByName(const std::string& device_name) {
+    if (device_name.empty()) return ProductConfig();
+
+    std::vector<std::string> search_paths = GetConfigSearchPaths();
+    for (const auto& dir : search_paths) {
+        // 扫描目录下所有 .json 文件
+        std::string pattern = dir + "*.json";
+        // 在 Windows 上用 FindFirstFile，Linux 上用 glob
+        // 以下使用平台无关的方式：尝试已知的产品文件名列表
+        // 也可以通过 dir 遍历实现，这里简化：直接在 search_paths 中逐文件尝试
+    }
+
+    // 平台无关遍历：尝试直接打开目录列表中的常见文件名
+    // 实际实现：在搜索路径中遍历，对每个路径尝试列出 .json 文件
+    // 由于 C++11 没有 filesystem，使用平台相关的目录遍历
+    for (const auto& search_dir : search_paths) {
+#ifdef _WIN32
+        std::string search_pattern = search_dir + "*.json";
+        WIN32_FIND_DATAA fd;
+        HANDLE hFind = FindFirstFileA(search_pattern.c_str(), &fd);
+        if (hFind == INVALID_HANDLE_VALUE) continue;
+        do {
+            std::string file_path = search_dir + fd.cFileName;
+#else
+        DIR* dir = opendir(search_dir.c_str());
+        if (!dir) continue;
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string name(entry->d_name);
+            if (name.size() < 6 || name.substr(name.size() - 5) != ".json") continue;
+            std::string file_path = search_dir + name;
+            struct stat st;
+            if (stat(file_path.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
+#endif
+            std::ifstream ifs(file_path);
+            if (!ifs) continue;
+            std::string raw_content((std::istreambuf_iterator<char>(ifs)),
+                                     std::istreambuf_iterator<char>());
+            std::string json_content = StripComments(raw_content);
+            try {
+                nlohmann::json j = nlohmann::json::parse(json_content);
+                std::string config_name = j.value("name", "");
+                if (NameMatches(device_name, config_name)) {
+                    // 找到匹配，完整加载这个 config
+                    ProductConfig config;
+                    config.model = j.value("model", "");
+                    config.name = config_name;
+                    if (j.contains("joints") && j["joints"].is_array()) {
+                        for (const auto& item : j["joints"]) {
+                            if (!item.contains("id") || !item["id"].is_string()) continue;
+                            JointId id = JointIdFromString(item["id"].get<std::string>());
+                            if (id == JointId::NUM_JOINTS) continue;
+                            config.valid_joints.push_back(id);
+                            if (item.contains("min") && item.contains("max")
+                                && item["min"].is_number() && item["max"].is_number()) {
+                                float min_val = item["min"].get<float>();
+                                float max_val = item["max"].get<float>();
+                                if (min_val > max_val) std::swap(min_val, max_val);
+                                config.joint_limits[id] = {min_val, max_val};
+                            }
+                        }
+                    }
+                    config.has_tactile = j.value("has_tactile", false);
+                    if (j.contains("tactile_regions") && j["tactile_regions"].is_array()) {
+                        for (const auto& item : j["tactile_regions"]) {
+                            TactileRegionConfig region;
+                            region.name = item.value("name", "");
+                            region.sensor_count = item.value("count", 0);
+                            if (!region.name.empty() && region.sensor_count > 0) {
+                                config.tactile_regions.push_back(region);
+                            }
+                        }
+                    }
+#ifdef _WIN32
+                    FindClose(hFind);
+#else
+                    closedir(dir);
+#endif
+                    LOG_INFO("Auto-detected product config: " << config.name
+                             << " from " << file_path);
+                    return config;
+                }
+            } catch (const nlohmann::json::exception&) {
+                // 跳过无法解析的 JSON 文件
+            }
+#ifdef _WIN32
+        } while (FindNextFileA(hFind, &fd));
+        FindClose(hFind);
+#else
+        }
+        closedir(dir);
+#endif
+    }
+
+    LOG_ERROR("No matching product config found for device model: " << device_name);
+    return ProductConfig();
 }
 
 }  // namespace internal

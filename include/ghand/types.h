@@ -126,7 +126,8 @@ std::string GHAND_API ToString(JointId id);
 
 // ===== 产品类型定义 =====
 enum class ProductType : uint8_t {
-    G5
+    G5,
+    AUTO
 };
 
 /**

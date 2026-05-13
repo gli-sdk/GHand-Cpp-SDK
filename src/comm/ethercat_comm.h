@@ -99,7 +99,7 @@ private:
     int expectedWKC_ = 0;
     int wkc_ = 0;
     int mappingdone_ = 0;
-    int dorun_ = 0;
+    std::atomic<int> dorun_{0};
     int inOP_ = 0;
     bool is_connected_ = false;
     int dowkccheck_ = 0;

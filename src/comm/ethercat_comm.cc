@@ -46,7 +46,10 @@ static std::atomic<bool> print_debug_info{false};
 
 EtherCATComm::EtherCATComm(const ProductConfig& config) : config_(config) {}
 
-EtherCATComm::~EtherCATComm() {}
+EtherCATComm::~EtherCATComm() {
+    StopThreads();
+    Disconnect();
+}
 
 // === 静态线程包装函数 ===
 
@@ -74,7 +77,9 @@ void EtherCATComm::StopThreads() {
     if (threads_started_) {
         threads_started_ = false;
         dorun_ = 0;
-        osal_usleep(10000);
+        for (int i = 0; i < 50; ++i) {
+            osal_usleep(1000);
+        }
     }
 }
 

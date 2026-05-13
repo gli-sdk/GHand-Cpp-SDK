@@ -1,6 +1,6 @@
 {
-  "model": "G5",
-  "name": "G5-13A23D-S01",
+  "model": "G5-13A23D-S01",
+  "name": "XIAOYAO-Hand",
   "joints": [
     { "id": "THUMB_DIP" },
     { "id": "THUMB_PIP",  "min": 0.0,  "max": 66.0 },

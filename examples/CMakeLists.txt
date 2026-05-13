@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-# 辅助函数：为示例程序添加自动复制DLL的post-build命令
+# 辅助函数：为示例程序添加自动复制DLL和配置文件的post-build命令
 function(copy_dll_for_target target_name)
     add_custom_command(TARGET ${target_name} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -70,6 +70,9 @@ if(WIN32)
     add_executable(glove_control tutorial/07glove_control.cc)
     target_link_libraries(glove_control ghand ws2_32)
     target_include_directories(glove_control PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    set_target_properties(glove_control PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tutorial
+    )
     copy_dll_for_target(glove_control)
 endif()
 

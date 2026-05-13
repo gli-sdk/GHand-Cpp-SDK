@@ -41,9 +41,9 @@ int main() {
         auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
         if (hand->Connect(name)) {
             hands.push_back(std::move(hand));
-            std::cout << "  ✓ Connected device: " << name << '\n';
+            std::cout << "Connected device: " << name << '\n';
         } else {
-            std::cout << "  ✗ Connection failed: " << name << '\n';
+            std::cout << "Connection failed: " << name << '\n';
         }
     }
 
@@ -52,7 +52,7 @@ int main() {
         return 1;
     }
 
-    std::cout << "\n✓ Successfully connected " << hands.size() << " device(s)\n";
+    std::cout << "\nSuccessfully connected " << hands.size() << " device(s)\n";
 
     // Display all device information
     std::cout << "\nDevice Information:\n";
@@ -77,9 +77,9 @@ int main() {
         std::cout << "\nControlling hand " << i << "...\n";
 
         if (hands[i]->MoveJoints(test_joints)) {
-            std::cout << "  ✓ Command sent successfully\n";
+            std::cout << "Command sent successfully\n";
         } else {
-            std::cout << "  ✗ Command send failed\n";
+            std::cout << "Command send failed\n";
         }
 
         // Wait for device to respond
@@ -96,7 +96,7 @@ int main() {
     std::vector<JointCommand> reset_joints = {
         {JointId::THUMB_PIP, 0.0f, 100, 100},
         {JointId::THUMB_MCP, 0.0f, 100, 100},
-        {JointId::THUMB_SWING, 0.0f, 100, 100},
+        {JointId::THUMB_SWING, 20.0f, 100, 100},
         {JointId::THUMB_ROTATION, 0.0f, 100, 100},
         {JointId::FF_PIP, 0.0f, 100, 100},
         {JointId::FF_MCP, 0.0f, 100, 100},
@@ -113,7 +113,7 @@ int main() {
     for (auto& hand : hands) {
         hand->MoveJoints(reset_joints);
     }
-    std::cout << "  ✓ Commands sent to all hands\n";
+    std::cout << "Commands sent to all hands\n";
 
     // Wait for movement completion
     std::cout << "\nWaiting for movement completion...\n";
@@ -124,7 +124,7 @@ int main() {
     std::cout << "\nDisconnecting all connections...\n";
     for (size_t i = 0; i < hands.size(); ++i) {
         hands[i]->Disconnect();
-        std::cout << "  ✓ Closed hand " << i << '\n';
+        std::cout << "Closed hand " << i << '\n';
     }
 
     std::cout << "\nDemo completed. Thank you for using!\n";

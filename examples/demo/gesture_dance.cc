@@ -6,117 +6,122 @@
 
 using namespace ghand;
 
-// ========== 手势姿态定义 ==========
+// ========== Gesture Pose Definitions ==========
 
-// 拇指触碰小指
+// Thumb touches little finger
 std::vector<JointCommand> MakeThumbTouchLittle() {
     return {
-        {JointId::THUMB_PIP, 20.0f}, {JointId::THUMB_MCP, 50.0f},
-        {JointId::THUMB_SWING, 60.0f}, {JointId::THUMB_ROTATION, 0.0f},
-        {JointId::FF_PIP, 0.0f}, {JointId::FF_MCP, 0.0f}, {JointId::FF_SWING, 0.0f},
-        {JointId::MF_PIP, 0.0f}, {JointId::MF_MCP, 0.0f},
-        {JointId::RF_PIP, 0.0f}, {JointId::RF_MCP, 0.0f},
-        {JointId::LF_PIP, 56.0f}, {JointId::LF_MCP, 28.0f},
+        {JointId::THUMB_PIP, 20.0f, 100, 100}, {JointId::THUMB_MCP, 50.0f, 100, 100},
+        {JointId::THUMB_SWING, 60.0f, 100, 100}, {JointId::THUMB_ROTATION, 0.0f, 100, 100},
+        {JointId::FF_PIP, 0.0f, 100, 100}, {JointId::FF_MCP, 0.0f, 100, 100}, {JointId::FF_SWING, 0.0f, 100, 100},
+        {JointId::MF_PIP, 0.0f, 100, 100}, {JointId::MF_MCP, 0.0f, 100, 100},
+        {JointId::RF_PIP, 0.0f, 100, 100}, {JointId::RF_MCP, 0.0f, 100, 100},
+        {JointId::LF_PIP, 56.0f, 100, 100}, {JointId::LF_MCP, 28.0f, 100, 100},
     };
 }
 
-// 拇指触碰无名指
+// Thumb touches ring finger
 std::vector<JointCommand> MakeThumbTouchRing() {
     return {
-        {JointId::THUMB_PIP, 19.0f}, {JointId::THUMB_MCP, 38.0f},
-        {JointId::THUMB_SWING, 45.0f}, {JointId::THUMB_ROTATION, 0.0f},
-        {JointId::FF_PIP, 0.0f}, {JointId::FF_MCP, 0.0f}, {JointId::FF_SWING, 0.0f},
-        {JointId::MF_PIP, 0.0f}, {JointId::MF_MCP, 0.0f},
-        {JointId::RF_PIP, 67.0f}, {JointId::RF_MCP, 39.0f},
-        {JointId::LF_PIP, 0.0f}, {JointId::LF_MCP, 0.0f},
+        {JointId::THUMB_PIP, 19.0f, 100, 100}, {JointId::THUMB_MCP, 38.0f, 100, 100},
+        {JointId::THUMB_SWING, 45.0f, 100, 100}, {JointId::THUMB_ROTATION, 0.0f, 100, 100},
+        {JointId::FF_PIP, 0.0f, 100, 100}, {JointId::FF_MCP, 0.0f, 100, 100}, {JointId::FF_SWING, 0.0f, 100, 100},
+        {JointId::MF_PIP, 0.0f, 100, 100}, {JointId::MF_MCP, 0.0f, 100, 100},
+        {JointId::RF_PIP, 67.0f, 100, 100}, {JointId::RF_MCP, 39.0f, 100, 100},
+        {JointId::LF_PIP, 0.0f, 100, 100}, {JointId::LF_MCP, 0.0f, 100, 100},
     };
 }
 
-// 拇指触碰中指
+// Thumb touches middle finger
 std::vector<JointCommand> MakeThumbTouchMiddle() {
     return {
-        {JointId::THUMB_PIP, 17.0f}, {JointId::THUMB_MCP, 27.0f},
-        {JointId::THUMB_SWING, 30.0f}, {JointId::THUMB_ROTATION, 0.0f},
-        {JointId::FF_PIP, 0.0f}, {JointId::FF_MCP, 0.0f}, {JointId::FF_SWING, 0.0f},
-        {JointId::MF_PIP, 40.0f}, {JointId::MF_MCP, 57.0f},
-        {JointId::RF_PIP, 0.0f}, {JointId::RF_MCP, 0.0f},
-        {JointId::LF_PIP, 0.0f}, {JointId::LF_MCP, 0.0f},
+        {JointId::THUMB_PIP, 17.0f, 100, 100}, {JointId::THUMB_MCP, 27.0f, 100, 100},
+        {JointId::THUMB_SWING, 30.0f, 100, 100}, {JointId::THUMB_ROTATION, 0.0f, 100, 100},
+        {JointId::FF_PIP, 0.0f, 100, 100}, {JointId::FF_MCP, 0.0f, 100, 100}, {JointId::FF_SWING, 0.0f, 100, 100},
+        {JointId::MF_PIP, 40.0f, 100, 100}, {JointId::MF_MCP, 57.0f, 100, 100},
+        {JointId::RF_PIP, 0.0f, 100, 100}, {JointId::RF_MCP, 0.0f, 100, 100},
+        {JointId::LF_PIP, 0.0f, 100, 100}, {JointId::LF_MCP, 0.0f, 100, 100},
     };
 }
 
-// 拇指触碰食指
+// Thumb touches index finger
 std::vector<JointCommand> MakeThumbTouchIndex() {
     return {
-        {JointId::THUMB_PIP, 13.0f}, {JointId::THUMB_MCP, 14.0f},
-        {JointId::THUMB_SWING, 20.0f}, {JointId::THUMB_ROTATION, 0.0f},
-        {JointId::FF_PIP, 51.0f}, {JointId::FF_MCP, 46.0f}, {JointId::FF_SWING, 0.0f},
-        {JointId::MF_PIP, 0.0f}, {JointId::MF_MCP, 0.0f},
-        {JointId::RF_PIP, 0.0f}, {JointId::RF_MCP, 0.0f},
-        {JointId::LF_PIP, 0.0f}, {JointId::LF_MCP, 0.0f},
+        {JointId::THUMB_PIP, 13.0f, 100, 100}, {JointId::THUMB_MCP, 14.0f, 100, 100},
+        {JointId::THUMB_SWING, 20.0f, 100, 100}, {JointId::THUMB_ROTATION, 0.0f, 100, 100},
+        {JointId::FF_PIP, 51.0f, 100, 100}, {JointId::FF_MCP, 46.0f, 100, 100}, {JointId::FF_SWING, 0.0f, 100, 100},
+        {JointId::MF_PIP, 0.0f, 100, 100}, {JointId::MF_MCP, 0.0f, 100, 100},
+        {JointId::RF_PIP, 0.0f, 100, 100}, {JointId::RF_MCP, 0.0f, 100, 100},
+        {JointId::LF_PIP, 0.0f, 100, 100}, {JointId::LF_MCP, 0.0f, 100, 100},
     };
 }
 
-// 握拳姿态
+// Fist pose
 std::vector<JointCommand> MakeFist() {
     return {
-        {JointId::THUMB_PIP, 40.0f}, {JointId::THUMB_MCP, 30.0f},
-        {JointId::THUMB_SWING, 30.0f}, {JointId::THUMB_ROTATION, 0.0f},
-        {JointId::FF_PIP, 65.0f}, {JointId::FF_MCP, 55.0f}, {JointId::FF_SWING, 0.0f},
-        {JointId::MF_PIP, 65.0f}, {JointId::MF_MCP, 55.0f},
-        {JointId::RF_PIP, 65.0f}, {JointId::RF_MCP, 55.0f},
-        {JointId::LF_PIP, 65.0f}, {JointId::LF_MCP, 55.0f},
+        {JointId::THUMB_PIP, 40.0f, 100, 100}, {JointId::THUMB_MCP, 30.0f, 100, 100},
+        {JointId::THUMB_SWING, 30.0f, 100, 100}, {JointId::THUMB_ROTATION, 0.0f, 100, 100},
+        {JointId::FF_PIP, 65.0f, 100, 100}, {JointId::FF_MCP, 55.0f, 100, 100}, {JointId::FF_SWING, 0.0f, 100, 100},
+        {JointId::MF_PIP, 65.0f, 100, 100}, {JointId::MF_MCP, 55.0f, 100, 100},
+        {JointId::RF_PIP, 65.0f, 100, 100}, {JointId::RF_MCP, 55.0f, 100, 100},
+        {JointId::LF_PIP, 65.0f, 100, 100}, {JointId::LF_MCP, 55.0f, 100, 100},
     };
 }
 
-// 张开食指
+// Open index finger
 std::vector<JointCommand> MakeOpenIndexFinger() {
     return {
-        {JointId::THUMB_PIP, 30.0f}, {JointId::THUMB_MCP, 20.0f},
-        {JointId::THUMB_SWING, 20.0f}, {JointId::THUMB_ROTATION, 0.0f},
-        {JointId::FF_PIP, 0.0f}, {JointId::FF_MCP, 0.0f}, {JointId::FF_SWING, 0.0f},
-        {JointId::MF_PIP, 75.0f}, {JointId::MF_MCP, 70.0f},
-        {JointId::RF_PIP, 75.0f}, {JointId::RF_MCP, 70.0f},
-        {JointId::LF_PIP, 70.0f}, {JointId::LF_MCP, 70.0f},
+        {JointId::THUMB_PIP, 30.0f, 100, 100}, {JointId::THUMB_MCP, 20.0f, 100, 100},
+        {JointId::THUMB_SWING, 20.0f, 100, 100}, {JointId::THUMB_ROTATION, 0.0f, 100, 100},
+        {JointId::FF_PIP, 0.0f, 100, 100}, {JointId::FF_MCP, 0.0f, 100, 100}, {JointId::FF_SWING, 0.0f, 100, 100},
+        {JointId::MF_PIP, 75.0f, 100, 100}, {JointId::MF_MCP, 70.0f, 100, 100},
+        {JointId::RF_PIP, 75.0f, 100, 100}, {JointId::RF_MCP, 70.0f, 100, 100},
+        {JointId::LF_PIP, 70.0f, 100, 100}, {JointId::LF_MCP, 70.0f, 100, 100},
     };
 }
 
-// 张开中指
+// Open middle finger
 std::vector<JointCommand> MakeOpenMiddleFinger() {
     return {
-        {JointId::THUMB_PIP, 30.0f}, {JointId::THUMB_MCP, 20.0f},
-        {JointId::THUMB_SWING, 20.0f}, {JointId::THUMB_ROTATION, 0.0f},
-        {JointId::FF_PIP, 0.0f}, {JointId::FF_MCP, 0.0f}, {JointId::FF_SWING, 0.0f},
-        {JointId::MF_PIP, 0.0f}, {JointId::MF_MCP, 0.0f},
-        {JointId::RF_PIP, 75.0f}, {JointId::RF_MCP, 70.0f},
-        {JointId::LF_PIP, 70.0f}, {JointId::LF_MCP, 70.0f},
+        {JointId::THUMB_PIP, 30.0f, 100, 100}, {JointId::THUMB_MCP, 20.0f, 100, 100},
+        {JointId::THUMB_SWING, 20.0f, 100, 100}, {JointId::THUMB_ROTATION, 0.0f, 100, 100},
+        {JointId::FF_PIP, 0.0f, 100, 100}, {JointId::FF_MCP, 0.0f, 100, 100}, {JointId::FF_SWING, 0.0f, 100, 100},
+        {JointId::MF_PIP, 0.0f, 100, 100}, {JointId::MF_MCP, 0.0f, 100, 100},
+        {JointId::RF_PIP, 75.0f, 100, 100}, {JointId::RF_MCP, 70.0f, 100, 100},
+        {JointId::LF_PIP, 70.0f, 100, 100}, {JointId::LF_MCP, 70.0f, 100, 100},
     };
 }
 
-// 张开手掌姿态
+// Open hand pose
 std::vector<JointCommand> MakeOpenHand() {
     return {
-        {JointId::THUMB_PIP, 0.0f}, {JointId::THUMB_MCP, 0.0f},
-        {JointId::THUMB_SWING, 20.0f}, {JointId::THUMB_ROTATION, 0.0f},
-        {JointId::FF_PIP, 0.0f}, {JointId::FF_MCP, 0.0f}, {JointId::FF_SWING, 0.0f},
-        {JointId::MF_PIP, 0.0f}, {JointId::MF_MCP, 0.0f},
-        {JointId::RF_PIP, 0.0f}, {JointId::RF_MCP, 0.0f},
-        {JointId::LF_PIP, 0.0f}, {JointId::LF_MCP, 0.0f},
+        {JointId::THUMB_PIP, 0.0f, 100, 100}, {JointId::THUMB_MCP, 0.0f, 100, 100},
+        {JointId::THUMB_SWING, 20.0f, 100, 100}, {JointId::THUMB_ROTATION, 0.0f, 100, 100},
+        {JointId::FF_PIP, 0.0f, 100, 100}, {JointId::FF_MCP, 0.0f, 100, 100}, {JointId::FF_SWING, 0.0f, 100, 100},
+        {JointId::MF_PIP, 0.0f, 100, 100}, {JointId::MF_MCP, 0.0f, 100, 100},
+        {JointId::RF_PIP, 0.0f, 100, 100}, {JointId::RF_MCP, 0.0f, 100, 100},
+        {JointId::LF_PIP, 0.0f, 100, 100}, {JointId::LF_MCP, 0.0f, 100, 100},
     };
 }
 
-// OK姿态
+// OK pose
 std::vector<JointCommand> MakeOK() {
     return {
-        {JointId::THUMB_PIP, 40.0f}, {JointId::THUMB_MCP, 30.0f},
-        {JointId::THUMB_SWING, 30.0f}, {JointId::THUMB_ROTATION, 0.0f},
-        {JointId::FF_PIP, 30.0f}, {JointId::FF_MCP, 50.0f}, {JointId::FF_SWING, 0.0f},
-        {JointId::MF_PIP, 0.0f}, {JointId::MF_MCP, 0.0f},
-        {JointId::RF_PIP, 0.0f}, {JointId::RF_MCP, 0.0f},
-        {JointId::LF_PIP, 0.0f}, {JointId::LF_MCP, 0.0f},
+        {JointId::THUMB_PIP, 40.0f, 100, 100}, {JointId::THUMB_MCP, 30.0f, 100, 100},
+        {JointId::THUMB_SWING, 30.0f, 100, 100}, {JointId::THUMB_ROTATION, 0.0f, 100, 100},
+        {JointId::FF_PIP, 30.0f, 100, 100}, {JointId::FF_MCP, 50.0f, 100, 100}, {JointId::FF_SWING, 0.0f, 100, 100},
+        {JointId::MF_PIP, 0.0f, 100, 100}, {JointId::MF_MCP, 0.0f, 100, 100},
+        {JointId::RF_PIP, 0.0f, 100, 100}, {JointId::RF_MCP, 0.0f, 100, 100},
+        {JointId::LF_PIP, 0.0f, 100, 100}, {JointId::LF_MCP, 0.0f, 100, 100},
     };
 }
 
-// ========== 动作执行函数 ==========
+// ========== Action Execution Functions ==========
+
+bool HandZero(DexHand& hand) {
+    auto joints = MakeOpenHand();
+    return hand.MoveJoints(joints);
+}
 
 bool HandZero(DexHand& hand);
 
@@ -154,12 +159,7 @@ bool MakeOKGesture(DexHand& hand) {
     return HandZero(hand);
 }
 
-bool HandZero(DexHand& hand) {
-    auto joints = MakeOpenHand();
-    return hand.MoveJoints(joints);
-}
-
-// ========== 第一组动作 ==========
+// ========== First Action Group ==========
 bool FirstAction(DexHand& hand) {
     if (!ThumbTouch(hand)) return false;
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -170,7 +170,7 @@ bool FirstAction(DexHand& hand) {
     return true;
 }
 
-// ========== 第二组动作 ==========
+// ========== Second Action Group ==========
 bool SecondAction(DexHand& hand) {
     if (!SeqOpenFinger(hand)) return false;
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -178,7 +178,7 @@ bool SecondAction(DexHand& hand) {
     return true;
 }
 
-// ========== 主函数 ==========
+// ========== Main Function ==========
 int main() {
     std::cout << "***** 枭尧灵巧手 SDK - 手势舞功能演示 *****\n" << std::endl;
     auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
@@ -188,10 +188,10 @@ int main() {
     }
     bool connected = hand->Connect("auto");
     if (!connected) {
-        std::cout << "\n[扫描结束] 未能连接到灵巧手。" << std::endl;
+        std::cout << "\n[Scan complete] Failed to connect to dexterous hand." << std::endl;
         return 1;
     }
-    std::cout << "\n--- 设备已就绪，将开始手势舞功能演示 ---\n" << std::endl;
+    std::cout << "\n--- Device ready, starting gesture dance demo ---\n" << std::endl;
 
     int gesture_cycle = 0;
     const int max_cycles = 0;
@@ -200,7 +200,7 @@ int main() {
         gesture_cycle++;
         if (max_cycles > 0 && gesture_cycle > max_cycles) break;
 
-        std::cout << "\n--- 第 " << gesture_cycle << " 轮手势演示开始 ---" << std::endl;
+        std::cout << "\n--- Round " << gesture_cycle << " gesture demo started ---" << std::endl;
 
         if (!FirstAction(*hand)) {
             std::cout << "第 " << gesture_cycle << " 轮演示中的第一组动作执行失败" << std::endl;
@@ -212,15 +212,15 @@ int main() {
             break;
         }
 
-        std::cout << "--- 第 " << gesture_cycle << " 轮手势演示结束 ---\n" << std::endl;
+        std::cout << "--- Round " << gesture_cycle << " gesture demo finished ---\n" << std::endl;
 
         if (max_cycles == 0) {
-            std::cout << "按 Ctrl+C 停止演示并退出程序\n" << std::endl;
+            std::cout << "Press Ctrl+C to stop demo and exit\n" << std::endl;
         }
     }
 
     hand->Disconnect();
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    std::cout << "\n--- 演示结束，断开连接 ---" << std::endl;
+    std::cout << "\n--- Demo finished, disconnecting ---" << std::endl;
     return 0;
 }

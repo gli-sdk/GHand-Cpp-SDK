@@ -25,6 +25,7 @@ struct TactileRegionConfig {
  * 从 JSON 配置文件加载的每产品差异化参数。
  */
 struct ProductConfig {
+    std::string model;
     std::string name;
     std::vector<JointId> valid_joints;
     std::map<JointId, std::pair<float, float>> joint_limits;

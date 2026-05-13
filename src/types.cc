@@ -6,7 +6,8 @@ namespace ghand {
 // ===== ProductType =====
 std::string ToString(ProductType type) {
     switch (type) {
-        case ProductType::G5:      return "G5";
+        case ProductType::G5:      return "G5-13A23D-S01";
+        case ProductType::AUTO:    return "AUTO";
         default:                      return "UNKNOWN";
     }
 }

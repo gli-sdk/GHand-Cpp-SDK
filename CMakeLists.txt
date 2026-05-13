@@ -29,6 +29,7 @@ if(WIN32)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/internal)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/wpcap)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/zlgcan)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/soem/win32)
 
     # 链接 SOEM 的库文件
     link_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib)
@@ -38,6 +39,7 @@ elseif(UNIX AND NOT APPLE)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/comm)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/internal)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/soem/linux)
 
     # 依赖检测
     find_package(Threads REQUIRED)
@@ -110,7 +112,7 @@ set_target_properties(ghand PROPERTIES
     SOVERSION 1
 )
 
-# ========== 自动复制运行时 DLL 到输出目录 ==========
+# ========== 自动复制运行时 DLL 和配置文件到输出目录 ==========
 if(WIN32)
     file(GLOB RUNTIME_DLLS "${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/*.dll")
     if(RUNTIME_DLLS)
@@ -122,6 +124,23 @@ if(WIN32)
         )
     endif()
 endif()
+
+# 复制配置文件到输出目录（开发时自动从源码 config/ 同步）
+# GetSdkRootFromModule() 从 DLL 路径反推 SDK root（DLL 目录的父目录）
+# 因此 config 需放在 DLL 目录的父目录下：
+#   主库 DLL: build/<config>/ghand.dll  → SDK root = build/  → config at build/config/
+#   示例 DLL: build/examples/<config>/   → SDK root = build/examples/ → config at build/examples/config/
+add_custom_command(TARGET ghand POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/config"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/XIAOYAO-Hand.json"
+        "${CMAKE_BINARY_DIR}/config/"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/examples/config"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/XIAOYAO-Hand.json"
+        "${CMAKE_BINARY_DIR}/examples/config/"
+    COMMENT "Copying config files to build/config/ and build/examples/config/"
+)
 
 # ========== 示例程序 ==========
 add_subdirectory(examples)

@@ -6,6 +6,7 @@
 #include "logger.h"
 #include "product_config_loader.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <unordered_map>
@@ -52,10 +53,14 @@ DexHand::DexHand(ProductType product_type, CommType comm_type)
       comm_type_(comm_type),
       product_type_(product_type),
       device_name_("") {
-    config_ = LoadProductConfig(product_type);
-    if (config_.name.empty()) {
-        LOG_ERROR("Failed to load product config for product type: " << ToString(product_type));
-        return;
+    if (product_type == ProductType::AUTO) {
+        config_ = ProductConfig();
+    } else {
+        config_ = LoadProductConfig(product_type);
+        if (config_.name.empty()) {
+            LOG_ERROR("Failed to load product config for product type: " << ToString(product_type));
+            return;
+        }
     }
 
     switch (comm_type) {
@@ -72,7 +77,9 @@ DexHand::DexHand(ProductType product_type, CommType comm_type)
     }
     callback_manager_ = std::unique_ptr<DexHandCallbackManager>(new DexHandCallbackManager());
 
-    SetupCallbacks();
+    if (product_type != ProductType::AUTO) {
+        SetupCallbacks();
+    }
 }
 
 DexHand::~DexHand() = default;
@@ -99,6 +106,47 @@ bool DexHand::ConnectToDevice(const std::string& device_name) {
     if (result == 0) {
         device_name_ = device_name;
         LOG_INFO("Successfully connected to device: " << device_name);
+
+        // 连接后校验 / 自动识别
+        std::string dev_name = comm_->GetDeviceInfo().device_name;
+        if (!dev_name.empty()) {
+            if (product_type_ == ProductType::AUTO) {
+                config_ = FindConfigByName(dev_name);
+                if (config_.name.empty()) {
+                    LOG_ERROR("Auto-detection failed for device: " << dev_name);
+                    comm_->Disconnect();
+                    return false;
+                }
+                comm_->Disconnect();
+                switch (comm_type_) {
+                    case CommType::ETHERCAT:
+                        comm_.reset(new EtherCATComm(config_));
+                        break;
+                    case CommType::CANFD:
+                        comm_.reset(new CANFDComm(config_));
+                        break;
+                    default:
+                        break;
+                }
+                SetupCallbacks();
+                int rc = comm_->Connect(device_name);
+                if (rc != 0) {
+                    LOG_ERROR("Failed to reconnect after auto-detection");
+                    return false;
+                }
+                LOG_INFO("Auto-detected product: " << config_.name);
+            } else if (!config_.name.empty()) {
+                std::string dev_lower = dev_name;
+                std::string cfg_lower = config_.name;
+                std::transform(dev_lower.begin(), dev_lower.end(), dev_lower.begin(), ::tolower);
+                std::transform(cfg_lower.begin(), cfg_lower.end(), cfg_lower.begin(), ::tolower);
+                if (dev_lower != cfg_lower) {
+                    LOG_WARNING("Device name mismatch: device reports \"" << dev_name
+                                << "\", config expects \"" << config_.name << "\"");
+                }
+            }
+        }
+
         return true;
     }
     return false;
