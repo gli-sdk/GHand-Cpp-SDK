@@ -32,7 +32,7 @@ using TactileDataCallback = std::function<void(const TactileData&)>;
 #endif
 class GHAND_API DexHand {
 public:
-    static std::unique_ptr<DexHand> Create(ProductType product_type,
+    static std::unique_ptr<DexHand> Create(ProductType product_type = ProductType::AUTO,
                                             CommType comm_type = CommType::ETHERCAT);
     ~DexHand();
 
