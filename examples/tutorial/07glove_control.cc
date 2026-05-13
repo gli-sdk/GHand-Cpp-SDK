@@ -15,7 +15,7 @@
     const int SOCKET_ERROR = -1;
 #endif
 
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 #include <iostream>
 #include <iomanip>
 #include <thread>

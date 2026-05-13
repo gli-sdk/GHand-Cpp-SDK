@@ -1,5 +1,5 @@
-#include "ghand/dexhand.h"
-#include "internal/dexhand.h"
+#include "ghand/ghand.h"
+#include "internal/ghand.h"
 
 namespace ghand {
 

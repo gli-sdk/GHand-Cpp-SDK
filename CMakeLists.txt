@@ -70,14 +70,14 @@ include_directories(${GENERATED_DIR})
 
 # 源文件列表（显式列出，避免 GLOB_RECURSE 在新增/删除文件时不同步）
 set(SOURCES
-    src/dexhand.cc
+    src/ghand.cc
     src/logging.cc
     src/types.cc
     src/comm/canfd_comm.cc
     src/comm/canfd_driver_zlg.cc
     src/comm/canfd_protocol.cc
     src/comm/ethercat_comm.cc
-    src/internal/dexhand.cc
+    src/internal/ghand.cc
     src/internal/dexhand_callback_manager.cc
     src/internal/file_lock.cc
     src/internal/product_config_loader.cc
@@ -135,11 +135,11 @@ endif()
 add_custom_command(TARGET ghand POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/config"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/config/XIAOYAO-Hand.json"
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/xiaoyao_hand.json"
         "${CMAKE_BINARY_DIR}/config/"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/examples/config"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/config/XIAOYAO-Hand.json"
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/xiaoyao_hand.json"
         "${CMAKE_BINARY_DIR}/examples/config/"
     COMMENT "Copying config files to build/config/ and build/examples/config/"
 )

@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 using namespace ghand;
 
 int main() {

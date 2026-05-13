@@ -285,7 +285,7 @@ sudo ./examples/basic_connection
 #### 最小可用代码示例
 
 ```cpp
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 #include <iostream>
 
 int main() {
@@ -317,7 +317,7 @@ int main() {
 #### 完整示例
 
 ```cpp
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 #include "ghand/logging.h"
 #include <iostream>
 #include <thread>
@@ -968,7 +968,7 @@ LOG_WARNING("警告: 温度过高");
 
 **完整示例：**
 ```cpp
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 #include "ghand/logging.h"
 #include <iostream>
 
@@ -1031,7 +1031,7 @@ int main() {
 **示例文件：** `examples/basic_connection.cc`
 
 ```cpp
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 #include <iostream>
 
 int main() {
@@ -1100,7 +1100,7 @@ sudo ./examples/basic_connection
 **示例文件：** `examples/move_joints.cc`
 
 ```cpp
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 #include <iostream>
 #include <iomanip>
 #include <thread>
@@ -1178,7 +1178,7 @@ int main() {
 **示例文件：** `examples/tactile_callback.cc`
 
 ```cpp
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 #include <iostream>
 #include <cmath>
 #include <thread>
@@ -1254,7 +1254,7 @@ int main() {
 **示例文件：** `examples/preset_gesture.cc`
 
 ```cpp
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 #include <iostream>
 #include <unordered_map>
 #include <thread>
@@ -1371,7 +1371,7 @@ GESTURE_DEFINITIONS[GestureType::VICTORY] = {
 C++ SDK 原生支持多手控制，可以同时控制多台灵巧手设备。
 
 ```cpp
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -1492,7 +1492,7 @@ int main() {
 提供交互式命令行界面，用户可以输入关节参数实时控制灵巧手。
 
 ```cpp
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 #include <iostream>
 #include <unordered_map>
 #include <string>
@@ -1593,7 +1593,7 @@ int main() {
 ### A. 完整的 API 参考
 
 详细的 API 文档请参考头文件中的注释：
-- `include/ghand/dexhand.h` - 主要 API
+- `include/ghand/ghand.h` - 主要 API
 - `include/ghand/types.h` - 类型定义
 - `include/ghand/logging.h` - 日志系统
 

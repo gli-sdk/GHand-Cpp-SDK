@@ -1,4 +1,4 @@
-#include "ghand/dexhand.h"
+#include "ghand/ghand.h"
 #include <iostream>
 #include <iomanip>
 #include <thread>

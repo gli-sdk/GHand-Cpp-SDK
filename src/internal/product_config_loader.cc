@@ -22,7 +22,7 @@ namespace internal {
 
 std::string ProductTypeToFileName(ProductType type) {
     switch (type) {
-        case ProductType::G5:      return "XIAOYAO-Hand.json";
+        case ProductType::G5:      return "xiaoyao_hand.json";
         case ProductType::AUTO:    return "";  // AUTO mode defers config loading
         default:                   return "";
     }
