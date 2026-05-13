@@ -1,5 +1,5 @@
 #include "product_config_loader.h"
-#include "logger.h"
+#include "ghand/logging.h"
 
 #include <algorithm>
 #include <nlohmann/json.hpp>

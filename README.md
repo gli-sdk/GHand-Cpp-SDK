@@ -1,8 +1,6 @@
 # GHand SDK C++
 
-## 概述
-
-GHand SDK C++ 是GHand 灵巧手的 C++ 开发包，提供对机械手的完整控制功能。
+GHand SDK C++ 是GHand灵巧手的 C++ 开发包，支持 EtherCAT 、CANFD 和 RS485 通信，提供关节控制、触觉数据采集和实时状态反馈。
 
 ## 功能特性
 
@@ -17,74 +15,117 @@ GHand SDK C++ 是GHand 灵巧手的 C++ 开发包，提供对机械手的完整�
 
 ```
 ghand-sdk-cpp/
-├── include/ghand/    # 公共头文件
-│   ├── dexhand.h       # 主 API
-│   ├── types.h         # 类型定义
-│   ├── logging.h       # 日志系统
-│   └── version.h       # 版本信息
-├── src/                # 源代码
-│   └── internal/       # 内部实现
-├── lib/                # 库文件（按平台分类）
-│   ├── windows/        # Windows 64位
-│   │   ├── ghand.lib
-│   │   └── ghand.dll
-│   └── linux/          # Linux 64位
-│       └── libghand.so
-├── cmake/              # 平台配置
-│   ├── Windows.cmake
-│   └── Linux.cmake
-├── examples/           # 示例代码
+├── include/ghand/            # 公共头文件
+│   ├── dexhand.h             # 主 API
+│   ├── types.h               # 类型定义
+│   ├── logging.h             # 日志系统
+│   ├── export.h              # DLL 导出宏
+│   └── version.h             # 版本信息
+├── src/
+│   ├── dexhand.cc            # 公共 API 实现（PIMPL 桥接）
+│   ├── logging.cc            # 日志实现
+│   ├── types.cc              # 类型序列化
+│   ├── comm/                 # 通信层
+│   │   ├── icomm.h           # 通信抽象接口
+│   │   ├── ethercat_comm.h   # EtherCAT 实现
+│   │   ├── ethercat_comm.cc
+│   │   ├── canfd_comm.h      # CANFD 实现
+│   │   ├── canfd_comm.cc
+│   │   ├── canfd_protocol.h  # CANFD 协议编解码
+│   │   ├── canfd_protocol.cc
+│   │   ├── canfd_driver.h    # CANFD 驱动抽象
+│   │   └── canfd_driver_zlg.cc  # ZLG 驱动实现
+│   └── internal/             # 内部实现
+│       ├── dexhand.h         # 内部状态机
+│       ├── dexhand.cc
+│       ├── dexhand_callback_manager.h  # 回调管理 + 数据缓存
+│       ├── dexhand_callback_manager.cc
+│       ├── product_config.h          # 产品配置结构
+│       ├── product_config_loader.h   # JSON 配置加载
+│       ├── product_config_loader.cc
+│       ├── file_lock.h       # 设备文件锁
+│       └── file_lock.cc
+├── config/                   # 产品配置文件
+│   └── XIAOYAO-Hand.json
+├── examples/
+│   ├── tutorial/
+│   │   ├── 01basic_connection.cc         # 基础连接
+│   │   ├── 02move_joints.cc             # 关节运动
+│   │   ├── 03speed_control.cc           # 速度控制
+│   │   ├── 04torque_control.cc          # 力矩控制
+│   │   ├── 05tactile_callback.cc        # 触觉回调
+│   │   ├── 06multi_hand.cc              # 多手控制
+│   │   ├── 07glove_control.cc           # 手套控制
+│   │   └── 08interactive_joint_control.cc  # 交互式控制
+│   └── demo/
+│       ├── preset_gesture.cc            # 预设手势
+│       ├── gesture_dance.cc             # 手势舞
+│       ├── grabbing_action.cc           # 抓取
+│       ├── press_action.cc              # 按压
+│       ├── clap_action.cc               # 拍手
+│       ├── hold_action.cc               # 握持
+│       ├── knock_action.cc              # 敲击
+│       ├── lift_action.cc               # 拎起
+│       ├── pull_action.cc               # 拉动
+│       └── support_action.cc            # 支撑
+└── third_party/              # 第三方库
+    ├── include/
+    │   ├── soem/             # SOEM (EtherCAT)
+    │   ├── wpcap/            # WinPcap
+    │   ├── zlgcan/           # ZLG CAN
+    │   └── nlohmann/         # JSON 解析
+    └── lib/
+        ├── windows/
+        │   ├── soem.lib
+        │   ├── wpcap.lib
+        │   ├── Packet.lib
+        │   ├── zlgcan.lib
+        │   ├── zlgcan.dll
+        │   └── kerneldlls/   # ZLG 驱动 DLL 及设备配置
+        └── linux/
+            └── libsoem.a
 ```
 
 ## 快速开始
 
-### 1. 包含头文件
-
 ```cpp
 #include "ghand/dexhand.h"
-```
 
-### 2. 创建实例并连接
+using namespace ghand;
 
-```cpp
-ghand::DexHand hand(ghand::ProductType::G5, ghand::CommType::ETHERCAT);
+int main() {
+    // 指定产品类型
+    auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
 
-if (!hand.Connect(ghand::CommType::ETHERCAT, "auto")) {
-    printf("连接失败\n");
-    return -1;
-}
-```
+    // 或自动识别（连接后根据设备名匹配配置）
+    auto hand = DexHand::Create(ProductType::AUTO, CommType::ETHERCAT);
 
-### 3. 注册回调
-
-```cpp
-hand.SetJointsCallback([](const std::vector<ghand::Joint>& joints) {
-    for (const auto& joint : joints) {
-        printf("关节 %d: %.1f°\n", (int)joint.id, joint.angle);
+    if (!hand || !hand->Connect("auto")) {
+        printf("连接失败\n");
+        return -1;
     }
-});
 
-hand.SetTactileDataCallback([](const ghand::TactileData& data) {
-    auto force = data.GetResultant(ghand::FingerType::THUMB);
-    printf("拇指合力: %.2f N\n", sqrt(force.x*force.x + force.y*force.y + force.z*force.z));
-});
-```
+    // 拉模式：主动查询最新缓存
+    auto state   = hand->GetHandData();     // 手部状态
+    auto joints  = hand->GetJointsData();   // 关节数据
+    auto tactile = hand->GetTactileData();  // 触觉数据
 
-### 4. 控制运动
+    // 推模式：注册回调
+    hand->SetJointsCallback([](const std::vector<Joint>& joints) {
+        for (const auto& j : joints) {
+            printf("关节 %d: %.1f°\n", (int)j.id, j.angle);
+        }
+    });
 
-```cpp
-std::vector<ghand::JointCommand> commands = {
-    {ghand::JointId::THUMB_MCP, 45.0f, 50, 50},
-    {ghand::JointId::FF_MCP, 30.0f, 50, 50}
-};
+    // 控制关节
+    std::vector<JointCommand> cmds = {
+        {JointId::THUMB_MCP, 45.0f, 50, 50},
+        {JointId::FF_MCP,    30.0f, 50, 50},
+    };
+    hand->MoveJoints(cmds);
 
-hand.MoveJoints(commands);
-```
-
-### 5. 断开连接
-
-```cpp
-hand.Disconnect();
+    hand->Disconnect();
+}
 ```
 
 ## 日志系统
@@ -94,16 +135,8 @@ SDK 提供了内置的日志系统，默认只显示 WARNING 和 ERROR 级别的
 ```cpp
 #include "ghand/logging.h"
 
-// 升级到 INFO 级别
 ghand::ConfigureConsole(ghand::LogLevel::INFO);
-
-// 启用文件日志（DEBUG 级别，包含详细的时间戳和源文件信息）
 ghand::ConfigureFile("ghand.log");
-
-// 在代码中记录日志
-LOG_INFO("连接到设备: " << adapter_name);
-LOG_ERROR("连接失败");
-LOG_DEBUG("调试信息");
 ```
 
 详细的日志系统使用说明请参阅 [C++ SDK 开发者文档](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)。
@@ -111,10 +144,8 @@ LOG_DEBUG("调试信息");
 ## 编译示例
 
 ### Windows
-
 ```bash
-mkdir build
-cd build
+mkdir build && cd build
 cmake ..
 cmake --build . --config Release
 

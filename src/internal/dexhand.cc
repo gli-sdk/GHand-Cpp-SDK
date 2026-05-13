@@ -3,7 +3,7 @@
 #include "canfd_comm.h"
 #include "ethercat_comm.h"
 #include "dexhand_callback_manager.h"
-#include "logger.h"
+#include "ghand/logging.h"
 #include "product_config_loader.h"
 
 #include <algorithm>

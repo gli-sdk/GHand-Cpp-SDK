@@ -1,5 +1,5 @@
 #include "canfd_driver.h"
-#include "logger.h"
+#include "ghand/logging.h"
 
 #include <algorithm>
 #include <cstring>

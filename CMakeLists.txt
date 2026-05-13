@@ -27,19 +27,21 @@ if(WIN32)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/comm)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/internal)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/wpcap)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/zlgcan)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/soem/win32)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/wpcap)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/zlgcan)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/soem/win32)
 
     # 链接 SOEM 的库文件
-    link_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib)
+    link_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib)
 
 elseif(UNIX AND NOT APPLE)
     # 添加头文件目录
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/comm)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/internal)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/soem/linux)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/soem/linux)
 
     # 依赖检测
     find_package(Threads REQUIRED)
@@ -49,7 +51,7 @@ elseif(UNIX AND NOT APPLE)
 endif()
 
 # 从 zlgcan.h 自动生成设备类型映射表，避免手动维护宏名映射
-set(ZLGCAN_H "${CMAKE_CURRENT_SOURCE_DIR}/include/zlgcan/zlgcan.h")
+set(ZLGCAN_H "${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/zlgcan/zlgcan.h")
 set(GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY ${GENERATED_DIR})
 
@@ -88,17 +90,17 @@ target_compile_definitions(ghand PRIVATE GHAND_BUILD)
 # 链接依赖库
 if(WIN32)
     target_link_libraries(ghand PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/soem.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows/soem.lib
         winmm ws2_32
         setupapi cfgmgr32
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/Packet.lib
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/wpcap.lib
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/zlgcan.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows/Packet.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows/wpcap.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows/zlgcan.lib
     )
 else()
     # Linux: 使用预编译库
     target_link_libraries(ghand PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/linux/libsoem.a
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/linux/libsoem.a
         Threads::Threads
         ${PCAP_LIBRARIES}
         ssl crypto rt dl
@@ -114,7 +116,7 @@ set_target_properties(ghand PROPERTIES
 
 # ========== 自动复制运行时 DLL 和配置文件到输出目录 ==========
 if(WIN32)
-    file(GLOB RUNTIME_DLLS "${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/*.dll")
+    file(GLOB RUNTIME_DLLS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows/*.dll")
     if(RUNTIME_DLLS)
         add_custom_command(TARGET ghand POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different

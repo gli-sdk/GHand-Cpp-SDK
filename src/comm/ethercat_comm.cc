@@ -9,7 +9,7 @@
 #endif
 
 #include "ethercat_comm.h"
-#include "logger.h"
+#include "ghand/logging.h"
 
 #ifdef _WIN32
     #include <windows.h>

@@ -1,11 +1,44 @@
-#include "internal/logger.h"
 #include "ghand/logging.h"
-#include <sstream>
-#include <iomanip>
 #include <chrono>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <sstream>
 
 namespace ghand {
 namespace internal {
+
+// Logger 类声明（仅此文件内部使用）
+class Logger {
+public:
+    static Logger& GetInstance();
+    void SetConsoleLevel(LogLevel level);
+    void SetFileLog(const std::string& filename, LogLevel level = LogLevel::DEBUG);
+    void Log(LogLevel level, const char* file, int line, const std::string& message);
+    std::ostringstream& GetStream(LogLevel level, const char* file, int line);
+
+private:
+    Logger();
+    ~Logger();
+    Logger(const Logger&) = delete;
+    Logger& operator=(const Logger&) = delete;
+
+    std::string FormatTime(bool iso_format = false) const;
+    std::string LevelToString(LogLevel level) const;
+    std::string FormatMessage(LogLevel level, const char* file, int line,
+                              const std::string& message, bool verbose) const;
+
+    LogLevel console_level_;
+    std::unique_ptr<std::ofstream> file_stream_;
+    LogLevel file_level_;
+    std::mutex mutex_;
+    std::unique_ptr<std::ostringstream> stream_buffer_;
+    LogLevel current_level_;
+    std::string current_file_;
+    int current_line_;
+};
 
 // ============================================================================
 // Logger 类实现
@@ -159,27 +192,16 @@ std::string Logger::FormatMessage(LogLevel level, const char* file, int line,
 
 }  // namespace internal
 
-// ============================================================================
-// 公共 API 实现
-// ============================================================================
-
-namespace detail {
-
-void LogMessage(LogLevel level, const char* file, int line, const std::string& message) {
-    internal::Logger::GetInstance().Log(
-        static_cast<internal::LogLevel>(level), file, line, message);
+void Log(LogLevel level, const char* file, int line, const std::string& message) {
+    internal::Logger::GetInstance().Log(level, file, line, message);
 }
 
-}  // namespace detail
-
 void ConfigureConsole(LogLevel level) {
-    internal::Logger::GetInstance().SetConsoleLevel(
-        static_cast<internal::LogLevel>(level));
+    internal::Logger::GetInstance().SetConsoleLevel(level);
 }
 
 void ConfigureFile(const std::string& filename, LogLevel level) {
-    internal::Logger::GetInstance().SetFileLog(filename,
-        static_cast<internal::LogLevel>(level));
+    internal::Logger::GetInstance().SetFileLog(filename, level);
 }
 
 }  // namespace ghand

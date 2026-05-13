@@ -8,16 +8,16 @@ function(copy_dll_for_target target_name)
             "$<TARGET_FILE_DIR:${target_name}>"
         COMMENT "Copying ghand.dll to ${target_name} directory"
     )
-    if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/lib/windows/zlgcan.dll")
+    if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/lib/windows/zlgcan.dll")
         add_custom_command(TARGET ${target_name} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_SOURCE_DIR}/lib/windows/zlgcan.dll"
+                "${CMAKE_SOURCE_DIR}/third_party/lib/windows/zlgcan.dll"
                 "$<TARGET_FILE_DIR:${target_name}>"
             COMMENT "Copying zlgcan.dll to ${target_name} directory"
         )
     endif()
-    if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/lib/windows/kerneldlls")
-        file(GLOB KERNEL_DLLS "${CMAKE_SOURCE_DIR}/lib/windows/kerneldlls/*.dll")
+    if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/lib/windows/kerneldlls")
+        file(GLOB KERNEL_DLLS "${CMAKE_SOURCE_DIR}/third_party/lib/windows/kerneldlls/*.dll")
         if(KERNEL_DLLS)
             add_custom_command(TARGET ${target_name} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different

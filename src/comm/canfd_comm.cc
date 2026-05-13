@@ -7,7 +7,7 @@
 #endif
 
 #include "canfd_comm.h"
-#include "logger.h"
+#include "ghand/logging.h"
 
 #include <algorithm>
 #include <cmath>
