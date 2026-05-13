@@ -4,7 +4,7 @@
 #include "product_config.h"
 #include "ghand/types.h"
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 /**
@@ -15,6 +15,6 @@ namespace internal {
 ProductConfig LoadProductConfig(ProductType product);
 
 }  // namespace internal
-}  // namespace xiaoyao
+}  // namespace ghand
 
 #endif  // SRC_INTERNAL_PRODUCT_CONFIG_LOADER_H_

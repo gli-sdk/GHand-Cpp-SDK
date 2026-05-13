@@ -5,15 +5,15 @@
 #include <chrono>
 #include <map>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 int main() {
     std::cout << "========================================\n";
-    std::cout << "  Xiaoyao Dexterous Hand SDK - Multi-Hand Control Demo\n";
+    std::cout << "  GHand Dexterous Hand SDK - Multi-Hand Control Demo\n";
     std::cout << "========================================\n";
 
     // Search for network adapters
-    auto temp_hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    auto temp_hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
     if (!temp_hand) {
         std::cerr << "Failed to create DexHand" << std::endl;
         return -1;
@@ -38,7 +38,7 @@ int main() {
     std::cout << "\nAttempting to connect devices...\n";
     for (const auto& adapter : adapters) {
         const std::string& name = adapter.first;
-        auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+        auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
         if (hand->Connect(name)) {
             hands.push_back(std::move(hand));
             std::cout << "  ✓ Connected device: " << name << '\n';

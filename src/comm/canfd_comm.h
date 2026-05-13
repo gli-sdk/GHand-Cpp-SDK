@@ -13,7 +13,7 @@
 #include <thread>
 #include <vector>
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 /**
@@ -112,6 +112,6 @@ private:
 };
 
 } // namespace internal
-} // namespace xiaoyao
+} // namespace ghand
 
 #endif // SRC_INTERNAL_CANFD_COMM_H_

@@ -1,5 +1,5 @@
-#ifndef XIAOYAO_INTERNAL_FILE_LOCK_H_
-#define XIAOYAO_INTERNAL_FILE_LOCK_H_
+#ifndef GHAND_INTERNAL_FILE_LOCK_H_
+#define GHAND_INTERNAL_FILE_LOCK_H_
 
 #include <string>
 
@@ -9,7 +9,7 @@
 #include <unistd.h>
 #endif
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 /**
@@ -22,7 +22,7 @@ namespace internal {
  * - Windows: 使用 CreateFile 独占模式
  * - Linux: 使用 flock 系统调用
  *
- * 锁文件格式：xiaoyao_ethernet_{md5(adapter_name)}.lock
+ * 锁文件格式：ghand_ethernet_{md5(adapter_name)}.lock
  * 锁文件位置：
  * - Windows: %TEMP% 目录
  * - Linux: /tmp 目录
@@ -51,6 +51,6 @@ private:
 std::string GetAdapterLockPath(const std::string& adapter_name);
 
 }  // namespace internal
-}  // namespace xiaoyao
+}  // namespace ghand
 
-#endif  // XIAOYAO_INTERNAL_FILE_LOCK_H_
+#endif  // GHAND_INTERNAL_FILE_LOCK_H_

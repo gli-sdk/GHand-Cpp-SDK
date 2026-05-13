@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 /**
@@ -66,6 +66,6 @@ public:
 std::unique_ptr<CANFDDriver> CreateZLGDriver();
 
 } // namespace internal
-} // namespace xiaoyao
+} // namespace ghand
 
 #endif // SRC_INTERNAL_CANFD_DRIVER_H_

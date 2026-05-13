@@ -8,7 +8,7 @@
 #include <mutex>
 #include <sstream>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 // ========== Gesture Type Definitions ==========
 
@@ -33,81 +33,81 @@ std::string GetGestureName(GestureType gesture) {
 
 // ========== Gesture Definitions ==========
 
-const std::unordered_map<GestureType, std::unordered_map<xiaoyao::JointId, float>> GESTURE_DEFINITIONS = {
+const std::unordered_map<GestureType, std::unordered_map<ghand::JointId, float>> GESTURE_DEFINITIONS = {
     {
         GestureType::OPEN_HAND,
         {
-            {xiaoyao::JointId::THUMB_PIP, 0.0f}, {xiaoyao::JointId::THUMB_MCP, 0.0f},
-            {xiaoyao::JointId::THUMB_SWING, 0.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
-            {xiaoyao::JointId::FF_PIP, 0.0f}, {xiaoyao::JointId::FF_MCP, 0.0f},
-            {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 0.0f},
-            {xiaoyao::JointId::MF_MCP, 0.0f}, {xiaoyao::JointId::RF_PIP, 0.0f},
-            {xiaoyao::JointId::RF_MCP, 0.0f}, {xiaoyao::JointId::LF_PIP, 0.0f},
-            {xiaoyao::JointId::LF_MCP, 0.0f},
+            {ghand::JointId::THUMB_PIP, 0.0f}, {ghand::JointId::THUMB_MCP, 0.0f},
+            {ghand::JointId::THUMB_SWING, 0.0f}, {ghand::JointId::THUMB_ROTATION, 0.0f},
+            {ghand::JointId::FF_PIP, 0.0f}, {ghand::JointId::FF_MCP, 0.0f},
+            {ghand::JointId::FF_SWING, 0.0f}, {ghand::JointId::MF_PIP, 0.0f},
+            {ghand::JointId::MF_MCP, 0.0f}, {ghand::JointId::RF_PIP, 0.0f},
+            {ghand::JointId::RF_MCP, 0.0f}, {ghand::JointId::LF_PIP, 0.0f},
+            {ghand::JointId::LF_MCP, 0.0f},
         }
     },
     {
         GestureType::FIST,
         {
-            {xiaoyao::JointId::THUMB_PIP, 40.0f}, {xiaoyao::JointId::THUMB_MCP, 30.0f},
-            {xiaoyao::JointId::THUMB_SWING, 30.0f}, {xiaoyao::JointId::THUMB_ROTATION, 4.0f},
-            {xiaoyao::JointId::FF_PIP, 65.0f}, {xiaoyao::JointId::FF_MCP, 55.0f},
-            {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 65.0f},
-            {xiaoyao::JointId::MF_MCP, 55.0f}, {xiaoyao::JointId::RF_PIP, 65.0f},
-            {xiaoyao::JointId::RF_MCP, 55.0f}, {xiaoyao::JointId::LF_PIP, 65.0f},
-            {xiaoyao::JointId::LF_MCP, 55.0f},
+            {ghand::JointId::THUMB_PIP, 40.0f}, {ghand::JointId::THUMB_MCP, 30.0f},
+            {ghand::JointId::THUMB_SWING, 30.0f}, {ghand::JointId::THUMB_ROTATION, 4.0f},
+            {ghand::JointId::FF_PIP, 65.0f}, {ghand::JointId::FF_MCP, 55.0f},
+            {ghand::JointId::FF_SWING, 0.0f}, {ghand::JointId::MF_PIP, 65.0f},
+            {ghand::JointId::MF_MCP, 55.0f}, {ghand::JointId::RF_PIP, 65.0f},
+            {ghand::JointId::RF_MCP, 55.0f}, {ghand::JointId::LF_PIP, 65.0f},
+            {ghand::JointId::LF_MCP, 55.0f},
         }
     },
     {
         GestureType::OK,
         {
-            {xiaoyao::JointId::THUMB_PIP, 40.0f}, {xiaoyao::JointId::THUMB_MCP, 30.0f},
-            {xiaoyao::JointId::THUMB_SWING, 30.0f}, {xiaoyao::JointId::THUMB_ROTATION, 4.0f},
-            {xiaoyao::JointId::FF_PIP, 30.0f}, {xiaoyao::JointId::FF_MCP, 50.0f},
-            {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 0.0f},
-            {xiaoyao::JointId::MF_MCP, 0.0f}, {xiaoyao::JointId::RF_PIP, 0.0f},
-            {xiaoyao::JointId::RF_MCP, 0.0f}, {xiaoyao::JointId::LF_PIP, 0.0f},
-            {xiaoyao::JointId::LF_MCP, 0.0f},
+            {ghand::JointId::THUMB_PIP, 40.0f}, {ghand::JointId::THUMB_MCP, 30.0f},
+            {ghand::JointId::THUMB_SWING, 30.0f}, {ghand::JointId::THUMB_ROTATION, 4.0f},
+            {ghand::JointId::FF_PIP, 30.0f}, {ghand::JointId::FF_MCP, 50.0f},
+            {ghand::JointId::FF_SWING, 0.0f}, {ghand::JointId::MF_PIP, 0.0f},
+            {ghand::JointId::MF_MCP, 0.0f}, {ghand::JointId::RF_PIP, 0.0f},
+            {ghand::JointId::RF_MCP, 0.0f}, {ghand::JointId::LF_PIP, 0.0f},
+            {ghand::JointId::LF_MCP, 0.0f},
         }
     },
     {
         GestureType::THUMBS_UP,
         {
-            {xiaoyao::JointId::THUMB_PIP, 0.0f}, {xiaoyao::JointId::THUMB_MCP, 0.0f},
-            {xiaoyao::JointId::THUMB_SWING, 0.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
-            {xiaoyao::JointId::FF_PIP, 65.0f}, {xiaoyao::JointId::FF_MCP, 55.0f},
-            {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 65.0f},
-            {xiaoyao::JointId::MF_MCP, 55.0f}, {xiaoyao::JointId::RF_PIP, 65.0f},
-            {xiaoyao::JointId::RF_MCP, 55.0f}, {xiaoyao::JointId::LF_PIP, 65.0f},
-            {xiaoyao::JointId::LF_MCP, 55.0f},
+            {ghand::JointId::THUMB_PIP, 0.0f}, {ghand::JointId::THUMB_MCP, 0.0f},
+            {ghand::JointId::THUMB_SWING, 0.0f}, {ghand::JointId::THUMB_ROTATION, 0.0f},
+            {ghand::JointId::FF_PIP, 65.0f}, {ghand::JointId::FF_MCP, 55.0f},
+            {ghand::JointId::FF_SWING, 0.0f}, {ghand::JointId::MF_PIP, 65.0f},
+            {ghand::JointId::MF_MCP, 55.0f}, {ghand::JointId::RF_PIP, 65.0f},
+            {ghand::JointId::RF_MCP, 55.0f}, {ghand::JointId::LF_PIP, 65.0f},
+            {ghand::JointId::LF_MCP, 55.0f},
         }
     },
     {
         GestureType::SIX_SIGN,
         {
-            {xiaoyao::JointId::THUMB_PIP, 0.0f}, {xiaoyao::JointId::THUMB_MCP, 0.0f},
-            {xiaoyao::JointId::THUMB_SWING, 0.0f}, {xiaoyao::JointId::THUMB_ROTATION, 0.0f},
-            {xiaoyao::JointId::FF_PIP, 65.0f}, {xiaoyao::JointId::FF_MCP, 55.0f},
-            {xiaoyao::JointId::FF_SWING, 0.0f}, {xiaoyao::JointId::MF_PIP, 65.0f},
-            {xiaoyao::JointId::MF_MCP, 55.0f}, {xiaoyao::JointId::RF_PIP, 65.0f},
-            {xiaoyao::JointId::RF_MCP, 55.0f}, {xiaoyao::JointId::LF_PIP, 0.0f},
-            {xiaoyao::JointId::LF_MCP, 0.0f},
+            {ghand::JointId::THUMB_PIP, 0.0f}, {ghand::JointId::THUMB_MCP, 0.0f},
+            {ghand::JointId::THUMB_SWING, 0.0f}, {ghand::JointId::THUMB_ROTATION, 0.0f},
+            {ghand::JointId::FF_PIP, 65.0f}, {ghand::JointId::FF_MCP, 55.0f},
+            {ghand::JointId::FF_SWING, 0.0f}, {ghand::JointId::MF_PIP, 65.0f},
+            {ghand::JointId::MF_MCP, 55.0f}, {ghand::JointId::RF_PIP, 65.0f},
+            {ghand::JointId::RF_MCP, 55.0f}, {ghand::JointId::LF_PIP, 0.0f},
+            {ghand::JointId::LF_MCP, 0.0f},
         }
     },
 };
 
 // ========== Global State for Error Handling ==========
 
-xiaoyao::HandState g_hand_state;
-std::vector<xiaoyao::Joint> g_joints;
+ghand::HandState g_hand_state;
+std::vector<ghand::Joint> g_joints;
 std::mutex g_state_mutex;
 
-void OnHandStateUpdate(const xiaoyao::HandState& state) {
+void OnHandStateUpdate(const ghand::HandState& state) {
     std::lock_guard<std::mutex> lock(g_state_mutex);
     g_hand_state = state;
 }
 
-void OnJointsUpdate(const std::vector<xiaoyao::Joint>& joints) {
+void OnJointsUpdate(const std::vector<ghand::Joint>& joints) {
     std::lock_guard<std::mutex> lock(g_state_mutex);
     g_joints = joints;
 }
@@ -136,8 +136,8 @@ void PrintError() {
     // Print hand state errors
     if (g_hand_state.HasError()) {
         std::cerr << "\n[ERROR] Hand state error detected!" << std::endl;
-        std::cerr << "Error: " << xiaoyao::ToString(g_hand_state.error) << std::endl;
-        std::cerr << "State: " << xiaoyao::ToString(g_hand_state.state) << std::endl;
+        std::cerr << "Error: " << ghand::ToString(g_hand_state.error) << std::endl;
+        std::cerr << "State: " << ghand::ToString(g_hand_state.state) << std::endl;
         std::cerr << "Temperature: " << g_hand_state.temperature << " degC" << std::endl;
     }
 
@@ -146,9 +146,9 @@ void PrintError() {
     for (const auto& joint : g_joints) {
         if (joint.HasError()) {
             std::stringstream ss;
-            ss << "  - " << xiaoyao::ToString(joint.id)
-               << ": state=" << xiaoyao::ToString(joint.state)
-               << ", error=" << xiaoyao::ToString(joint.error);
+            ss << "  - " << ghand::ToString(joint.id)
+               << ": state=" << ghand::ToString(joint.state)
+               << ", error=" << ghand::ToString(joint.error);
             faulty_joints.push_back(ss.str());
         }
     }
@@ -167,9 +167,9 @@ void PrintError() {
 
 // ========== Helper Functions ==========
 
-std::vector<xiaoyao::JointCommand> CreateJointsFromGesture(
-    const std::unordered_map<xiaoyao::JointId, float>& gesture_def) {
-    std::vector<xiaoyao::JointCommand> joints;
+std::vector<ghand::JointCommand> CreateJointsFromGesture(
+    const std::unordered_map<ghand::JointId, float>& gesture_def) {
+    std::vector<ghand::JointCommand> joints;
     for (const auto& pair : gesture_def) {
         joints.push_back({pair.first, pair.second, 100, 100});
     }
@@ -178,11 +178,11 @@ std::vector<xiaoyao::JointCommand> CreateJointsFromGesture(
 
 int main() {
     std::cout << "========================================" << std::endl;
-    std::cout << "  Xiaoyao Dexterous Hand SDK - Preset Gesture Demo" << std::endl;
+    std::cout << "  GHand Dexterous Hand SDK - Preset Gesture Demo" << std::endl;
     std::cout << "========================================" << std::endl;
 
     // Connect to device
-    auto hand = xiaoyao::DexHand::Create(xiaoyao::ProductType::GHAND, xiaoyao::CommType::ETHERCAT);
+    auto hand = ghand::DexHand::Create(ghand::ProductType::G5, ghand::CommType::ETHERCAT);
     if (!hand) {
         std::cerr << "Failed to create DexHand" << std::endl;
         return -1;
@@ -195,7 +195,7 @@ int main() {
     std::cout << "Connected successfully" << std::endl;
 
     // Set control mode
-    hand->SetControlMode(xiaoyao::ControlMode::POSITION);
+    hand->SetControlMode(ghand::ControlMode::POSITION);
 
     // Register callbacks for error detection
     hand->SetJointsCallback(OnJointsUpdate);

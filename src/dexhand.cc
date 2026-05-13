@@ -1,7 +1,7 @@
 #include "ghand/dexhand.h"
 #include "internal/dexhand.h"
 
-namespace xiaoyao {
+namespace ghand {
 
 // 工厂函数
 std::unique_ptr<DexHand> DexHand::Create(ProductType pt, CommType ct) {
@@ -90,10 +90,22 @@ void DexHand::SetTactileDataCallback(TactileDataCallback cb) {
     impl_->SetTactileDataCallback(cb);
 }
 
+HandState DexHand::GetHandData() {
+    return impl_->GetHandData();
+}
+
+std::vector<Joint> DexHand::GetJointsData() {
+    return impl_->GetJointsData();
+}
+
+TactileData DexHand::GetTactileData() {
+    return impl_->GetTactileData();
+}
+
 int DexHand::BootUpdate(const std::string& ifname,
                    uint16_t slave,
                    const std::string& filename,
                    std::function<void(int)> progressCallback) {
     return impl_->BootUpdate(ifname, slave, filename, progressCallback);
 }
-}  // namespace xiaoyao
+}  // namespace ghand

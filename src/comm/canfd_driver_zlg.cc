@@ -51,7 +51,7 @@ static const int kCommonZLGDeviceTypes[] = {
     ZCAN_CANFDCOM_100IE,
 };
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 
@@ -526,4 +526,4 @@ std::unique_ptr<CANFDDriver> CreateZLGDriver() {
 }
 
 } // namespace internal
-} // namespace xiaoyao
+} // namespace ghand

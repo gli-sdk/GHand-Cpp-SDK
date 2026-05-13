@@ -13,7 +13,7 @@
 #include <cmath>
 #include <cstring>
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 // 每关节数据尺寸:uint16 angle(2B) + uint8 velocity(1B) + uint8 torque(1B)
@@ -564,14 +564,19 @@ void CANFDComm::ParseJointStates(const uint8_t* data, size_t len) {
 void CANFDComm::ParseTactileForce(const uint8_t* data, size_t len) {
     if (!config_.has_tactile) return;
 
-    // 30 bytes: 5 fingers * (x:2B + y:2B + z:2B)
-    constexpr size_t kTactileForceSize = 30;
-    if (len < kTactileForceSize) return;
+    // 至少需要每个区域的合力数据（6 字节/区域）
+    size_t min_size = config_.tactile_regions.size() * 6;
+    if (len < min_size) return;
 
     TactileData tactile;
     size_t offset = 0;
 
-    auto ParseFinger = [&](FingerTactileData& finger) {
+    tactile.regions.reserve(config_.tactile_regions.size());
+    for (size_t i = 0; i < config_.tactile_regions.size(); ++i) {
+        const auto& rc = config_.tactile_regions[i];
+        RegionTactile region;
+        region.region_name = rc.name.c_str();
+
         int16_t raw_x = static_cast<int16_t>(data[offset] | (data[offset + 1] << 8));
         offset += 2;
         int16_t raw_y = static_cast<int16_t>(data[offset] | (data[offset + 1] << 8));
@@ -579,16 +584,25 @@ void CANFDComm::ParseTactileForce(const uint8_t* data, size_t len) {
         int16_t raw_z = static_cast<int16_t>(data[offset] | (data[offset + 1] << 8));
         offset += 2;
 
-        finger.resultant_force.x = raw_x * 0.1f;
-        finger.resultant_force.y = raw_y * 0.1f;
-        finger.resultant_force.z = raw_z * 0.1f;
-    };
+        region.resultant_force.x = raw_x * 0.1f;
+        region.resultant_force.y = raw_y * 0.1f;
+        region.resultant_force.z = raw_z * 0.1f;
 
-    ParseFinger(tactile.thumb);
-    ParseFinger(tactile.index);
-    ParseFinger(tactile.middle);
-    ParseFinger(tactile.ring);
-    ParseFinger(tactile.pinky);
+        int sample_size = rc.sensor_count * 3;
+        if (rc.sensor_count > 0 && offset + sample_size <= len) {
+            region.distributed_forces.reserve(rc.sensor_count);
+            for (int j = 0; j < rc.sensor_count; ++j) {
+                Force f;
+                f.x = static_cast<float>(static_cast<int8_t>(data[offset])) * 0.1f;
+                f.y = static_cast<float>(static_cast<int8_t>(data[offset + 1])) * 0.1f;
+                f.z = static_cast<float>(static_cast<uint8_t>(data[offset + 2])) * 0.1f;
+                offset += 3;
+                region.distributed_forces.push_back(f);
+            }
+        }
+
+        tactile.regions.push_back(std::move(region));
+    }
 
     std::lock_guard<std::mutex> lock(cb_mutex_);
     if (tactile_cb_) tactile_cb_(tactile);
@@ -639,4 +653,4 @@ uint16_t CANFDComm::AngleToRaw(float angle_rad, JointId id) {
 }
 
 } // namespace internal
-} // namespace xiaoyao
+} // namespace ghand

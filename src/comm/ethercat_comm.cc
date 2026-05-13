@@ -33,7 +33,7 @@
 #define EC_TIMEOUTMON 500
 #define NSEC_PER_SEC 1000000000
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 // 每关节数据尺寸: float(4B) + uint8 velocity(1B) + uint8 torque(1B)
@@ -842,30 +842,26 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
             offset += 2;
         }
 
-        auto ParseFingerTactile = [&offset, data, size, &tactile_data, this](
-            FingerTactileData& finger_data, FingerType finger, int bit_offset) {
-            finger_data.state = (tactile_data.sensor_state & (1 << bit_offset)) != 0;
+        tactile_data.regions.reserve(config_.tactile_regions.size());
+        for (size_t i = 0; i < config_.tactile_regions.size(); ++i) {
+            const auto& rc = config_.tactile_regions[i];
+            RegionTactile region;
+            region.region_name = rc.name.c_str();
+            region.state = (tactile_data.sensor_state & (1 << i)) != 0;
 
             if (offset + 6 <= size) {
-                finger_data.resultant_force = ParseResultantForce(data + offset);
+                region.resultant_force = ParseResultantForce(data + offset);
                 offset += 6;
             }
 
-            auto it = config_.tactile_sensor_counts.find(finger);
-            int sensor_count = (it != config_.tactile_sensor_counts.end()) ? it->second : 0;
-            int sample_size = sensor_count * 3;
-
-            if (offset + sample_size <= size) {
-                finger_data.distributed_forces = ParseSampleForces(data + offset, sensor_count);
+            int sample_size = rc.sensor_count * 3;
+            if (rc.sensor_count > 0 && offset + sample_size <= size) {
+                region.distributed_forces = ParseSampleForces(data + offset, rc.sensor_count);
                 offset += sample_size;
             }
-        };
 
-        ParseFingerTactile(tactile_data.thumb,  FingerType::THUMB, 0);
-        ParseFingerTactile(tactile_data.index,  FingerType::FF,    1);
-        ParseFingerTactile(tactile_data.middle, FingerType::MF,    2);
-        ParseFingerTactile(tactile_data.ring,   FingerType::RF,    3);
-        ParseFingerTactile(tactile_data.pinky,  FingerType::LF,    4);
+            tactile_data.regions.push_back(std::move(region));
+        }
 
         if (tactile_callback_) {
             tactile_callback_(tactile_data);
@@ -874,4 +870,4 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
 }
 
 }  // namespace internal
-}  // namespace xiaoyao
+}  // namespace ghand

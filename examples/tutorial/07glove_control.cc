@@ -23,7 +23,7 @@
 #include <cstring>
 #include <string>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 // ========== Data Structures ==========
 
@@ -258,7 +258,7 @@ bool ProcessGloveData(const char* data, HandData& left_hand, HandData& right_han
 
 int main() {
     std::cout << "========================================" << std::endl;
-    std::cout << "  Xiaoyao Dexterous Hand SDK - Glove Control        " << std::endl;
+    std::cout << "  GHand Dexterous Hand SDK - Glove Control        " << std::endl;
     std::cout << "========================================" << std::endl;
 
 #ifdef _WIN32
@@ -299,7 +299,7 @@ int main() {
     std::cout << "\n✓ Listening for data on " << UDP_IP << ":" << UDP_PORT << "..." << std::endl;
 
     // Connect dexterous hand
-    auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
     if (!hand) {
         std::cerr << "Failed to create DexHand" << std::endl;
         closesocket(sock);

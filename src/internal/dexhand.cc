@@ -44,7 +44,7 @@ bool IsVersionNewer(const std::string& old_ver, const std::string& new_ver) {
 
 } // anonymous namespace
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 DexHand::DexHand(ProductType product_type, CommType comm_type)
@@ -240,6 +240,18 @@ void DexHand::SetTactileDataCallback(std::function<void(const TactileData&)> cb)
     callback_manager_->SetTactileDataCallback(cb);
 }
 
+HandState DexHand::GetHandData() const {
+    return callback_manager_->GetHandData();
+}
+
+std::vector<Joint> DexHand::GetJointsData() const {
+    return callback_manager_->GetJointsData();
+}
+
+TactileData DexHand::GetTactileData() const {
+    return callback_manager_->GetTactileData();
+}
+
 int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
                         const std::string& filename,
                         std::function<void(int)> progressCallback) {
@@ -372,4 +384,4 @@ void DexHand::ClampJointTorque(JointCommand& joint) {
 }
 
 }  // namespace internal
-}  // namespace xiaoyao
+}  // namespace ghand

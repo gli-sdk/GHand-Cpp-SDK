@@ -9,7 +9,7 @@
 
 #include "ghand/types.h"
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 using JointsCallback = std::function<void(const std::vector<Joint>&)>;
@@ -63,6 +63,6 @@ public:
 };
 
 } // namespace internal
-} // namespace xiaoyao
+} // namespace ghand
 
 #endif // SRC_INTERNAL_ICOMM_H_

@@ -1,5 +1,5 @@
-#ifndef XIAOYAO_INTERNAL_LOGGER_H_
-#define XIAOYAO_INTERNAL_LOGGER_H_
+#ifndef GHAND_INTERNAL_LOGGER_H_
+#define GHAND_INTERNAL_LOGGER_H_
 
 #include <string>
 #include <sstream>
@@ -14,7 +14,7 @@
 #undef ERROR
 #endif
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 /**
@@ -62,7 +62,7 @@ private:
 };
 
 }  // namespace internal
-}  // namespace xiaoyao
+}  // namespace ghand
 
 // ============================================================================
 // 内部日志宏（供 SDK 内部使用）
@@ -70,38 +70,38 @@ private:
 
 #define LOG_DEBUG(x) \
     do { \
-        auto& stream = ::xiaoyao::internal::Logger::GetInstance().GetStream( \
-            ::xiaoyao::internal::LogLevel::DEBUG, __FILE__, __LINE__); \
+        auto& stream = ::ghand::internal::Logger::GetInstance().GetStream( \
+            ::ghand::internal::LogLevel::DEBUG, __FILE__, __LINE__); \
         stream << x; \
-        ::xiaoyao::internal::Logger::GetInstance().Log( \
-            ::xiaoyao::internal::LogLevel::DEBUG, __FILE__, __LINE__, stream.str()); \
+        ::ghand::internal::Logger::GetInstance().Log( \
+            ::ghand::internal::LogLevel::DEBUG, __FILE__, __LINE__, stream.str()); \
     } while(0)
 
 #define LOG_INFO(x) \
     do { \
-        auto& stream = ::xiaoyao::internal::Logger::GetInstance().GetStream( \
-            ::xiaoyao::internal::LogLevel::INFO, __FILE__, __LINE__); \
+        auto& stream = ::ghand::internal::Logger::GetInstance().GetStream( \
+            ::ghand::internal::LogLevel::INFO, __FILE__, __LINE__); \
         stream << x; \
-        ::xiaoyao::internal::Logger::GetInstance().Log( \
-            ::xiaoyao::internal::LogLevel::INFO, __FILE__, __LINE__, stream.str()); \
+        ::ghand::internal::Logger::GetInstance().Log( \
+            ::ghand::internal::LogLevel::INFO, __FILE__, __LINE__, stream.str()); \
     } while(0)
 
 #define LOG_WARNING(x) \
     do { \
-        auto& stream = ::xiaoyao::internal::Logger::GetInstance().GetStream( \
-            ::xiaoyao::internal::LogLevel::WARNING, __FILE__, __LINE__); \
+        auto& stream = ::ghand::internal::Logger::GetInstance().GetStream( \
+            ::ghand::internal::LogLevel::WARNING, __FILE__, __LINE__); \
         stream << x; \
-        ::xiaoyao::internal::Logger::GetInstance().Log( \
-            ::xiaoyao::internal::LogLevel::WARNING, __FILE__, __LINE__, stream.str()); \
+        ::ghand::internal::Logger::GetInstance().Log( \
+            ::ghand::internal::LogLevel::WARNING, __FILE__, __LINE__, stream.str()); \
     } while(0)
 
 #define LOG_ERROR(x) \
     do { \
-        auto& stream = ::xiaoyao::internal::Logger::GetInstance().GetStream( \
-            ::xiaoyao::internal::LogLevel::ERR, __FILE__, __LINE__); \
+        auto& stream = ::ghand::internal::Logger::GetInstance().GetStream( \
+            ::ghand::internal::LogLevel::ERR, __FILE__, __LINE__); \
         stream << x; \
-        ::xiaoyao::internal::Logger::GetInstance().Log( \
-            ::xiaoyao::internal::LogLevel::ERR, __FILE__, __LINE__, stream.str()); \
+        ::ghand::internal::Logger::GetInstance().Log( \
+            ::ghand::internal::LogLevel::ERR, __FILE__, __LINE__, stream.str()); \
     } while(0)
 
-#endif  // XIAOYAO_INTERNAL_LOGGER_H_
+#endif  // GHAND_INTERNAL_LOGGER_H_

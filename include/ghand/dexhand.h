@@ -1,5 +1,5 @@
-#ifndef XIAOYAO_H_
-#define XIAOYAO_H_
+#ifndef GHAND_H_
+#define GHAND_H_
 
 #include "export.h"
 #include "types.h"
@@ -9,7 +9,7 @@
 #include <memory>
 #include <vector>
 
-namespace xiaoyao {
+namespace ghand {
 
 // 前向声明内部实现类
 namespace internal {
@@ -22,7 +22,7 @@ using HandStateCallback = std::function<void(const HandState&)>;
 using TactileDataCallback = std::function<void(const TactileData&)>;
 
 /**
- * @brief Xiaoyao DexHand 机械手控制接口
+ * @brief GHand DexHand 机械手控制接口
  *
  * 这是唯一的公共 API 类，提供对机械手的完整控制。
  */
@@ -127,6 +127,22 @@ public:
      */
     bool ZeroTactile();
 
+    // ========== 数据获取 ==========
+    /**
+     * @brief 获取手部状态（最新缓存数据，不触发硬件读取）
+     */
+    HandState GetHandData();
+
+    /**
+     * @brief 获取关节数据（最新缓存数据，不触发硬件读取）
+     */
+    std::vector<Joint> GetJointsData();
+
+    /**
+     * @brief 获取触觉数据（最新缓存数据，不触发硬件读取）
+     */
+    TactileData GetTactileData();
+
     // ========== 回调注册 ==========
     /**
      * @brief 注册关节数据回调
@@ -157,10 +173,10 @@ public:
     std::unique_ptr<internal::DexHand> impl_;
 };
 
-}  // namespace xiaoyao
+}  // namespace ghand
 
 #ifdef _WIN32
 #pragma warning(pop)
 #endif
 
-#endif  // XIAOYAO_H_
+#endif  // GHAND_H_

@@ -4,7 +4,7 @@
 #include <chrono>
 #include <vector>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 /**
  * @brief Speed control demonstration
@@ -15,10 +15,10 @@ using namespace xiaoyao;
 
 int main() {
     std::cout << "========================================" << std::endl;
-    std::cout << "  Xiaoyao Dexterous Hand SDK - Speed Control Demo        " << std::endl;
+    std::cout << "  GHand Dexterous Hand SDK - Speed Control Demo        " << std::endl;
     std::cout << "========================================" << std::endl;
 
-    auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
     if (!hand) {
         std::cerr << "Failed to create DexHand" << std::endl;
         return -1;

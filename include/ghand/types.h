@@ -1,5 +1,5 @@
-#ifndef XIAOYAO_TYPES_H_
-#define XIAOYAO_TYPES_H_
+#ifndef GHAND_TYPES_H_
+#define GHAND_TYPES_H_
 
 #include <array>
 #include <cstdint>
@@ -8,7 +8,7 @@
 
 #include "export.h"
 
-namespace xiaoyao {
+namespace ghand {
 
 // ===== 手部类型定义 =====
 enum class HandType : uint8_t {
@@ -126,8 +126,7 @@ std::string GHAND_API ToString(JointId id);
 
 // ===== 产品类型定义 =====
 enum class ProductType : uint8_t {
-    GHAND,
-    GHAND_LITE
+    G5
 };
 
 /**
@@ -184,11 +183,12 @@ struct HandState {
 };
 
 /**
- * @brief 单个手指的触觉数据
+ * @brief 单个触觉区域的传感器数据
  */
-struct FingerTactileData {
-    bool state;                       // 传感器状态 (true=正常, false=异常)
-    Force resultant_force;            // 合力数据
+struct RegionTactile {
+    const char* region_name;            // 指向配置中的区域名（零拷贝）
+    bool state;                         // 传感器状态 (true=正常, false=异常)
+    Force resultant_force;              // 合力数据
     std::vector<Force> distributed_forces;  // 分布力数据
 };
 
@@ -196,20 +196,16 @@ struct FingerTactileData {
  * @brief 触觉数据结构
  *
  * 设计说明：
- * - 使用单手指结构体提供高度内聚的数据组织
- * - 每个手指包含状态、合力、分布力，逻辑清晰
- * - sensor_state 按位编码：bit 0-4 分别代表 thumb, index, middle, ring, pinky
+ * - regions 按 ProductConfig::tactile_regions 顺序排列，与协议帧字节序一致
+ * - region_name 指向配置中的字符串，生命周期与 ProductConfig 相同，无需拷贝
+ * - sensor_state 按位编码：bit 0-4 分别对应区域 0-4（顺序与配置一致）
  * - sensor_error 为全局错误码
  */
 struct TactileData {
-    uint8_t sensor_state;             // 保留原始字节（调试用）
-    uint8_t sensor_error;             // 全局错误码
+    uint8_t sensor_state;               // 保留原始字节（调试用）
+    uint8_t sensor_error;               // 全局错误码
 
-    FingerTactileData thumb;
-    FingerTactileData index;
-    FingerTactileData middle;
-    FingerTactileData ring;
-    FingerTactileData pinky;
+    std::vector<RegionTactile> regions;
 };
 
 // 关节命令结构体，用于参数化关节控制
@@ -244,6 +240,6 @@ struct Joint {
     GHAND_API std::string ToString() const;
 };
 
-}  // namespace xiaoyao
+}  // namespace ghand
 
-#endif  // XIAOYAO_TYPES_H_
+#endif  // GHAND_TYPES_H_

@@ -6,7 +6,7 @@
 
 #include "ghand/logging.h"
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 DexHandCallbackManager::DexHandCallbackManager() {
@@ -30,29 +30,57 @@ void DexHandCallbackManager::SetTactileDataCallback(TactileDataCallback callback
 }
 
 void DexHandCallbackManager::UpdateJoints(const std::vector<Joint>& joints) {
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        last_joints_ = joints;
+    }
     if (HasJointDataChanged(joints)) {
         if (joints_callback_) {
             joints_callback_(joints);
         }
-        last_joints_ = joints;
         last_joint_callback_time_ = std::chrono::steady_clock::now();
     }
 }
 
 void DexHandCallbackManager::UpdateTemperature(const HandState& temperature) {
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        last_state_ = temperature;
+    }
     if (HasTemperatureChanged(temperature)) {
         if (hand_state_callback_) {
             hand_state_callback_(temperature);
         }
-        last_state_ = temperature;
         last_temp_callback_time_ = std::chrono::steady_clock::now();
     }
 }
 
 void DexHandCallbackManager::UpdateTactileData(const TactileData& data) {
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        last_tactile_data_ = data;
+        has_tactile_data_ = true;
+    }
     if (tactile_data_callback_) {
         tactile_data_callback_(data);
     }
+}
+
+// ===== 轮询访问 =====
+
+HandState DexHandCallbackManager::GetHandData() const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    return last_state_;
+}
+
+std::vector<Joint> DexHandCallbackManager::GetJointsData() const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    return last_joints_;
+}
+
+TactileData DexHandCallbackManager::GetTactileData() const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    return last_tactile_data_;
 }
 
 bool DexHandCallbackManager::HasJointDataChanged(const std::vector<Joint>& joints) {
@@ -92,7 +120,7 @@ bool DexHandCallbackManager::HasTemperatureChanged(const HandState& temperature)
     // 1. 状态或错误变化 → 立即触发
     if (temperature.state != last_state_.state ||
         temperature.error != last_state_.error) {
-        LOG_DEBUG("Hand state change detected: " << xiaoyao::ToString(temperature.state));
+        LOG_DEBUG("Hand state change detected: " << ghand::ToString(temperature.state));
         return true;
     }
 
@@ -114,4 +142,4 @@ bool DexHandCallbackManager::HasTemperatureChanged(const HandState& temperature)
 }
 
 }  // namespace internal
-}  // namespace xiaoyao
+}  // namespace ghand

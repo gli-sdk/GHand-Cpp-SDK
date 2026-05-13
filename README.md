@@ -1,8 +1,8 @@
-# Xiaoyao SDK C++
+# GHand SDK C++
 
 ## 概述
 
-Xiaoyao SDK C++ 是枭尧灵巧手的 C++ 开发包，提供对机械手的完整控制功能。
+GHand SDK C++ 是GHand 灵巧手的 C++ 开发包，提供对机械手的完整控制功能。
 
 ## 功能特性
 
@@ -16,9 +16,9 @@ Xiaoyao SDK C++ 是枭尧灵巧手的 C++ 开发包，提供对机械手的完�
 ## 目录结构
 
 ```
-xiaoyao-sdk-cpp/
-├── include/xiaoyao/    # 公共头文件
-│   ├── xiaoyao.h       # 主 API
+ghand-sdk-cpp/
+├── include/ghand/    # 公共头文件
+│   ├── dexhand.h       # 主 API
 │   ├── types.h         # 类型定义
 │   ├── logging.h       # 日志系统
 │   └── version.h       # 版本信息
@@ -26,10 +26,10 @@ xiaoyao-sdk-cpp/
 │   └── internal/       # 内部实现
 ├── lib/                # 库文件（按平台分类）
 │   ├── windows/        # Windows 64位
-│   │   ├── xiaoyao.lib
-│   │   └── xiaoyao.dll
+│   │   ├── ghand.lib
+│   │   └── ghand.dll
 │   └── linux/          # Linux 64位
-│       └── libxiaoyao.so
+│       └── libghand.so
 ├── cmake/              # 平台配置
 │   ├── Windows.cmake
 │   └── Linux.cmake
@@ -41,15 +41,15 @@ xiaoyao-sdk-cpp/
 ### 1. 包含头文件
 
 ```cpp
-#include "xiaoyao/xiaoyao.h"
+#include "ghand/dexhand.h"
 ```
 
 ### 2. 创建实例并连接
 
 ```cpp
-xiaoyao::DexHand hand(xiaoyao::ProductType::GHAND, xiaoyao::CommType::ETHERCAT);
+ghand::DexHand hand(ghand::ProductType::G5, ghand::CommType::ETHERCAT);
 
-if (!hand.Connect(xiaoyao::CommType::ETHERCAT, "auto")) {
+if (!hand.Connect(ghand::CommType::ETHERCAT, "auto")) {
     printf("连接失败\n");
     return -1;
 }
@@ -58,14 +58,14 @@ if (!hand.Connect(xiaoyao::CommType::ETHERCAT, "auto")) {
 ### 3. 注册回调
 
 ```cpp
-hand.SetJointsCallback([](const std::vector<xiaoyao::Joint>& joints) {
+hand.SetJointsCallback([](const std::vector<ghand::Joint>& joints) {
     for (const auto& joint : joints) {
         printf("关节 %d: %.1f°\n", (int)joint.id, joint.angle);
     }
 });
 
-hand.SetTactileDataCallback([](const xiaoyao::TactileData& data) {
-    auto force = data.GetResultant(xiaoyao::FingerType::THUMB);
+hand.SetTactileDataCallback([](const ghand::TactileData& data) {
+    auto force = data.GetResultant(ghand::FingerType::THUMB);
     printf("拇指合力: %.2f N\n", sqrt(force.x*force.x + force.y*force.y + force.z*force.z));
 });
 ```
@@ -73,9 +73,9 @@ hand.SetTactileDataCallback([](const xiaoyao::TactileData& data) {
 ### 4. 控制运动
 
 ```cpp
-std::vector<xiaoyao::JointCommand> commands = {
-    {xiaoyao::JointId::THUMB_MCP, 45.0f, 50, 50},
-    {xiaoyao::JointId::FF_MCP, 30.0f, 50, 50}
+std::vector<ghand::JointCommand> commands = {
+    {ghand::JointId::THUMB_MCP, 45.0f, 50, 50},
+    {ghand::JointId::FF_MCP, 30.0f, 50, 50}
 };
 
 hand.MoveJoints(commands);
@@ -92,13 +92,13 @@ hand.Disconnect();
 SDK 提供了内置的日志系统，默认只显示 WARNING 和 ERROR 级别的日志。你可以根据需要配置日志级别：
 
 ```cpp
-#include "xiaoyao/logging.h"
+#include "ghand/logging.h"
 
 // 升级到 INFO 级别
-xiaoyao::ConfigureConsole(xiaoyao::LogLevel::INFO);
+ghand::ConfigureConsole(ghand::LogLevel::INFO);
 
 // 启用文件日志（DEBUG 级别，包含详细的时间戳和源文件信息）
-xiaoyao::ConfigureFile("xiaoyao.log");
+ghand::ConfigureFile("ghand.log");
 
 // 在代码中记录日志
 LOG_INFO("连接到设备: " << adapter_name);
@@ -172,6 +172,6 @@ sudo ./examples/basic_connection
 
 ## 许可证
 
-Xiaoyao SDK C++ 是 Glitech 的专有软件。使用本 SDK 前，请参阅 [LICENSE](LICENSE) 文件了解完整条款。
+GHand SDK C++ 是 Glitech 的专有软件。使用本 SDK 前，请参阅 [LICENSE](LICENSE) 文件了解完整条款。
 
 Copyright © 2025 Glitech. All rights reserved.

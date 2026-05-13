@@ -14,13 +14,12 @@
 #include <limits.h>
 #endif
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 std::string ProductTypeToFileName(ProductType type) {
     switch (type) {
-        case ProductType::GHAND:      return "ghand.json";
-        case ProductType::GHAND_LITE: return "ghand_lite.json";
+        case ProductType::G5:      return "G5.json";
         default:                      return "";
     }
 }
@@ -107,7 +106,7 @@ std::string GetSdkRootFromModule() {
 std::vector<std::string> GetConfigSearchPaths() {
     std::vector<std::string> paths;
 
-    const char* env_path = std::getenv("XIAOYAO_SDK_CONFIG");
+    const char* env_path = std::getenv("GHAND_SDK_CONFIG");
     if (env_path) {
         std::string path(env_path);
         if (!path.empty() && path.back() != '/' && path.back() != '\\') {
@@ -130,11 +129,11 @@ std::vector<std::string> GetConfigSearchPaths() {
 #ifdef _WIN32
     const char* program_data = std::getenv("PROGRAMDATA");
     if (program_data) {
-        paths.emplace_back(std::string(program_data) + "\\xiaoyao-sdk\\config\\");
+        paths.emplace_back(std::string(program_data) + "\\ghand-sdk\\config\\");
     }
 #else
-    paths.emplace_back("/usr/share/xiaoyao-sdk/config/");
-    paths.emplace_back("/usr/local/share/xiaoyao-sdk/config/");
+    paths.emplace_back("/usr/share/ghand-sdk/config/");
+    paths.emplace_back("/usr/local/share/ghand-sdk/config/");
 #endif
 
     return paths;
@@ -161,16 +160,6 @@ JointId JointIdFromString(const std::string& name) {
     if (name == "LF_MCP")          return JointId::LF_MCP;
     LOG_WARNING("Unknown joint name: " << name);
     return JointId::NUM_JOINTS;
-}
-
-FingerType FingerTypeFromString(const std::string& name) {
-    if (name == "THUMB") return FingerType::THUMB;
-    if (name == "FF")    return FingerType::FF;
-    if (name == "MF")    return FingerType::MF;
-    if (name == "RF")    return FingerType::RF;
-    if (name == "LF")    return FingerType::LF;
-    LOG_WARNING("Unknown finger type: " << name);
-    return FingerType::NUM_FINGERS;
 }
 
 ProductConfig LoadProductConfig(ProductType product) {
@@ -216,31 +205,31 @@ ProductConfig LoadProductConfig(ProductType product) {
 
         config.name = j.value("name", "");
 
-        if (j.contains("valid_joints") && j["valid_joints"].is_array()) {
-            for (const auto& item : j["valid_joints"]) {
-                JointId id = JointIdFromString(item.get<std::string>());
-                if (id != JointId::NUM_JOINTS) {
-                    config.valid_joints.push_back(id);
-                }
-            }
-        }
-
-        if (j.contains("joint_limits") && j["joint_limits"].is_object()) {
-            for (nlohmann::json::iterator it = j["joint_limits"].begin(); it != j["joint_limits"].end(); ++it) {
-                JointId id = JointIdFromString(it.key());
-                if (id != JointId::NUM_JOINTS && it.value().is_array() && it.value().size() >= 2) {
-                    config.joint_limits[id] = {it.value()[0].get<float>(), it.value()[1].get<float>()};
+        if (j.contains("joints") && j["joints"].is_array()) {
+            for (const auto& item : j["joints"]) {
+                if (!item.contains("id") || !item["id"].is_string()) continue;
+                JointId id = JointIdFromString(item["id"].get<std::string>());
+                if (id == JointId::NUM_JOINTS) continue;
+                config.valid_joints.push_back(id);
+                if (item.contains("min") && item.contains("max")
+                    && item["min"].is_number() && item["max"].is_number()) {
+                    float min_val = item["min"].get<float>();
+                    float max_val = item["max"].get<float>();
+                    if (min_val > max_val) std::swap(min_val, max_val);
+                    config.joint_limits[id] = {min_val, max_val};
                 }
             }
         }
 
         config.has_tactile = j.value("has_tactile", false);
 
-        if (j.contains("tactile_sensor_counts") && j["tactile_sensor_counts"].is_object()) {
-            for (nlohmann::json::iterator it = j["tactile_sensor_counts"].begin(); it != j["tactile_sensor_counts"].end(); ++it) {
-                FingerType finger = FingerTypeFromString(it.key());
-                if (finger != FingerType::NUM_FINGERS) {
-                    config.tactile_sensor_counts[finger] = it.value().get<int>();
+        if (j.contains("tactile_regions") && j["tactile_regions"].is_array()) {
+            for (const auto& item : j["tactile_regions"]) {
+                TactileRegionConfig region;
+                region.name = item.value("name", "");
+                region.sensor_count = item.value("count", 0);
+                if (!region.name.empty() && region.sensor_count > 0) {
+                    config.tactile_regions.push_back(region);
                 }
             }
         }
@@ -248,12 +237,6 @@ ProductConfig LoadProductConfig(ProductType product) {
         if (config.name.empty() || config.valid_joints.empty()) {
             LOG_ERROR("Product config missing required fields in " << found_path);
             return ProductConfig();
-        }
-
-        for (auto it = config.joint_limits.begin(); it != config.joint_limits.end(); ++it) {
-            if (it->second.first > it->second.second) {
-                std::swap(it->second.first, it->second.second);
-            }
         }
 
         LOG_INFO("Loaded product config: " << config.name << " from " << found_path);
@@ -266,4 +249,4 @@ ProductConfig LoadProductConfig(ProductType product) {
 }
 
 }  // namespace internal
-}  // namespace xiaoyao
+}  // namespace ghand

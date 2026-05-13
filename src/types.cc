@@ -1,13 +1,12 @@
 #include "ghand/types.h"
 #include <sstream>
 
-namespace xiaoyao {
+namespace ghand {
 
 // ===== ProductType =====
 std::string ToString(ProductType type) {
     switch (type) {
-        case ProductType::GHAND:      return "GHAND";
-        case ProductType::GHAND_LITE: return "GHAND_LITE";
+        case ProductType::G5:      return "G5";
         default:                      return "UNKNOWN";
     }
 }
@@ -98,8 +97,8 @@ std::string ToString(JointId id) {
 // ===== HandState =====
 std::string HandState::ToString() const {
     std::ostringstream oss;
-    oss << "HandState{state=" << xiaoyao::ToString(state)
-        << ", error=" << xiaoyao::ToString(error)
+    oss << "HandState{state=" << ghand::ToString(state)
+        << ", error=" << ghand::ToString(error)
         << ", temperature=" << temperature << "}";
     return oss.str();
 }
@@ -107,13 +106,13 @@ std::string HandState::ToString() const {
 // ===== Joint =====
 std::string Joint::ToString() const {
     std::ostringstream oss;
-    oss << "Joint[" << xiaoyao::ToString(id)
-        << "]{state=" << xiaoyao::ToString(state)
-        << ", error=" << xiaoyao::ToString(error)
+    oss << "Joint[" << ghand::ToString(id)
+        << "]{state=" << ghand::ToString(state)
+        << ", error=" << ghand::ToString(error)
         << ", angle=" << angle
         << ", velocity=" << static_cast<int>(velocity)
         << ", torque=" << static_cast<int>(torque) << "}";
     return oss.str();
 }
 
-}  // namespace xiaoyao
+}  // namespace ghand

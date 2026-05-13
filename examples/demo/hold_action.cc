@@ -4,7 +4,7 @@
 #include <chrono>
 #include <vector>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 // 握姿态
 std::vector<JointCommand> MakeHoldPose() {
@@ -42,7 +42,7 @@ bool HandZero(DexHand& hand) {
 
 int main() {
     std::cout << "***** 枭尧灵巧手 SDK - 握功能演示 *****\n" << std::endl;
-    auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
     if (!hand) {
         std::cerr << "Failed to create DexHand" << std::endl;
         return -1;

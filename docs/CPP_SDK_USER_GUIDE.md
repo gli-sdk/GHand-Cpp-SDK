@@ -18,7 +18,7 @@
 
 #### SDK 简介
 
-Xiaoyao SDK C++ 是深圳果力智能科技有限公司为 G5-13A28D 系列灵巧手提供的 C++ 开发包，提供完整的机械手控制功能。SDK 采用现代 C++ 设计，支持 Windows 和 Linux 平台，提供类型安全的 API 和高性能的数据回调机制。
+GHand SDK C++ 是深圳果力智能科技有限公司为 G5-13A28D 系列灵巧手提供的 C++ 开发包，提供完整的机械手控制功能。SDK 采用现代 C++ 设计，支持 Windows 和 Linux 平台，提供类型安全的 API 和高性能的数据回调机制。
 
 #### SDK 主要功能
 
@@ -174,8 +174,8 @@ G5-13A28D 灵巧手具有 13 个可控关节，分布在 5 个手指上：
 
 3. **获取 SDK**
    ```bash
-   git clone https://github.com/yourcompany/xiaoyao-sdk-cpp.git
-   cd xiaoyao-sdk-cpp
+   git clone https://github.com/yourcompany/ghand-sdk-cpp.git
+   cd ghand-sdk-cpp
    ```
 
 4. **安装 Npcap（EtherCAT 通信需要）**
@@ -212,8 +212,8 @@ G5-13A28D 灵巧手具有 13 个可控关节，分布在 5 个手指上：
 
 3. **克隆项目**
    ```bash
-   git clone https://github.com/yourcompany/xiaoyao-sdk-cpp.git
-   cd xiaoyao-sdk-cpp
+   git clone https://github.com/yourcompany/ghand-sdk-cpp.git
+   cd ghand-sdk-cpp
    ```
 
 #### 2.1.3 依赖说明
@@ -233,8 +233,8 @@ SDK 依赖以下第三方库（已包含在 SDK 中）：
 #### 步骤一：获取 SDK
 
 ```bash
-git clone https://github.com/yourcompany/xiaoyao-sdk-cpp.git
-cd xiaoyao-sdk-cpp
+git clone https://github.com/yourcompany/ghand-sdk-cpp.git
+cd ghand-sdk-cpp
 ```
 
 #### 步骤二：配置项目
@@ -285,11 +285,11 @@ sudo ./examples/basic_connection
 #### 最小可用代码示例
 
 ```cpp
-#include "xiaoyao/xiaoyao.h"
+#include "ghand/dexhand.h"
 #include <iostream>
 
 int main() {
-    using namespace xiaoyao;
+    using namespace ghand;
 
     // 1. 创建灵巧手实例
     DexHand hand(CommType::ETHERCAT);
@@ -317,13 +317,13 @@ int main() {
 #### 完整示例
 
 ```cpp
-#include "xiaoyao/xiaoyao.h"
-#include "xiaoyao/logging.h"
+#include "ghand/dexhand.h"
+#include "ghand/logging.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 int main() {
     // 配置日志级别
@@ -912,13 +912,13 @@ void ConfigureConsole(LogLevel level);
 
 **示例：**
 ```cpp
-#include "xiaoyao/logging.h"
+#include "ghand/logging.h"
 
 // 升级到 INFO 级别（推荐用于生产环境）
-xiaoyao::ConfigureConsole(xiaoyao::LogLevel::INFO);
+ghand::ConfigureConsole(ghand::LogLevel::INFO);
 
 // 升级到 DEBUG 级别（仅推荐用于开发调试）
-xiaoyao::ConfigureConsole(xiaoyao::LogLevel::DEBUG);
+ghand::ConfigureConsole(ghand::LogLevel::DEBUG);
 ```
 
 ---
@@ -938,10 +938,10 @@ void ConfigureFile(const std::string& filename, LogLevel level = LogLevel::DEBUG
 **示例：**
 ```cpp
 // 启用文件日志（DEBUG 级别）
-xiaoyao::ConfigureFile("xiaoyao.log");
+ghand::ConfigureFile("ghand.log");
 
 // 启用文件日志（INFO 级别）
-xiaoyao::ConfigureFile("xiaoyao.log", xiaoyao::LogLevel::INFO);
+ghand::ConfigureFile("ghand.log", ghand::LogLevel::INFO);
 ```
 
 ---
@@ -968,16 +968,16 @@ LOG_WARNING("警告: 温度过高");
 
 **完整示例：**
 ```cpp
-#include "xiaoyao/xiaoyao.h"
-#include "xiaoyao/logging.h"
+#include "ghand/dexhand.h"
+#include "ghand/logging.h"
 #include <iostream>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 int main() {
     // 配置日志
     ConfigureConsole(LogLevel::INFO);         // 控制台输出 INFO 及以上
-    ConfigureFile("xiaoyao.log");             // 文件输出 DEBUG 及以上
+    ConfigureFile("ghand.log");             // 文件输出 DEBUG 及以上
 
     LOG_INFO("程序启动");
 
@@ -1031,11 +1031,11 @@ int main() {
 **示例文件：** `examples/basic_connection.cc`
 
 ```cpp
-#include "xiaoyao/xiaoyao.h"
+#include "ghand/dexhand.h"
 #include <iostream>
 
 int main() {
-    using namespace xiaoyao;
+    using namespace ghand;
 
     DexHand hand(CommType::ETHERCAT);
 
@@ -1100,13 +1100,13 @@ sudo ./examples/basic_connection
 **示例文件：** `examples/move_joints.cc`
 
 ```cpp
-#include "xiaoyao/xiaoyao.h"
+#include "ghand/dexhand.h"
 #include <iostream>
 #include <iomanip>
 #include <thread>
 #include <chrono>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 // 关节状态显示回调函数
 void DisplayJoints(const std::vector<Joint>& joints) {
@@ -1178,13 +1178,13 @@ int main() {
 **示例文件：** `examples/tactile_callback.cc`
 
 ```cpp
-#include "xiaoyao/xiaoyao.h"
+#include "ghand/dexhand.h"
 #include <iostream>
 #include <cmath>
 #include <thread>
 #include <chrono>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 int main() {
     DexHand hand(CommType::ETHERCAT);
@@ -1254,13 +1254,13 @@ int main() {
 **示例文件：** `examples/preset_gesture.cc`
 
 ```cpp
-#include "xiaoyao/xiaoyao.h"
+#include "ghand/dexhand.h"
 #include <iostream>
 #include <unordered_map>
 #include <thread>
 #include <chrono>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 // 手势类型定义
 enum class GestureType {
@@ -1371,14 +1371,14 @@ GESTURE_DEFINITIONS[GestureType::VICTORY] = {
 C++ SDK 原生支持多手控制，可以同时控制多台灵巧手设备。
 
 ```cpp
-#include "xiaoyao/xiaoyao.h"
+#include "ghand/dexhand.h"
 #include <iostream>
 #include <memory>
 #include <vector>
 #include <thread>
 #include <chrono>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 struct HandInstance {
     std::unique_ptr<DexHand> hand;
@@ -1492,12 +1492,12 @@ int main() {
 提供交互式命令行界面，用户可以输入关节参数实时控制灵巧手。
 
 ```cpp
-#include "xiaoyao/xiaoyao.h"
+#include "ghand/dexhand.h"
 #include <iostream>
 #include <unordered_map>
 #include <string>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 struct JointParams {
     float angle;
@@ -1593,9 +1593,9 @@ int main() {
 ### A. 完整的 API 参考
 
 详细的 API 文档请参考头文件中的注释：
-- `include/xiaoyao/xiaoyao.h` - 主要 API
-- `include/xiaoyao/types.h` - 类型定义
-- `include/xiaoyao/logging.h` - 日志系统
+- `include/ghand/dexhand.h` - 主要 API
+- `include/ghand/types.h` - 类型定义
+- `include/ghand/logging.h` - 日志系统
 
 ### B. 常见问题
 
@@ -1653,12 +1653,12 @@ std::unordered_map<JointId, float> my_gesture = {
 
 - **Email**: qpan@glitech.com
 - **公司**: 深圳果力智能科技有限公司
-- **SDK 仓库**: https://github.com/yourcompany/xiaoyao-sdk-cpp
+- **SDK 仓库**: https://github.com/yourcompany/ghand-sdk-cpp
 
 ---
 
 ## 许可证
 
-Xiaoyao SDK C++ 是 Glitech 的专有软件。使用本 SDK 前，请参阅 LICENSE 文件了解完整条款。
+GHand SDK C++ 是 Glitech 的专有软件。使用本 SDK 前，请参阅 LICENSE 文件了解完整条款。
 
 Copyright © 2025 Glitech. All rights reserved.

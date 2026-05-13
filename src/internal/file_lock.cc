@@ -31,7 +31,7 @@
 #include <openssl/md5.h>
 #endif
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 // =============================================================================
@@ -259,15 +259,15 @@ std::string GetAdapterLockPath(const std::string& adapter_name) {
     if (!lock_path.empty() && lock_path.back() != '\\') {
         lock_path += '\\';
     }
-    lock_path += "xiaoyao_ethernet_" + hash + ".lock";
+    lock_path += "ghand_ethernet_" + hash + ".lock";
 
 #else
     // Linux: 固定使用 /tmp 目录
-    std::string lock_path = "/tmp/xiaoyao_ethernet_" + hash + ".lock";
+    std::string lock_path = "/tmp/ghand_ethernet_" + hash + ".lock";
 #endif
 
     return lock_path;
 }
 
 }  // namespace internal
-}  // namespace xiaoyao
+}  // namespace ghand

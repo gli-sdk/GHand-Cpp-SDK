@@ -1,10 +1,10 @@
 #include <iostream>
 
 #include "ghand/dexhand.h"
-using namespace xiaoyao;
+using namespace ghand;
 
 int main() {
-    auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
     if (!hand) {
         std::cerr << "Failed to create DexHand" << std::endl;
         return -1;

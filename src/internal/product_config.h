@@ -8,8 +8,16 @@
 
 #include "ghand/types.h"
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
+
+/**
+ * @brief 单个触觉区域的配置
+ */
+struct TactileRegionConfig {
+    std::string name;
+    int sensor_count = 0;
+};
 
 /**
  * @brief 产品硬件配置
@@ -21,10 +29,10 @@ struct ProductConfig {
     std::vector<JointId> valid_joints;
     std::map<JointId, std::pair<float, float>> joint_limits;
     bool has_tactile = false;
-    std::map<FingerType, int> tactile_sensor_counts;
+    std::vector<TactileRegionConfig> tactile_regions;
 };
 
 }  // namespace internal
-}  // namespace xiaoyao
+}  // namespace ghand
 
 #endif  // SRC_INTERNAL_PRODUCT_CONFIG_H_

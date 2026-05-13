@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(XiaoyaoSDK VERSION 1.0.0 LANGUAGES C CXX)
+project(GHandSDK VERSION 1.0.0 LANGUAGES C CXX)
 
 # 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 11)
@@ -25,6 +25,7 @@ endif()
 if(WIN32)
     # 添加头文件目录
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/comm)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/internal)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/wpcap)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/zlgcan)
@@ -35,6 +36,7 @@ if(WIN32)
 elseif(UNIX AND NOT APPLE)
     # 添加头文件目录
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/comm)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/internal)
 
     # 依赖检测
@@ -67,23 +69,23 @@ set(SOURCES
     src/dexhand.cc
     src/logging.cc
     src/types.cc
-    src/internal/canfd_comm.cc
-    src/internal/canfd_driver_zlg.cc
-    src/internal/canfd_protocol.cc
+    src/comm/canfd_comm.cc
+    src/comm/canfd_driver_zlg.cc
+    src/comm/canfd_protocol.cc
+    src/comm/ethercat_comm.cc
     src/internal/dexhand.cc
     src/internal/dexhand_callback_manager.cc
-    src/internal/ethercat_comm.cc
     src/internal/file_lock.cc
     src/internal/product_config_loader.cc
 )
 
 # 创建动态库
-add_library(xiaoyao SHARED ${SOURCES})
-target_compile_definitions(xiaoyao PRIVATE XIAOYAO_BUILD)
+add_library(ghand SHARED ${SOURCES})
+target_compile_definitions(ghand PRIVATE GHAND_BUILD)
 
 # 链接依赖库
 if(WIN32)
-    target_link_libraries(xiaoyao PRIVATE
+    target_link_libraries(ghand PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/soem.lib
         winmm ws2_32
         setupapi cfgmgr32
@@ -93,7 +95,7 @@ if(WIN32)
     )
 else()
     # Linux: 使用预编译库
-    target_link_libraries(xiaoyao PRIVATE
+    target_link_libraries(ghand PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/linux/libsoem.a
         Threads::Threads
         ${PCAP_LIBRARIES}
@@ -102,8 +104,8 @@ else()
 endif()
 
 # 设置输出名称和版本信息
-set_target_properties(xiaoyao PROPERTIES
-    OUTPUT_NAME xiaoyao
+set_target_properties(ghand PROPERTIES
+    OUTPUT_NAME ghand
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
 )
@@ -112,10 +114,10 @@ set_target_properties(xiaoyao PROPERTIES
 if(WIN32)
     file(GLOB RUNTIME_DLLS "${CMAKE_CURRENT_SOURCE_DIR}/lib/windows/*.dll")
     if(RUNTIME_DLLS)
-        add_custom_command(TARGET xiaoyao POST_BUILD
+        add_custom_command(TARGET ghand POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${RUNTIME_DLLS}
-            $<TARGET_FILE_DIR:xiaoyao>
+            $<TARGET_FILE_DIR:ghand>
             COMMENT "Copying runtime DLLs to output directory"
         )
     endif()
@@ -125,7 +127,7 @@ endif()
 add_subdirectory(examples)
 
 # ========== 安装规则 ==========
-install(TARGETS xiaoyao
+install(TARGETS ghand
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
@@ -139,7 +141,7 @@ install(DIRECTORY include/ghand
 
 # 安装产品配置文件
 install(DIRECTORY config/
-    DESTINATION share/xiaoyao-sdk/config
+    DESTINATION share/ghand-sdk/config
     FILES_MATCHING PATTERN "*.json"
 )
 

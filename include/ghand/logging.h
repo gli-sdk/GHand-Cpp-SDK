@@ -1,5 +1,5 @@
-#ifndef XIAOYAO_LOGGING_H_
-#define XIAOYAO_LOGGING_H_
+#ifndef GHAND_LOGGING_H_
+#define GHAND_LOGGING_H_
 
 #include "export.h"
 #include <string>
@@ -10,7 +10,7 @@
 #undef ERROR
 #endif
 
-namespace xiaoyao {
+namespace ghand {
 
 /**
  * @brief 日志级别枚举
@@ -47,7 +47,7 @@ GHAND_API void ConfigureConsole(LogLevel level);
  */
 GHAND_API void ConfigureFile(const std::string& filename, LogLevel level = LogLevel::DEBUG);
 
-}  // namespace xiaoyao
+}  // namespace ghand
 
 // ============================================================================
 // 便捷日志宏
@@ -59,7 +59,7 @@ GHAND_API void ConfigureFile(const std::string& filename, LogLevel level = LogLe
     do { \
         std::ostringstream _log_stream; \
         _log_stream << x; \
-        xiaoyao::detail::LogMessage(xiaoyao::LogLevel::DEBUG, __FILE__, __LINE__, _log_stream.str()); \
+        ghand::detail::LogMessage(ghand::LogLevel::DEBUG, __FILE__, __LINE__, _log_stream.str()); \
     } while(0)
 #endif
 
@@ -68,7 +68,7 @@ GHAND_API void ConfigureFile(const std::string& filename, LogLevel level = LogLe
     do { \
         std::ostringstream _log_stream; \
         _log_stream << x; \
-        xiaoyao::detail::LogMessage(xiaoyao::LogLevel::INFO, __FILE__, __LINE__, _log_stream.str()); \
+        ghand::detail::LogMessage(ghand::LogLevel::INFO, __FILE__, __LINE__, _log_stream.str()); \
     } while(0)
 #endif
 
@@ -77,7 +77,7 @@ GHAND_API void ConfigureFile(const std::string& filename, LogLevel level = LogLe
     do { \
         std::ostringstream _log_stream; \
         _log_stream << x; \
-        xiaoyao::detail::LogMessage(xiaoyao::LogLevel::WARNING, __FILE__, __LINE__, _log_stream.str()); \
+        ghand::detail::LogMessage(ghand::LogLevel::WARNING, __FILE__, __LINE__, _log_stream.str()); \
     } while(0)
 #endif
 
@@ -86,8 +86,8 @@ GHAND_API void ConfigureFile(const std::string& filename, LogLevel level = LogLe
     do { \
         std::ostringstream _log_stream; \
         _log_stream << x; \
-        xiaoyao::detail::LogMessage(xiaoyao::LogLevel::ERR, __FILE__, __LINE__, _log_stream.str()); \
+        ghand::detail::LogMessage(ghand::LogLevel::ERR, __FILE__, __LINE__, _log_stream.str()); \
     } while(0)
 #endif
 
-#endif  // XIAOYAO_LOGGING_H_
+#endif  // GHAND_LOGGING_H_

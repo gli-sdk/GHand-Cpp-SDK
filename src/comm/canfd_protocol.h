@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 namespace canfd {
 
@@ -105,6 +105,6 @@ private:
 
 } // namespace canfd
 } // namespace internal
-} // namespace xiaoyao
+} // namespace ghand
 
 #endif // SRC_INTERNAL_CANFD_PROTOCOL_H_

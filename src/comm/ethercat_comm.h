@@ -1,5 +1,5 @@
-#ifndef XIAOYAO_INTERNAL_ETHERCAT_COMM_H_
-#define XIAOYAO_INTERNAL_ETHERCAT_COMM_H_
+#ifndef GHAND_INTERNAL_ETHERCAT_COMM_H_
+#define GHAND_INTERNAL_ETHERCAT_COMM_H_
 
 #include <soem/soem.h>
 
@@ -24,7 +24,7 @@
 #include "icomm.h"
 #include "product_config.h"
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 constexpr size_t kFirmwareBufferSize = 8 * 1024 * 1024;
@@ -154,6 +154,6 @@ private:
 };
 
 }  // namespace internal
-}  // namespace xiaoyao
+}  // namespace ghand
 
-#endif  // XIAOYAO_INTERNAL_ETHERCAT_COMM_H_
+#endif  // GHAND_INTERNAL_ETHERCAT_COMM_H_

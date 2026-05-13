@@ -11,7 +11,7 @@
 #include "product_config.h"
 #include "ghand/types.h"
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 class IComm;
@@ -57,6 +57,12 @@ public:
     void SetJointsCallback(std::function<void(const std::vector<Joint>&)> cb);
     void SetHandStateCallback(std::function<void(const HandState&)> cb);
     void SetTactileDataCallback(std::function<void(const TactileData&)> cb);
+
+    // 数据轮询
+    HandState GetHandData() const;
+    std::vector<Joint> GetJointsData() const;
+    TactileData GetTactileData() const;
+
     // Firmware update
     int BootUpdate(const std::string& ifname,
                    uint16_t slave,
@@ -81,6 +87,6 @@ public:
 };
 
 }  // namespace internal
-}  // namespace xiaoyao
+}  // namespace ghand
 
 #endif  // SRC_INTERNAL_DEXHAND_H_

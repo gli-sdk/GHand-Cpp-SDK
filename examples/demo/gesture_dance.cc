@@ -4,7 +4,7 @@
 #include <chrono>
 #include <vector>
 
-using namespace xiaoyao;
+using namespace ghand;
 
 // ========== 手势姿态定义 ==========
 
@@ -181,7 +181,7 @@ bool SecondAction(DexHand& hand) {
 // ========== 主函数 ==========
 int main() {
     std::cout << "***** 枭尧灵巧手 SDK - 手势舞功能演示 *****\n" << std::endl;
-    auto hand = DexHand::Create(ProductType::GHAND, CommType::ETHERCAT);
+    auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
     if (!hand) {
         std::cerr << "Failed to create DexHand" << std::endl;
         return -1;

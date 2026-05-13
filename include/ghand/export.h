@@ -1,8 +1,8 @@
-#ifndef XIAOYAO_EXPORT_H_
-#define XIAOYAO_EXPORT_H_
+#ifndef GHAND_EXPORT_H_
+#define GHAND_EXPORT_H_
 
 #ifdef _WIN32
-  #ifdef XIAOYAO_BUILD
+  #ifdef GHAND_BUILD
     #define GHAND_API __declspec(dllexport)
   #else
     #define GHAND_API __declspec(dllimport)
@@ -11,4 +11,4 @@
   #define GHAND_API
 #endif
 
-#endif  // XIAOYAO_EXPORT_H_
+#endif  // GHAND_EXPORT_H_

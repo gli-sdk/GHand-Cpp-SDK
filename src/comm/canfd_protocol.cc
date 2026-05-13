@@ -1,7 +1,7 @@
 #include "canfd_protocol.h"
 #include <cstring>
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 namespace canfd {
 
@@ -86,4 +86,4 @@ void PacketAssembler::Reset() {
 
 } // namespace canfd
 } // namespace internal
-} // namespace xiaoyao
+} // namespace ghand

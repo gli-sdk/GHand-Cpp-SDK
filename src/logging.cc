@@ -4,7 +4,7 @@
 #include <iomanip>
 #include <chrono>
 
-namespace xiaoyao {
+namespace ghand {
 namespace internal {
 
 // ============================================================================
@@ -182,4 +182,4 @@ void ConfigureFile(const std::string& filename, LogLevel level) {
         static_cast<internal::LogLevel>(level));
 }
 
-}  // namespace xiaoyao
+}  // namespace ghand
