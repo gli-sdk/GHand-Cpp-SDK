@@ -43,7 +43,6 @@ public:
     // ========== 连接管理 ==========
     /**
      * @brief 自动连接设备
-     * @param comm_type 通信类型（默认 ETHERCAT）
      * @return 成功返回 true
      */
     bool AutoConnect();
@@ -91,7 +90,7 @@ public:
 
     /**
      * @brief 控制关节运动
-     * @param joints 关节命令列表
+     * @param joints 关节命令列表，角度单位为度（deg）
      * @return 成功返回 true
      */
     bool MoveJoints(const std::vector<JointCommand>& joints);

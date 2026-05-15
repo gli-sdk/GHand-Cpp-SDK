@@ -76,6 +76,9 @@ DexHand::DexHand(ProductType product_type, CommType comm_type)
             break;
     }
     callback_manager_ = std::unique_ptr<DexHandCallbackManager>(new DexHandCallbackManager());
+    if (product_type != ProductType::AUTO) {
+        SetupCallbacks();
+    }
 }
 
 DexHand::~DexHand() = default;
@@ -124,6 +127,7 @@ bool DexHand::ConnectToDevice(const std::string& device_name) {
                     default:
                         break;
                 }
+                SetupCallbacks();
                 int rc = comm_->Connect(device_name);
                 if (rc != 0) {
                     LOG_ERROR("Failed to reconnect after auto-detection");
