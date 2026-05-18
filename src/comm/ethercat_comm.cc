@@ -569,18 +569,21 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
         info.device_name = std::string(reinterpret_cast<char*>(value));
     }
 
+    size = sizeof(value);
     memset(value, 0, sizeof(value));
     result = SDORead(1, 0x1009, 0x00, &size, &value, EC_TIMEOUTRXM);
     if (result == 1) {
         info.hardware_version = std::string(reinterpret_cast<char*>(value));
     }
 
+    size = sizeof(value);
     memset(value, 0, sizeof(value));
     result = SDORead(1, 0x100A, 0x00, &size, &value, EC_TIMEOUTRXM);
     if (result == 1) {
         info.software_version = std::string(reinterpret_cast<char*>(value));
     }
 
+    size = sizeof(value);
     memset(value, 0, sizeof(value));
     result = SDORead(1, 0x1018, 0x04, &size, &value, EC_TIMEOUTRXM);
     if (result == 1) {
@@ -596,7 +599,9 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
     int motor_size = sizeof(std::uint8_t);
     int motor_result[3] = {0};
     motor_result[0] = SDORead(1, 0x2007, 0x01, &motor_size, &motor_ver[0], EC_TIMEOUTRXM);
+    motor_size = sizeof(std::uint8_t);
     motor_result[1] = SDORead(1, 0x2007, 0x02, &motor_size, &motor_ver[1], EC_TIMEOUTRXM);
+    motor_size = sizeof(std::uint8_t);
     motor_result[2] = SDORead(1, 0x2007, 0x03, &motor_size, &motor_ver[2], EC_TIMEOUTRXM);
     if (motor_result[0] == 1 && motor_result[1] == 1 && motor_result[2] == 1) {
         info.motor_driver_version =
