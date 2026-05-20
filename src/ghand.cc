@@ -1,15 +1,16 @@
 #include "ghand/ghand.h"
+
 #include "internal/ghand.h"
 
 namespace ghand {
 
 // 工厂函数
 std::unique_ptr<DexHand> DexHand::Create(ProductType pt, CommType ct) {
-    auto hand = std::unique_ptr<DexHand>(new DexHand(pt, ct));
-    if (!hand->impl_->IsValid()) {
-        return nullptr;
-    }
-    return hand;
+  auto hand = std::unique_ptr<DexHand>(new DexHand(pt, ct));
+  if (!hand->impl_->IsValid()) {
+    return nullptr;
+  }
+  return hand;
 }
 
 // 构造/析构
@@ -18,94 +19,63 @@ DexHand::DexHand(ProductType pt, CommType ct)
 DexHand::~DexHand() {}
 
 // 转发所有调用
-bool DexHand::AutoConnect() {
-    return impl_->AutoConnect();
-}
+bool DexHand::AutoConnect() { return impl_->AutoConnect(); }
 
 bool DexHand::Connect(const std::string& device_name) {
-    return impl_->Connect(device_name);
+  return impl_->Connect(device_name);
 }
 
-bool DexHand::Disconnect() {
-    return impl_->Disconnect();
-}
+bool DexHand::Disconnect() { return impl_->Disconnect(); }
 
-bool DexHand::IsConnected() const {
-    return impl_->IsConnected();
-}
+bool DexHand::IsConnected() const { return impl_->IsConnected(); }
 
 std::map<std::string, std::string> DexHand::SearchAdapters() {
-    return impl_->SearchAdapters();
+  return impl_->SearchAdapters();
 }
 
-HandType DexHand::GetHandType() {
-    return impl_->GetHandType();
-}
+HandType DexHand::GetHandType() { return impl_->GetHandType(); }
 
-DeviceInfo DexHand::GetDeviceInfo() {
-    return impl_->GetDeviceInfo();
-}
+DeviceInfo DexHand::GetDeviceInfo() { return impl_->GetDeviceInfo(); }
 
-void DexHand::SetControlMode(ControlMode mode) {
-    impl_->SetControlMode(mode);
-}
+void DexHand::SetControlMode(ControlMode mode) { impl_->SetControlMode(mode); }
 
 bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
-    return impl_->MoveJoints(joints);
+  return impl_->MoveJoints(joints);
 }
 
-void DexHand::Stop() {
-    impl_->Stop();
-}
+void DexHand::Stop() { impl_->Stop(); }
 
-bool DexHand::ClearFault() {
-    return impl_->ClearFault();
-}
+bool DexHand::ClearFault() { return impl_->ClearFault(); }
 
-bool DexHand::InitJoint() {
-    return impl_->InitJoint();
-}
+bool DexHand::InitJoint() { return impl_->InitJoint(); }
 
-bool DexHand::OpenTactile() {
-    return impl_->OpenTactile();
-}
+bool DexHand::OpenTactile() { return impl_->OpenTactile(); }
 
-bool DexHand::CloseTactile() {
-    return impl_->CloseTactile();
-}
+bool DexHand::CloseTactile() { return impl_->CloseTactile(); }
 
-bool DexHand::ZeroTactile() {
-    return impl_->ZeroTactile();
-}
+bool DexHand::ZeroTactile() { return impl_->ZeroTactile(); }
 
 void DexHand::SetJointsCallback(JointsCallback cb) {
-    impl_->SetJointsCallback(cb);
+  impl_->SetJointsCallback(cb);
 }
 
 void DexHand::SetHandStateCallback(HandStateCallback cb) {
-    impl_->SetHandStateCallback(cb);
+  impl_->SetHandStateCallback(cb);
 }
 
 void DexHand::SetTactileDataCallback(TactileDataCallback cb) {
-    impl_->SetTactileDataCallback(cb);
+  impl_->SetTactileDataCallback(cb);
 }
 
-HandState DexHand::GetHandData() {
-    return impl_->GetHandData();
-}
+HandState DexHand::GetHandData() { return impl_->GetHandData(); }
 
-std::vector<Joint> DexHand::GetJointsData() {
-    return impl_->GetJointsData();
-}
+std::vector<Joint> DexHand::GetJointsData() { return impl_->GetJointsData(); }
 
-TactileData DexHand::GetTactileData() {
-    return impl_->GetTactileData();
-}
+TactileData DexHand::GetTactileData() { return impl_->GetTactileData(); }
 
-int DexHand::BootUpdate(const std::string& ifname,
-                   uint16_t slave,
-                   const std::string& filename,
-                   std::function<void(int)> progressCallback) {
-    return impl_->BootUpdate(ifname, slave, filename, progressCallback);
+int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
+                        const std::string& filename,
+                        std::function<void(int)> progressCallback) {
+  return impl_->BootUpdate(ifname, slave, filename, progressCallback);
 }
 }  // namespace ghand

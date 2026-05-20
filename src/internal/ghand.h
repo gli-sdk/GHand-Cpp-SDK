@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "product_config.h"
 #include "ghand/types.h"
+#include "product_config.h"
 
 namespace ghand {
 namespace internal {
@@ -24,66 +24,65 @@ class DexHandCallbackManager;
  * 用户代码不应直接访问此类，它仅用于SDK内部实现。
  */
 class DexHand {
-public:
-    explicit DexHand(ProductType product_type, CommType comm_type);
-    ~DexHand();
+ public:
+  explicit DexHand(ProductType product_type, CommType comm_type);
+  ~DexHand();
 
-    bool IsValid() const { return comm_ != nullptr; }
+  bool IsValid() const { return comm_ != nullptr; }
 
-    // 连接管理
-    bool AutoConnect();
-    bool Connect(const std::string& device_name);
-    bool Disconnect();
-    bool IsConnected() const;
+  // 连接管理
+  bool AutoConnect();
+  bool Connect(const std::string& device_name);
+  bool Disconnect();
+  bool IsConnected() const;
 
-    // 设备信息
-    std::map<std::string, std::string> SearchAdapters() const;
-    HandType GetHandType() const;
-    DeviceInfo GetDeviceInfo() const;
+  // 设备信息
+  std::map<std::string, std::string> SearchAdapters() const;
+  HandType GetHandType() const;
+  DeviceInfo GetDeviceInfo() const;
 
-    // 控制操作
-    void SetControlMode(ControlMode mode);
-    bool MoveJoints(const std::vector<JointCommand>& joints);
-    void Stop();
-    bool ClearFault();
-    bool InitJoint();
+  // 控制操作
+  void SetControlMode(ControlMode mode);
+  bool MoveJoints(const std::vector<JointCommand>& joints);
+  void Stop();
+  bool ClearFault();
+  bool InitJoint();
 
-    // 触觉传感器控制
-    bool OpenTactile();
-    bool CloseTactile();
-    bool ZeroTactile();
+  // 触觉传感器控制
+  bool OpenTactile();
+  bool CloseTactile();
+  bool ZeroTactile();
 
-    // 回调注册
-    void SetJointsCallback(std::function<void(const std::vector<Joint>&)> cb);
-    void SetHandStateCallback(std::function<void(const HandState&)> cb);
-    void SetTactileDataCallback(std::function<void(const TactileData&)> cb);
+  // 回调注册
+  void SetJointsCallback(std::function<void(const std::vector<Joint>&)> cb);
+  void SetHandStateCallback(std::function<void(const HandState&)> cb);
+  void SetTactileDataCallback(std::function<void(const TactileData&)> cb);
 
-    // 数据轮询
-    HandState GetHandData() const;
-    std::vector<Joint> GetJointsData() const;
-    TactileData GetTactileData() const;
+  // 数据轮询
+  HandState GetHandData() const;
+  std::vector<Joint> GetJointsData() const;
+  TactileData GetTactileData() const;
 
-    // Firmware update
-    int BootUpdate(const std::string& ifname,
-                   uint16_t slave,
-                   const std::string& filename,
-                   std::function<void(int)> progressCallback);
+  // Firmware update
+  int BootUpdate(const std::string& ifname, uint16_t slave,
+                 const std::string& filename,
+                 std::function<void(int)> progressCallback);
 
  private:
-    bool ConnectToDevice(const std::string& device_name);
-    void SetupCallbacks();
-    void ClampJointAngle(JointCommand& joint);
-    void ClampJointVelocity(JointCommand& joint);
-    void ClampJointTorque(JointCommand& joint);
+  bool ConnectToDevice(const std::string& device_name);
+  void SetupCallbacks();
+  void ClampJointAngle(JointCommand& joint);
+  void ClampJointVelocity(JointCommand& joint);
+  void ClampJointTorque(JointCommand& joint);
 
-    std::unique_ptr<IComm> comm_;
-    std::unique_ptr<DexHandCallbackManager> callback_manager_;
+  std::unique_ptr<IComm> comm_;
+  std::unique_ptr<DexHandCallbackManager> callback_manager_;
 
-    ControlMode control_mode_;
-    CommType comm_type_;
-    ProductType product_type_;
-    std::string device_name_;
-    ProductConfig config_;
+  ControlMode control_mode_;
+  CommType comm_type_;
+  ProductType product_type_;
+  std::string device_name_;
+  ProductConfig config_;
 };
 
 }  // namespace internal

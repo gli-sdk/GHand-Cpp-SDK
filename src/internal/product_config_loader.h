@@ -1,8 +1,8 @@
 #ifndef SRC_INTERNAL_PRODUCT_CONFIG_LOADER_H_
 #define SRC_INTERNAL_PRODUCT_CONFIG_LOADER_H_
 
-#include "product_config.h"
 #include "ghand/types.h"
+#include "product_config.h"
 
 namespace ghand {
 namespace internal {

@@ -28,24 +28,24 @@ namespace internal {
  * - Linux: /tmp 目录
  */
 class FileLock {
-public:
-    FileLock();
-    ~FileLock();
+ public:
+  FileLock();
+  ~FileLock();
 
-    bool Acquire(const std::string& lock_file);
-    void Release();
-    bool IsLocked() const;
+  bool Acquire(const std::string& lock_file);
+  void Release();
+  bool IsLocked() const;
 
-private:
-    std::string lock_file_;
+ private:
+  std::string lock_file_;
 
 #ifdef _WIN32
-    int fd_;
+  int fd_;
 #else
-    int fd_;
+  int fd_;
 #endif
 
-    bool is_locked_;
+  bool is_locked_;
 };
 
 std::string GetAdapterLockPath(const std::string& adapter_name);
