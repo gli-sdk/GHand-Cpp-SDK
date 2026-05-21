@@ -8,6 +8,7 @@
 #include <sstream>
 
 #include "ghand/logging.h"
+#include "logging_macros.h"
 
 #ifdef _WIN32
 #include <fcntl.h>
@@ -61,7 +62,7 @@ std::string MD5Hash(const std::string& input) {
   DWORD cbHash = 16;
 
   // 获取加密服务提供者句柄
-  if (!CryptAcquireContext(&hProv, NULL, NULL, PROV_RSA_FULL,
+  if (!CryptAcquireContext(&hProv, nullptr, nullptr, PROV_RSA_FULL,
                            CRYPT_VERIFYCONTEXT)) {
     LOG_DEBUG("Failed to acquire crypt context");
     return "";
@@ -75,7 +76,8 @@ std::string MD5Hash(const std::string& input) {
   }
 
   // 计算哈希值
-  if (!CryptHashData(hHash, (BYTE*)input.c_str(),
+  if (!CryptHashData(hHash,
+                     reinterpret_cast<BYTE*>(const_cast<char*>(input.c_str())),
                      static_cast<DWORD>(input.length()), 0)) {
     CryptDestroyHash(hHash);
     CryptReleaseContext(hProv, 0);
@@ -97,7 +99,8 @@ std::string MD5Hash(const std::string& input) {
   // 转换为十六进制字符串
   std::stringstream ss;
   for (int i = 0; i < 16; i++) {
-    ss << std::hex << std::setw(2) << std::setfill('0') << (int)rgbHash[i];
+    ss << std::hex << std::setw(2) << std::setfill('0')
+       << static_cast<int>(rgbHash[i]);
   }
   return ss.str();
 
@@ -110,7 +113,8 @@ std::string MD5Hash(const std::string& input) {
   // 转换为十六进制字符串
   std::stringstream ss;
   for (int i = 0; i < 16; i++) {
-    ss << std::hex << std::setw(2) << std::setfill('0') << (int)digest[i];
+    ss << std::hex << std::setw(2) << std::setfill('0')
+       << static_cast<int>(digest[i]);
   }
   return ss.str();
 #endif

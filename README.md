@@ -1,87 +1,128 @@
 # GHand SDK C++
+[![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)](include/ghand/version.h)
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+
+[![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
+[![CMake](https://img.shields.io/badge/CMake-3.5+-green.svg)](https://cmake.org/)
 
 [中文](README.zh.md)
 
-C++ SDK for GHand dexterous hands, supporting EtherCAT and CANFD communication with joint control, tactile sensing, and real-time state feedback.
+C++ SDK for GHand dexterous hands, supporting EtherCAT, CANFD, and RS485 communication with joint control, tactile sensing, and real-time state feedback.
 
-## Features
+## ✨ Features
 
-- EtherCAT and CANFD communication
-- Independent per-joint control (position, velocity, torque)
-- Push mode: real-time data callbacks
-- Pull mode: on-demand cached data queries
+- EtherCAT, CANFD, and RS485 communication
+- Independent per-joint control for all 5 fingers (position, velocity, torque)
+- Real-time data callbacks for joint states and tactile data
+- Left and right hand device support
 - Automatic product detection via device name matching
+- Provided as Windows dynamic-link library (DLL)
 
-## Directory Structure
+## 📖 Official Documentation
 
+For detailed technical specifications and API references, visit: [C++ SDK Developer Documentation](https://fcnzogxju7xr.feishu.cn/docx/PlY7dUod5o3tZYxzXiUc0BN1nyd)
+
+## 📑 Table of Contents
+
+- [Features](#-features)
+- [Official Documentation](#-official-documentation)
+- [System Requirements](#-system-requirements)
+- [Dependencies](#-dependencies)
+- [Installation](#-installation)
+- [Quick Start](#-quick-start)
+- [Build from Source](#-build-from-source)
+- [Directory Structure](#-directory-structure)
+- [Open Source & Ecosystem Resources](#-open-source--ecosystem-resources)
+- [Changelog](#-changelog)
+- [Support & Feedback](#-support--feedback)
+- [License](#-license)
+
+## 💻 System Requirements
+
+### Supported Platforms
+
+| Platform | Arch | Status | Compiler |
+|----------|------|--------|----------|
+| **Windows** | x64 | Stable | Visual Studio 2017+ |
+| **Linux** | x64 | Stable | GCC 7.5+ (C++11) |
+
+#### Windows
+- Windows 7 or higher
+- Visual Studio 2017 or higher
+- CMake 3.5 or higher
+
+#### Linux
+- Ubuntu 20.04 LTS or higher
+- GCC 7.5+ (C++11 support)
+- CMake 3.5 or higher
+- libpcap-dev, libssl-dev
+
+## 🔧 Dependencies
+
+### Required Tools
+- CMake 3.5 or higher
+- C++11 compatible compiler
+
+### Bundled Third-Party Libraries
+The following libraries are included in `third_party/` and built automatically:
+
+| Library | Purpose | License |
+|---------|---------|---------|
+| [SOEM](https://github.com/OpenEtherCATsociety/SOEM) | EtherCAT master stack | GPL-2.0 |
+| [nlohmann/json](https://github.com/nlohmann/json) | JSON parsing | MIT |
+| [ZLG CAN](https://www.zlg.cn/) | CANFD driver (Windows) | Proprietary |
+| WinPcap | Packet capture (Windows) | BSD |
+
+### System Libraries (Linux only)
+- libpcap-dev
+- libssl-dev
+- pthreads
+
+## 📦 Installation
+
+### Prebuilt Library
+
+Copy the following artifacts into your project:
+
+| Artifact | Description |
+|----------|-------------|
+| `include/ghand/` | Public headers |
+| `lib/ghand.dll` / `libghand.so` | Shared library |
+| `config/xiaoyao_hand.json` | Product configuration |
+
+Link against `ghand` and ensure the JSON config is accessible at runtime.
+
+### CMake Install
+
+```bash
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build .
+cmake --install . --prefix /path/to/install
 ```
-ghand-sdk-cpp/
-├── include/ghand/            # Public headers
-│   ├── ghand.h               # Main API
-│   ├── types.h               # Type definitions
-│   ├── logging.h             # Logging
-│   ├── export.h              # DLL export macros
-│   └── version.h             # Version info
-├── src/
-│   ├── ghand.cc              # Public API (PIMPL bridge)
-│   ├── logging.cc            # Logger implementation
-│   ├── types.cc              # Type serialization
-│   ├── comm/                 # Communication layer
-│   │   ├── icomm.h           # Abstract interface
-│   │   ├── ethercat_comm.h   # EtherCAT implementation
-│   │   ├── ethercat_comm.cc
-│   │   ├── canfd_comm.h      # CANFD implementation
-│   │   ├── canfd_comm.cc
-│   │   ├── canfd_protocol.h  # CANFD protocol
-│   │   ├── canfd_protocol.cc
-│   │   ├── canfd_driver.h    # CANFD driver abstraction
-│   │   └── canfd_driver_zlg.cc  # ZLG driver
-│   └── internal/             # Internal implementation
-│       ├── ghand.h           # State machine
-│       ├── ghand.cc
-│       ├── dexhand_callback_manager.h  # Callback + data cache
-│       ├── dexhand_callback_manager.cc
-│       ├── product_config.h          # Config structures
-│       ├── product_config_loader.h   # JSON config loader
-│       ├── product_config_loader.cc
-│       ├── file_lock.h       # Device file lock
-│       └── file_lock.cc
-├── config/                   # Product configuration
-│   └── xiaoyao_hand.json
-├── examples/
-│   ├── tutorial/             # Getting started (8 examples)
-│   └── demo/                 # Feature demos (10 examples)
-└── third_party/              # Third-party libraries
-    ├── include/
-    │   ├── soem/             # SOEM (EtherCAT)
-    │   ├── wpcap/            # WinPcap
-    │   ├── zlgcan/           # ZLG CAN
-    │   └── nlohmann/         # JSON parser
-    └── lib/
-        ├── windows/
-        │   ├── soem.lib
-        │   ├── wpcap.lib
-        │   ├── Packet.lib
-        │   ├── zlgcan.lib
-        │   ├── zlgcan.dll
-        │   └── kerneldlls/
-        └── linux/
-            └── libsoem.a
+
+Then in your `CMakeLists.txt`:
+
+```cmake
+find_library(GHAND_LIB ghand PATHS /path/to/install/lib)
+target_link_libraries(your_target PRIVATE ${GHAND_LIB})
+target_include_directories(your_target PRIVATE /path/to/install/include)
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
 ```cpp
 #include "ghand/ghand.h"
 
-using namespace ghand;
-
 int main() {
     // Explicit product type
-    auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
+    auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                       ghand::CommType::ETHERCAT);
 
     // Or auto-detect (matches config by device name after connection)
-    auto hand = DexHand::Create(ProductType::AUTO, CommType::ETHERCAT);
+    // auto hand = ghand::DexHand::Create(ghand::ProductType::AUTO,
+    //                                    ghand::CommType::ETHERCAT);
 
     if (!hand || !hand->Connect("auto")) {
         printf("Connection failed\n");
@@ -94,16 +135,16 @@ int main() {
     auto tactile = hand->GetTactileData();  // Tactile data
 
     // Push mode: register callbacks
-    hand->SetJointsCallback([](const std::vector<Joint>& joints) {
+    hand->SetJointsCallback([](const std::vector<ghand::Joint>& joints) {
         for (const auto& j : joints) {
-            printf("Joint %d: %.1f deg\n", (int)j.id, j.angle);
+            printf("Joint %d: %.1f deg\n", static_cast<int>(j.id), j.angle);
         }
     });
 
     // Control joints
-    std::vector<JointCommand> cmds = {
-        {JointId::THUMB_MCP, 45.0f, 50, 50},
-        {JointId::FF_MCP,    30.0f, 50, 50},
+    std::vector<ghand::JointCommand> cmds = {
+        {ghand::JointId::THUMB_MCP, 45.0f, 50, 50},
+        {ghand::JointId::FF_MCP,    30.0f, 50, 50},
     };
     hand->MoveJoints(cmds);
 
@@ -111,42 +152,64 @@ int main() {
 }
 ```
 
-## Logging
-
-```cpp
-#include "ghand/logging.h"
-
-ghand::ConfigureConsole(ghand::LogLevel::INFO);
-ghand::ConfigureFile("ghand.log");
-```
-
-## Build
+## 🔨 Build from Source
 
 ### Windows
+
 ```bash
 mkdir build && cd build
 cmake ..
 cmake --build . --config Release
+
+# Run example
 .\examples\Release\basic_connection.exe
 ```
 
 ### Linux
+
 ```bash
+# Install dependencies
 sudo apt install -y cmake build-essential pkg-config libpcap-dev libssl-dev
+
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
-sudo ./examples/tutorial/basic_connection
+
+# Run example (requires raw socket access)
+sudo setcap cap_net_raw,cap_net_admin+eip ./examples/tutorial/basic_connection
+./examples/tutorial/basic_connection
 ```
 
-## System Requirements
+## 📁 Directory Structure
 
-| Platform | Arch  | Compiler       |
-|----------|-------|----------------|
-| Windows 7+ | x64 | MSVC 2017+     |
-| Ubuntu 20.04+ | x64 | GCC 7.5+       |
+```
+ghand-sdk-cpp/
+├── include/ghand/    # Public API headers
+├── src/              # Source implementation
+│   ├── comm/         # Communication layer (EtherCAT, CANFD)
+│   └── internal/     # Internal state machine & config
+├── config/           # Product configuration (JSON)
+├── examples/         # Tutorial and demo programs
+├── third_party/      # Bundled dependencies (SOEM, ZLG CAN, etc.)
+└── lib/              # Precompiled libraries
+```
 
-## License
+## 🌐 Open Source & Ecosystem Resources
+
+- **GLI Open Source Hub**: [GLI GitHub Organization](https://github.com/gli-sdk)
+- **Official Documentation**: [GHand Dexterous Hand Docs](https://fcnzogxju7xr.feishu.cn/docx/AhZ6ds2iCoguaAxIzBxciYHinNo)
+- **C++ SDK**: [GHand SDK C++](https://github.com/gli-sdk/ghand_sdk_cpp)
+
+## 📋 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes.
+
+## 📞 Support & Feedback
+
+- 📋 **Technical Support:** For project-specific issues, open an `Issues` in this repository.
+- 📧 **General Inquiries:** [support@glitech.com](mailto:support@glitech.com)
+
+## 📄 License
 
 GHand SDK C++ is proprietary software of Glitech. See [LICENSE](LICENSE).
 

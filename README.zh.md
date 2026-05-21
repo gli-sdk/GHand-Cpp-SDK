@@ -1,10 +1,16 @@
 # GHand SDK C++
+[![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)](include/ghand/version.h)
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+
+[![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
+[![CMake](https://img.shields.io/badge/CMake-3.5+-green.svg)](https://cmake.org/)
 
 [English](README.md)
 
 GHand SDK C++ 是GHand灵巧手的 C++ 开发包，支持 EtherCAT 、CANFD 和 RS485 通信，提供关节控制、触觉数据采集和实时状态反馈。
 
-## 功能特性
+## ✨ 功能特性
 
 - 支持多种通信方式：EtherCAT、CANFD、RS485
 - 提供对5根手指每个关节的独立控制
@@ -13,162 +19,32 @@ GHand SDK C++ 是GHand灵巧手的 C++ 开发包，支持 EtherCAT 、CANFD 和 
 - 支持左手和右手设备
 - Windows 平台动态链接库 (DLL) 形式提供
 
-## 目录结构
+## 📖 官方文档
 
-```
-ghand-sdk-cpp/
-├── include/ghand/            # 公共头文件
-│   ├── ghand.h             # 主 API
-│   ├── types.h               # 类型定义
-│   ├── logging.h             # 日志系统
-│   ├── export.h              # DLL 导出宏
-│   └── version.h             # 版本信息
-├── src/
-│   ├── ghand.cc            # 公共 API 实现（PIMPL 桥接）
-│   ├── logging.cc            # 日志实现
-│   ├── types.cc              # 类型序列化
-│   ├── comm/                 # 通信层
-│   │   ├── icomm.h           # 通信抽象接口
-│   │   ├── ethercat_comm.h   # EtherCAT 实现
-│   │   ├── ethercat_comm.cc
-│   │   ├── canfd_comm.h      # CANFD 实现
-│   │   ├── canfd_comm.cc
-│   │   ├── canfd_protocol.h  # CANFD 协议编解码
-│   │   ├── canfd_protocol.cc
-│   │   ├── canfd_driver.h    # CANFD 驱动抽象
-│   │   └── canfd_driver_zlg.cc  # ZLG 驱动实现
-│   └── internal/             # 内部实现
-│       ├── ghand.h         # 内部状态机
-│       ├── ghand.cc
-│       ├── dexhand_callback_manager.h  # 回调管理 + 数据缓存
-│       ├── dexhand_callback_manager.cc
-│       ├── product_config.h          # 产品配置结构
-│       ├── product_config_loader.h   # JSON 配置加载
-│       ├── product_config_loader.cc
-│       ├── file_lock.h       # 设备文件锁
-│       └── file_lock.cc
-├── config/                   # 产品配置文件
-│   └── xiaoyao_hand.json
-├── examples/
-│   ├── tutorial/
-│   │   ├── 01basic_connection.cc         # 基础连接
-│   │   ├── 02move_joints.cc             # 关节运动
-│   │   ├── 03speed_control.cc           # 速度控制
-│   │   ├── 04torque_control.cc          # 力矩控制
-│   │   ├── 05tactile_callback.cc        # 触觉回调
-│   │   ├── 06multi_hand.cc              # 多手控制
-│   │   ├── 07glove_control.cc           # 手套控制
-│   │   └── 08interactive_joint_control.cc  # 交互式控制
-│   └── demo/
-│       ├── preset_gesture.cc            # 预设手势
-│       ├── gesture_dance.cc             # 手势舞
-│       ├── grabbing_action.cc           # 抓取
-│       ├── press_action.cc              # 按压
-│       ├── clap_action.cc               # 拍手
-│       ├── hold_action.cc               # 握持
-│       ├── knock_action.cc              # 敲击
-│       ├── lift_action.cc               # 拎起
-│       ├── pull_action.cc               # 拉动
-│       └── support_action.cc            # 支撑
-└── third_party/              # 第三方库
-    ├── include/
-    │   ├── soem/             # SOEM (EtherCAT)
-    │   ├── wpcap/            # WinPcap
-    │   ├── zlgcan/           # ZLG CAN
-    │   └── nlohmann/         # JSON 解析
-    └── lib/
-        ├── windows/
-        │   ├── soem.lib
-        │   ├── wpcap.lib
-        │   ├── Packet.lib
-        │   ├── zlgcan.lib
-        │   ├── zlgcan.dll
-        │   └── kerneldlls/   # ZLG 驱动 DLL 及设备配置
-        └── linux/
-            └── libsoem.a
-```
+完整的 API 文档请查看 [C++ SDK 开发者文档](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)，包含：
+- 完整的接口说明和参数定义
+- 详细的代码示例和使用场景
+- 常见问题解答和技术支持信息
+- 环境配置和安装流程
 
-## 快速开始
+详细的 API 签名说明请查看头文件中的注释。
 
-```cpp
-#include "ghand/ghand.h"
+## 📑 目录
 
-using namespace ghand;
+- [功能特性](#-功能特性)
+- [官方文档](#-官方文档)
+- [系统要求](#-系统要求)
+- [依赖说明](#-依赖说明)
+- [安装](#-安装)
+- [快速开始](#-快速开始)
+- [源码编译](#-源码编译)
+- [目录结构](#-目录结构)
+- [开源与生态资源](#-开源与生态资源)
+- [更新日志](#-更新日志)
+- [支持与反馈](#-支持与反馈)
+- [许可证](#-许可证)
 
-int main() {
-    // 指定产品类型
-    auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
-
-    // 或自动识别（连接后根据设备名匹配配置）
-    auto hand = DexHand::Create(ProductType::AUTO, CommType::ETHERCAT);
-
-    if (!hand || !hand->Connect("auto")) {
-        printf("连接失败\n");
-        return -1;
-    }
-
-    // 拉模式：主动查询最新缓存
-    auto state   = hand->GetHandData();     // 手部状态
-    auto joints  = hand->GetJointsData();   // 关节数据
-    auto tactile = hand->GetTactileData();  // 触觉数据
-
-    // 推模式：注册回调
-    hand->SetJointsCallback([](const std::vector<Joint>& joints) {
-        for (const auto& j : joints) {
-            printf("关节 %d: %.1f°\n", (int)j.id, j.angle);
-        }
-    });
-
-    // 控制关节
-    std::vector<JointCommand> cmds = {
-        {JointId::THUMB_MCP, 45.0f, 50, 50},
-        {JointId::FF_MCP,    30.0f, 50, 50},
-    };
-    hand->MoveJoints(cmds);
-
-    hand->Disconnect();
-}
-```
-
-## 日志系统
-
-SDK 提供了内置的日志系统，默认只显示 WARNING 和 ERROR 级别的日志。你可以根据需要配置日志级别：
-
-```cpp
-#include "ghand/logging.h"
-
-ghand::ConfigureConsole(ghand::LogLevel::INFO);
-ghand::ConfigureFile("ghand.log");
-```
-
-详细的日志系统使用说明请参阅 [C++ SDK 开发者文档](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)。
-
-## 编译示例
-
-### Windows
-```bash
-mkdir build && cd build
-cmake ..
-cmake --build . --config Release
-
-# 运行示例
-.\examples\Release\basic_connection.exe
-```
-
-### Linux
-```bash
-# 安装依赖
-sudo apt install -y cmake build-essential pkg-config libpcap-dev libssl-dev
-
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
-
-# 运行示例（需要 root 权限访问网卡）
-sudo ./examples/tutorial/basic_connection
-```
-
-## 系统要求
+## 💻 系统要求
 
 ### 支持的平台
 
@@ -184,26 +60,162 @@ sudo ./examples/tutorial/basic_connection
 
 #### Linux
 - Ubuntu 20.04 LTS 或更高版本
-- GCC 7.5+ (支持 C++11)
+- GCC 7.5+（支持 C++11）
 - CMake 3.5 或更高版本
 - libpcap-dev, libssl-dev
 
-## API 参考
+## 🔧 依赖说明
 
-完整的 API 文档请查看 [C++ SDK 开发者文档](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)，包含：
-- 完整的接口说明和参数定义
-- 详细的代码示例和使用场景
-- 常见问题解答和技术支持信息
-- 环境配置和安装流程
+### 必需工具
+- CMake 3.5 或更高版本
+- 支持 C++11 的编译器
 
-详细的 API 签名说明请查看头文件中的注释。
+### 已集成的第三方库
+以下库已包含在 `third_party/` 目录中，会自动编译：
 
-## 支持与反馈
+| 库 | 用途 | 许可证 |
+|----|------|--------|
+| [SOEM](https://github.com/OpenEtherCATsociety/SOEM) | EtherCAT 主站协议栈 | GPL-2.0 |
+| [nlohmann/json](https://github.com/nlohmann/json) | JSON 解析 | MIT |
+| [ZLG CAN](https://www.zlg.cn/) | CANFD 驱动（Windows） | 专有 |
+| WinPcap | 数据包捕获（Windows） | BSD |
 
-- 如有问题或建议，请提交 Issue 或联系技术支持。
-- Email: qpan@glitech.com
+### 系统库（仅 Linux）
+- libpcap-dev
+- libssl-dev
+- pthreads
 
-## 许可证
+## 📦 安装
+
+### 预编译库
+
+将以下文件复制到你的项目中：
+
+| 文件 | 说明 |
+|------|------|
+| `include/ghand/` | 公共头文件 |
+| `lib/ghand.dll` / `libghand.so` | 动态链接库 |
+| `config/xiaoyao_hand.json` | 产品配置文件 |
+
+链接 `ghand` 库，并确保运行时能访问 JSON 配置文件。
+
+### CMake 安装
+
+```bash
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build .
+cmake --install . --prefix /path/to/install
+```
+
+然后在你的 `CMakeLists.txt` 中：
+
+```cmake
+find_library(GHAND_LIB ghand PATHS /path/to/install/lib)
+target_link_libraries(your_target PRIVATE ${GHAND_LIB})
+target_include_directories(your_target PRIVATE /path/to/install/include)
+```
+
+## 🚀 快速开始
+
+```cpp
+#include "ghand/ghand.h"
+
+int main() {
+    // 指定产品类型
+    auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                       ghand::CommType::ETHERCAT);
+
+    // 或自动识别（连接后根据设备名匹配配置）
+    // auto hand = ghand::DexHand::Create(ghand::ProductType::AUTO,
+    //                                    ghand::CommType::ETHERCAT);
+
+    if (!hand || !hand->Connect("auto")) {
+        printf("连接失败\n");
+        return -1;
+    }
+
+    // 拉模式：主动查询最新缓存
+    auto state   = hand->GetHandData();     // 手部状态
+    auto joints  = hand->GetJointsData();   // 关节数据
+    auto tactile = hand->GetTactileData();  // 触觉数据
+
+    // 推模式：注册回调
+    hand->SetJointsCallback([](const std::vector<ghand::Joint>& joints) {
+        for (const auto& j : joints) {
+            printf("关节 %d: %.1f°\n", static_cast<int>(j.id), j.angle);
+        }
+    });
+
+    // 控制关节
+    std::vector<ghand::JointCommand> cmds = {
+        {ghand::JointId::THUMB_MCP, 45.0f, 50, 50},
+        {ghand::JointId::FF_MCP,    30.0f, 50, 50},
+    };
+    hand->MoveJoints(cmds);
+
+    hand->Disconnect();
+}
+```
+
+## 🔨 源码编译
+
+### Windows
+
+```bash
+mkdir build && cd build
+cmake ..
+cmake --build . --config Release
+
+# 运行示例
+.\examples\Release\basic_connection.exe
+```
+
+### Linux
+
+```bash
+# 安装依赖
+sudo apt install -y cmake build-essential pkg-config libpcap-dev libssl-dev
+
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+
+# 运行示例（需要原始套接字权限）
+sudo setcap cap_net_raw,cap_net_admin+eip ./examples/tutorial/basic_connection
+./examples/tutorial/basic_connection
+```
+
+## 📁 目录结构
+
+```
+ghand-sdk-cpp/
+├── include/ghand/    # 公共 API 头文件
+├── src/              # 源码实现
+│   ├── comm/         # 通信层（EtherCAT、CANFD）
+│   └── internal/     # 内部状态机与配置
+├── config/           # 产品配置文件（JSON）
+├── examples/         # 教程与示例程序
+├── third_party/      # 集成依赖库（SOEM、ZLG CAN 等）
+└── lib/              # 预编译库
+```
+
+## 🌐 开源与生态资源
+
+查看 Glitech 更多开源项目和生态工具：
+
+- [GLI SDK GitHub 组织](https://github.com/gli-sdk)
+
+## 📋 更新日志
+
+详见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 📞 支持与反馈
+
+- 📋 **技术支持：** 如有项目相关问题，请在本仓库提交 `Issue`。
+- 📧 **一般咨询：** [support@glitech.com](mailto:support@glitech.com)
+
+## 📄 许可证
 
 GHand SDK C++ 是 Glitech 的专有软件。使用本 SDK 前，请参阅 [LICENSE](LICENSE) 文件了解完整条款。
 

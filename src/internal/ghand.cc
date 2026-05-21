@@ -15,6 +15,7 @@
 #include "dexhand_callback_manager.h"
 #include "ethercat_comm.h"
 #include "ghand/logging.h"
+#include "logging_macros.h"
 #include "product_config_loader.h"
 
 namespace {
@@ -213,31 +214,28 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
 
   LOG_DEBUG("Moving " << joints.size() << " joints");
 
-  // 按 valid_joints 顺序排列，仅包含可控关节（有 joint_limits 的）
-  std::map<JointId, JointCommand> joint_map;
-  for (const auto& joint : joints) {
-    JointCommand limited_joint = joint;
-    ClampJointAngle(limited_joint);
-    ClampJointVelocity(limited_joint);
-    ClampJointTorque(limited_joint);
-    joint_map[joint.id] = limited_joint;
-  }
-
+  // 按 valid_joints 顺序排列，仅包含用户输入的可控关节
   std::vector<JointCommand> ordered_joints;
-  ordered_joints.reserve(config_.joint_limits.size());
+  ordered_joints.reserve(joints.size());
   for (const auto& joint_id : config_.valid_joints) {
     if (config_.joint_limits.find(joint_id) == config_.joint_limits.end())
       continue;  // 跳过只读关节
-    auto it = joint_map.find(joint_id);
-    if (it != joint_map.end()) {
-      ordered_joints.push_back(it->second);
-    } else {
-      float default_angle = 0.0f;
-      auto limit = config_.joint_limits.find(joint_id);
-      if (limit != config_.joint_limits.end() && limit->second.first > 0.0f) {
-        default_angle = limit->second.first;
+    for (const auto& joint : joints) {
+      if (joint.id == joint_id) {
+        JointCommand limited = joint;
+        if (control_mode_ == ControlMode::POSITION) {
+          ClampJointAngle(limited);
+          ClampJointVelocity(limited);
+          ClampJointTorque(limited);
+        } else if (control_mode_ == ControlMode::SPEED) {
+          ClampJointVelocity(limited);
+          ClampJointTorque(limited);
+        } else if (control_mode_ == ControlMode::TORQUE) {
+          ClampJointTorque(limited);
+        }
+        ordered_joints.push_back(limited);
+        break;
       }
-      ordered_joints.push_back({joint_id, default_angle, 0, 0});
     }
   }
 
@@ -293,17 +291,17 @@ TactileData DexHand::GetTactileData() const {
 
 int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
                         const std::string& filename,
-                        std::function<void(int)> progressCallback) {
+                        std::function<void(int)> progress_callback) {
   LOG_INFO("Starting firmware update: " << filename);
 
   const int retry_count = 10;
   const int retry_delay_ms = 1000;
   std::string last_version = comm_->GetDeviceInfo().software_version;
 
-  int ret = comm_->BootUpdate(ifname, slave, filename, progressCallback);
+  int ret = comm_->BootUpdate(ifname, slave, filename, progress_callback);
   if (ret == 1) {
     for (int i = 0; i < retry_count; i++) {
-      progressCallback(100);
+      progress_callback(100);
       std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
       if (Connect(device_name_)) {
@@ -354,7 +352,7 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
     // 位置模式：速度范围 0-100，负数取绝对值，绝对值>100取100
     if (joint.velocity < 0) {
       int8_t original = joint.velocity;
-      joint.velocity = abs(joint.velocity);
+      joint.velocity = std::abs(joint.velocity);
       LOG_WARNING(
           "[Joint] "
           << ToString(joint.id) << " velocity " << static_cast<int>(original)
@@ -394,7 +392,7 @@ void DexHand::ClampJointTorque(JointCommand& joint) {
     // 位置模式和速度模式：力矩范围 0-100，负数取绝对值，绝对值>100取100
     if (joint.torque < 0) {
       int8_t original = joint.torque;
-      joint.torque = abs(joint.torque);
+      joint.torque = std::abs(joint.torque);
       const char* mode_name =
           (control_mode_ == ControlMode::POSITION) ? "POSITION" : "SPEED";
       LOG_WARNING("[Joint] " << ToString(joint.id) << " torque "

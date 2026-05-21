@@ -75,7 +75,7 @@ TactileData DexHand::GetTactileData() { return impl_->GetTactileData(); }
 
 int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
                         const std::string& filename,
-                        std::function<void(int)> progressCallback) {
-  return impl_->BootUpdate(ifname, slave, filename, progressCallback);
+                        std::function<void(int)> progress_callback) {
+  return impl_->BootUpdate(ifname, slave, filename, progress_callback);
 }
 }  // namespace ghand

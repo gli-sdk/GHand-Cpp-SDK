@@ -5,12 +5,17 @@
 
 #include "ghand/ghand.h"
 
-using namespace ghand;
+using ghand::DexHand;
+\nusing ghand::JointCommand;
+\nusing ghand::JointId;
+\nusing ghand::ProductType;
+\nusing ghand::CommType;
+\n
 
-// ========== Gesture Pose Definitions ==========
+    // ========== Gesture Pose Definitions ==========
 
-// Thumb touches little finger
-std::vector<JointCommand> MakeThumbTouchLittle() {
+    // Thumb touches little finger
+    std::vector<JointCommand> MakeThumbTouchLittle() {
   return {
       {JointId::THUMB_PIP, 20.0f, 100, 100},
       {JointId::THUMB_MCP, 50.0f, 100, 100},

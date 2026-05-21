@@ -5,6 +5,7 @@
 #include <sstream>
 
 #include "ghand/logging.h"
+#include "logging_macros.h"
 
 namespace ghand {
 namespace internal {

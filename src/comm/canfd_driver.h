@@ -50,7 +50,7 @@ class CANFDDriver {
    * @param timeout_ms 超时时间（毫秒）
    * @return 0 成功，负值失败或超时
    */
-  virtual int Receive(canfd::Frame& frame, int timeout_ms) = 0;
+  virtual int Receive(canfd::Frame* frame, int timeout_ms) = 0;
 
   /**
    * @brief 枚举可用适配器

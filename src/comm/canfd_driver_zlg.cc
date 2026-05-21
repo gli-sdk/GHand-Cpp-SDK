@@ -8,6 +8,7 @@
 
 #include "canfd_driver.h"
 #include "ghand/logging.h"
+#include "logging_macros.h"
 
 #ifdef _WIN32
 #include <cfgmgr32.h>
@@ -93,7 +94,7 @@ struct ComPortEntry {
 static std::vector<ComPortEntry> EnumerateComPorts() {
   std::vector<ComPortEntry> result;
   HDEVINFO hDevInfo =
-      SetupDiGetClassDevs(&GUID_DEVINTERFACE_COMPORT, NULL, NULL,
+      SetupDiGetClassDevs(&GUID_DEVINTERFACE_COMPORT, nullptr, nullptr,
                           DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
   if (hDevInfo == INVALID_HANDLE_VALUE) return result;
 
@@ -104,8 +105,8 @@ static std::vector<ComPortEntry> EnumerateComPorts() {
     char hwId[256] = {};
     DWORD dataType = 0, reqSize = 0;
     if (!SetupDiGetDeviceRegistryPropertyA(
-            hDevInfo, &devInfoData, SPDRP_HARDWAREID, &dataType, (PBYTE)hwId,
-            sizeof(hwId), &reqSize)) {
+            hDevInfo, &devInfoData, SPDRP_HARDWAREID, &dataType,
+            reinterpret_cast<PBYTE>(hwId), sizeof(hwId), &reqSize)) {
       continue;
     }
 
@@ -113,22 +114,22 @@ static std::vector<ComPortEntry> EnumerateComPorts() {
     char* vid_pos = strstr(hwId, "VID_");
     char* pid_pos = strstr(hwId, "PID_");
     if (vid_pos && pid_pos) {
-      vid = static_cast<int>(strtol(vid_pos + 4, NULL, 16));
-      pid = static_cast<int>(strtol(pid_pos + 4, NULL, 16));
+      vid = static_cast<int>(strtol(vid_pos + 4, nullptr, 16));
+      pid = static_cast<int>(strtol(pid_pos + 4, nullptr, 16));
     }
     if (vid == 0) continue;
 
     char friendly[256] = {};
     reqSize = 0;
     SetupDiGetDeviceRegistryPropertyA(
-        hDevInfo, &devInfoData, SPDRP_FRIENDLYNAME, &dataType, (PBYTE)friendly,
-        sizeof(friendly), &reqSize);
+        hDevInfo, &devInfoData, SPDRP_FRIENDLYNAME, &dataType,
+        reinterpret_cast<PBYTE>(friendly), sizeof(friendly), &reqSize);
 
     char device_desc[256] = {};
     reqSize = 0;
-    SetupDiGetDeviceRegistryPropertyA(hDevInfo, &devInfoData, SPDRP_DEVICEDESC,
-                                      &dataType, (PBYTE)device_desc,
-                                      sizeof(device_desc), &reqSize);
+    SetupDiGetDeviceRegistryPropertyA(
+        hDevInfo, &devInfoData, SPDRP_DEVICEDESC, &dataType,
+        reinterpret_cast<PBYTE>(device_desc), sizeof(device_desc), &reqSize);
 
     std::string port_name;
     std::string friendly_str(friendly);
@@ -451,7 +452,7 @@ class ZLGDriver : public CANFDDriver {
     return (sent == 1) ? 0 : -1;
   }
 
-  int Receive(canfd::Frame& frame, int timeout_ms) override {
+  int Receive(canfd::Frame* frame, int timeout_ms) override {
     if (channel_handle_ == nullptr) return -1;
 
     ZCAN_ReceiveFD_Data rx;
@@ -464,19 +465,19 @@ class ZLGDriver : public CANFDDriver {
     UINT received = ZCAN_ReceiveFD(*channel_handle_, &rx, 1, zlg_wait);
     if (received == 0) return -1;
 
-    frame.id = GET_ID(rx.frame.can_id);
-    frame.len = rx.frame.len;
-    memcpy(frame.data, rx.frame.data, rx.frame.len);
-    frame.is_fd = true;
-    frame.is_extended = IS_EFF(rx.frame.can_id);
+    frame->id = GET_ID(rx.frame.can_id);
+    frame->len = rx.frame.len;
+    memcpy(frame->data, rx.frame.data, rx.frame.len);
+    frame->is_fd = true;
+    frame->is_extended = IS_EFF(rx.frame.can_id);
 
-    canfd::ArbitrationId arb(frame.id);
+    canfd::ArbitrationId arb(frame->id);
     // LOG_INFO("CH" << can_index_ << " RX "
-    //           << "ID=0x" << std::hex << frame.id << std::dec
+    //           << "ID=0x" << std::hex << frame->id << std::dec
     //           << " " << FrameTypeString(arb.frame_type())
-    //           << (frame.is_extended ? " EXT" : " STD")
-    //           << " DLC=" << static_cast<int>(frame.len)
-    //           << " DATA=" << HexDump(frame.data, frame.len));
+    //           << (frame->is_extended ? " EXT" : " STD")
+    //           << " DLC=" << static_cast<int>(frame->len)
+    //           << " DATA=" << HexDump(frame->data, frame->len));
 
     return 0;
   }

@@ -1,9 +1,13 @@
 #include <iostream>
 
 #include "ghand/ghand.h"
-using namespace ghand;
 
-int main() {
+using ghand::DexHand;
+\nusing ghand::HandType;
+\nusing ghand::ProductType;
+\nusing ghand::CommType;
+\nusing ghand::ToString;
+\n int main() {
   auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << std::endl;

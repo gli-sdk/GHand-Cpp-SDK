@@ -5,9 +5,15 @@
 
 #include "ghand/ghand.h"
 
-using ghand::JointId;
-
-using namespace ghand;
+using ghand::DexHand;
+\nusing ghand::JointCommand;
+\nusing ghand::JointId;
+\nusing ghand::ControlMode;
+\nusing ghand::ProductType;
+\nusing ghand::CommType;
+\nusing ghand::State;
+\nusing ghand::ToString;
+\n using ghand::JointId;
 
 // 关节状态显示回调函数
 void DisplayJoints(const std::vector<ghand::Joint>& joints) {

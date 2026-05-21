@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include "ghand/logging.h"
+#include "logging_macros.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -90,7 +91,8 @@ std::string GetSdkRootFromModule() {
   }
 #else
   Dl_info info;
-  if (dladdr((void*)&GetSdkRootFromModule, &info) == 0 || !info.dli_fname) {
+  if (dladdr(reinterpret_cast<void*>(&GetSdkRootFromModule), &info) == 0 ||
+      !info.dli_fname) {
     return "";
   }
   char resolved[PATH_MAX];

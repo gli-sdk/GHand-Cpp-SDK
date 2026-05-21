@@ -5,10 +5,14 @@
 
 #include "ghand/ghand.h"
 
-using namespace ghand;
+using ghand::DexHand;
+\nusing ghand::JointCommand;
+\nusing ghand::JointId;
+\nusing ghand::CommType;
+\n
 
-// Lift pose
-std::vector<JointCommand> MakeLiftPose() {
+    // Lift pose
+    std::vector<JointCommand> MakeLiftPose() {
   return {
       {JointId::THUMB_PIP, 0.0f, 100, 100},
       {JointId::THUMB_MCP, 0.0f, 100, 100},

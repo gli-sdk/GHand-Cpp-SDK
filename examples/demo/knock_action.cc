@@ -5,10 +5,14 @@
 
 #include "ghand/ghand.h"
 
-using namespace ghand;
+using ghand::DexHand;
+\nusing ghand::JointCommand;
+\nusing ghand::JointId;
+\nusing ghand::CommType;
+\n
 
-// Knock pose
-std::vector<JointCommand> MakeKnockPose() {
+    // Knock pose
+    std::vector<JointCommand> MakeKnockPose() {
   return {
       {JointId::THUMB_PIP, 60.0f, 100, 100},
       {JointId::THUMB_MCP, 0.0f, 100, 100},

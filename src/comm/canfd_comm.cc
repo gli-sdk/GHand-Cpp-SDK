@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "ghand/logging.h"
+#include "logging_macros.h"
 
 namespace ghand {
 namespace internal {
@@ -178,7 +179,7 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
       continue;
     }
 
-    // 查找该关节是否有命令（传入列表已按 DexHand 补全为 18 个）
+    // 查找该关节是否有命令（传入列表仅包含用户指定的关节）
     float angle = 0.0f;
     uint8_t velocity = 0;
     uint8_t torque = 0;
@@ -461,7 +462,7 @@ bool CANFDComm::SendMultiFrame(const uint8_t* data, uint8_t total_len) {
 void CANFDComm::ReceiveThread() {
   while (rx_running_) {
     canfd::Frame frame;
-    int result = driver_->Receive(frame, 100);  // 100ms timeout
+    int result = driver_->Receive(&frame, 100);  // 100ms timeout
     if (result != 0) continue;
 
     canfd::ArbitrationId arb(frame.id);

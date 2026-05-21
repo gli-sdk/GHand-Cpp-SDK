@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **BREAKING:** Removed `LOG_DEBUG`, `LOG_INFO`, `LOG_WARNING`, `LOG_ERROR` macros from public header `include/ghand/logging.h`. These were never documented as public API. If your code depended on them, define your own macros or call `ghand::Log()` directly.
 - **BREAKING:** Renamed all example files to remove number prefixes for consistency with C++ naming conventions
   - `01.basic_connection.cc` → `basic_connection.cc`
   - `02.move_joints.cc` → `move_joints.cc`
@@ -21,3 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Updated all documentation references to use new example file names
+- Refactored `CMakeLists.txt` to use `target_include_directories()` with proper `PUBLIC`/`PRIVATE` scoping instead of global `include_directories()`
+- Changed `CANFDComm` and `EtherCATComm` to hold `ProductConfig` by value instead of by reference, eliminating potential lifetime coupling issues
+- Sanitized public header comments in `include/ghand/types.h` to remove internal implementation references (`ProductConfig`)

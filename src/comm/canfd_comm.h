@@ -86,7 +86,7 @@ class CANFDComm : public IComm {
   std::thread rx_thread_;
   std::atomic<bool> rx_running_{false};
 
-  const ProductConfig& config_;
+  ProductConfig config_;
 
   // 请求-响应匹配（按功能码分槽，支持多请求并发）
   struct ResponseSlot {

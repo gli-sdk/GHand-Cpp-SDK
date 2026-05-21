@@ -5,10 +5,15 @@
 
 #include "ghand/ghand.h"
 
-using namespace ghand;
+using ghand::DexHand;
+\nusing ghand::JointCommand;
+\nusing ghand::JointId;
+\nusing ghand::ProductType;
+\nusing ghand::CommType;
+\n
 
-// Hold pose
-std::vector<JointCommand> MakeHoldPose() {
+    // Hold pose
+    std::vector<JointCommand> MakeHoldPose() {
   return {
       {JointId::THUMB_PIP, 10.0f, 100, 100},
       {JointId::THUMB_MCP, 25.0f, 100, 100},

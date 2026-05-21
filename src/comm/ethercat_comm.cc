@@ -9,6 +9,7 @@ constexpr double kPi = 3.14159265358979323846;
 #include "ethercat_comm.h"
 
 #include "ghand/logging.h"
+#include "logging_macros.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -438,10 +439,10 @@ bool EtherCATComm::InputBin(const char* fname, int* length) {
 
 #ifdef _WIN32
   errno_t err = fopen_s(&fp, fname, "rb");
-  if (err != 0 || fp == NULL) return false;
+  if (err != 0 || fp == nullptr) return false;
 #else
   fp = fopen(fname, "rb");
-  if (fp == NULL) return false;
+  if (fp == nullptr) return false;
 #endif
 
   while (((c = fgetc(fp)) != EOF) &&
@@ -456,7 +457,7 @@ bool EtherCATComm::InputBin(const char* fname, int* length) {
 
 int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
                              const std::string& file_path,
-                             std::function<void(int)> progressCallback) {
+                             std::function<void(int)> progress_callback) {
   (void)ifname;
 
   // 预检查：写入 0x5A 到 0x2005:0x01
@@ -482,7 +483,7 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
   inOP_ = 0;
   dorun_ = 0;
   StopThreads();
-  progress_callback_ = progressCallback;
+  progress_callback_ = progress_callback;
   foe_instance_ = this;
   ctx_.slavelist[0].state = EC_STATE_SAFE_OP;
   ecx_writestate(&ctx_, 0);
@@ -663,18 +664,33 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
     return false;
   }
 
-  std::vector<uint8_t> buffer(joints.size() * kEthercatJointDataSize + 2, 0);
+  // EtherCAT PDO 需要固定长度，按 valid_joints 顺序补全缺失关节
+  std::map<JointId, JointCommand> joint_map;
+  for (const auto& joint : joints) {
+    joint_map[joint.id] = joint;
+  }
+
+  std::vector<uint8_t> buffer(
+      config_.valid_joints.size() * kEthercatJointDataSize + 2, 0);
   size_t offset = 0;
 
   buffer[offset++] = static_cast<uint8_t>(mode);
   buffer[offset++] = 0;  // stop
 
-  for (const auto& joint : joints) {
-    float angle = joint.angle * (static_cast<float>(kPi) / 180.0f);
+  for (const auto& joint_id : config_.valid_joints) {
+    float angle = 0.0f;
+    uint8_t velocity = 0;
+    uint8_t torque = 0;
+    auto it = joint_map.find(joint_id);
+    if (it != joint_map.end()) {
+      angle = it->second.angle * (static_cast<float>(kPi) / 180.0f);
+      velocity = it->second.velocity;
+      torque = it->second.torque;
+    }
     memcpy(buffer.data() + offset, &angle, sizeof(angle));
     offset += sizeof(angle);
-    buffer[offset++] = joint.velocity;
-    buffer[offset++] = joint.torque;
+    buffer[offset++] = velocity;
+    buffer[offset++] = torque;
   }
 
   LOG_INFO("Sending PDO data");

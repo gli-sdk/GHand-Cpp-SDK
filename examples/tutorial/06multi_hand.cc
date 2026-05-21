@@ -6,9 +6,15 @@
 
 #include "ghand/ghand.h"
 
-using namespace ghand;
+using ghand::DexHand;
+\nusing ghand::JointCommand;
+\nusing ghand::JointId;
+\nusing ghand::ProductType;
+\nusing ghand::CommType;
+\n
 
-int main() {
+    int
+    main() {
   std::cout << "========================================\n";
   std::cout << "  GHand Dexterous Hand SDK - Multi-Hand Control Demo\n";
   std::cout << "========================================\n";

@@ -22,28 +22,7 @@ elseif(UNIX AND NOT APPLE)
     add_compile_definitions(__linux__)
 endif()
 
-if(WIN32)
-    # 添加头文件目录
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/comm)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/internal)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/wpcap)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/zlgcan)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/soem/win32)
-
-    # 链接 SOEM 的库文件
-    link_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib)
-
-elseif(UNIX AND NOT APPLE)
-    # 添加头文件目录
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/comm)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/internal)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/soem/linux)
-
-    # 依赖检测
+if(UNIX AND NOT APPLE)
     find_package(Threads REQUIRED)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(PCAP REQUIRED libpcap)
@@ -86,6 +65,33 @@ set(SOURCES
 # 创建动态库
 add_library(ghand SHARED ${SOURCES})
 target_compile_definitions(ghand PRIVATE GHAND_BUILD)
+
+target_include_directories(ghand
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/comm
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/internal
+        ${GENERATED_DIR}
+)
+
+if(WIN32)
+    target_include_directories(ghand PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/wpcap
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/zlgcan
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/soem/win32
+    )
+    target_link_directories(ghand PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib
+    )
+else()
+    target_include_directories(ghand PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/soem/linux
+    )
+endif()
 
 # 链接依赖库
 if(WIN32)

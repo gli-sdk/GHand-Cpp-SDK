@@ -5,17 +5,24 @@
 
 #include "ghand/ghand.h"
 
-using namespace ghand;
+using ghand::DexHand;
+\nusing ghand::JointCommand;
+\nusing ghand::JointId;
+\nusing ghand::ControlMode;
+\nusing ghand::ProductType;
+\nusing ghand::CommType;
+\n
 
-/**
- * @brief Speed control demonstration
- *
- * This example shows how to control dexterous hand joint movements using
- * different speed percentages. Speed parameter range: 0-100%, higher values
- * result in faster movement.
- */
+    /**
+     * @brief Speed control demonstration
+     *
+     * This example shows how to control dexterous hand joint movements using
+     * different speed percentages. Speed parameter range: 0-100%, higher values
+     * result in faster movement.
+     */
 
-int main() {
+    int
+    main() {
   std::cout << "========================================" << std::endl;
   std::cout << "  GHand Dexterous Hand SDK - Speed Control Demo        "
             << std::endl;

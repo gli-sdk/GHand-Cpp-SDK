@@ -110,7 +110,7 @@ class EtherCATComm : public IComm {
   TactileDataCallback tactile_callback_;
   std::mutex callback_mutex_;
 
-  const ProductConfig& config_;
+  ProductConfig config_;
 
   // === FOE 固件升级共享状态（同一时刻仅允许一个固件升级操作）===
   static std::function<void(int)> progress_callback_;

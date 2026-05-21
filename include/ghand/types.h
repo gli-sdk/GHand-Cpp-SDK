@@ -161,7 +161,7 @@ struct HandState {
  * @brief 单个触觉区域的传感器数据
  */
 struct RegionTactile {
-  const char* region_name;                // 指向配置中的区域名（零拷贝）
+  const char* region_name;                // 区域名称（由设备端提供）
   bool state;                             // 传感器状态 (true=正常, false=异常)
   Force resultant_force;                  // 合力数据
   std::vector<Force> distributed_forces;  // 分布力数据
@@ -171,9 +171,9 @@ struct RegionTactile {
  * @brief 触觉数据结构
  *
  * 设计说明：
- * - regions 按 ProductConfig::tactile_regions 顺序排列，与协议帧字节序一致
- * - region_name 指向配置中的字符串，生命周期与 ProductConfig 相同，无需拷贝
- * - sensor_state 按位编码：bit 0-4 分别对应区域 0-4（顺序与配置一致）
+ * - regions 按设备协议定义的顺序排列，与协议帧字节序一致
+ * - region_name 指向设备返回的字符串，生命周期与 TactileData 数据帧相同
+ * - sensor_state 按位编码：bit 0-4 分别对应区域 0-4
  * - sensor_error 为全局错误码
  */
 struct TactileData {

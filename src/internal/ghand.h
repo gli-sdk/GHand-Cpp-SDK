@@ -66,7 +66,7 @@ class DexHand {
   // Firmware update
   int BootUpdate(const std::string& ifname, uint16_t slave,
                  const std::string& filename,
-                 std::function<void(int)> progressCallback);
+                 std::function<void(int)> progress_callback);
 
  private:
   bool ConnectToDevice(const std::string& device_name);

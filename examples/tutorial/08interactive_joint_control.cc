@@ -9,12 +9,21 @@
 
 #include "ghand/ghand.h"
 
-using namespace ghand;
+using ghand::DexHand;
+\nusing ghand::JointCommand;
+\nusing ghand::JointId;
+\nusing ghand::ControlMode;
+\nusing ghand::HandType;
+\nusing ghand::ProductType;
+\nusing ghand::CommType;
+\nusing ghand::State;
+\nusing ghand::ToString;
+\n
 
-/**
- * @brief Joint parameter structure
- */
-struct JointParams {
+    /**
+     * @brief Joint parameter structure
+     */
+    struct JointParams {
   float angle;  // Angle (degrees)
   int speed;    // Speed (0-100)
   int torque;   // Torque (0-100)

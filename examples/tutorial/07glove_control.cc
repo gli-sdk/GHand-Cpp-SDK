@@ -24,14 +24,19 @@ const int SOCKET_ERROR = -1;
 
 #include "ghand/ghand.h"
 
-using namespace ghand;
+using ghand::DexHand;
+\nusing ghand::JointCommand;
+\nusing ghand::JointId;
+\nusing ghand::ProductType;
+\nusing ghand::CommType;
+\n
 
-// ========== Data Structures ==========
+    // ========== Data Structures ==========
 
-/**
- * @brief Thumb finger data (9 sensors)
- */
-struct ThumbFinger {
+    /**
+     * @brief Thumb finger data (9 sensors)
+     */
+    struct ThumbFinger {
   float mcp_bend, mcp_sway, mcp_roll;
   float pip_bend, pip_sway, pip_roll;
   float dip_bend, dip_sway, dip_roll;
