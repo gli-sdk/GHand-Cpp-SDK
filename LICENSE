@@ -1,68 +1,21 @@
-Ghand SDK C++ - 许可协议
-================================
+MIT License
 
-Copyright © 2025 Glitech. All rights reserved.
+Copyright (c) 2026 GLITech
 
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. 软件性质
------------
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-本软件（Ghand SDK C++）及其相关文档文件是 Glitech 的专有和保密信息。
-Glitech 保留本软件的所有权利、所有权和利益。
-
-
-2. 使用许可
------------
-
-在遵守本协议条款的前提下，Glitech 特此授予您有限的、非独占的、不可转让的
-许可，允许您：
-
-a) 将本 SDK 用于软件开发和集成目的；
-b) 在您的应用程序中链接和使用提供的 DLL 文件；
-c) 在授权设备上使用本 SDK。
-
-本许可不包含任何其他权利，所有未明确授予的权利均由 Glitech 保留。
-
-
-3. 使用限制
------------
-
-未经 Glitech 事先书面同意，您不得：
-
-a) 分发、复制、修改或创建基于本软件的衍生作品；
-b) 反向工程、反编译、反汇编或以其他方式尝试提取本软件的源代码；
-c) 出租、出借、租赁或以任何方式向第三方转移本软件；
-d) 移除或修改本软件上的任何版权声明、商标或其他专有标记；
-e) 将本软件用于任何非法目的或违反任何法律法规的行为。
-
-
-4. 免责声明
------------
-
-本软件按"现状"提供，不提供任何形式的明示或暗示的保证，包括但不限于
-对适销性、特定用途适用性、所有权和非侵权的暗示保证。
-
-Glitech 不保证：
-a) 本软件将满足您的要求；
-b) 本软件将不间断、及时、安全或无错误运行；
-c) 从本软件使用中获得的任何结果将是准确或可靠的；
-d) 本软件中的任何错误或缺陷将被更正。
-
-在任何情况下，Glitech 均不对任何直接、间接、附带、特殊、惩罚性或后果性
-损害（包括但不限于利润损失、业务中断、商业信息丢失或其他金钱损失）负责，
-即使已被告知此类损害的可能性。
-
-
-5. 适用法律
------------
-
-本协议受中华人民共和国法律管辖，并依其解释。因本协议引起的或与本协议
-有关的任何争议，双方应首先通过友好协商解决；协商不成的，任何一方均可
-向 Glitech 所在地有管辖权的人民法院提起诉讼。
-
-
-6. 联系方式
------------
-
-如有任何问题或需要获得额外的许可权限，请联系：
-Email: qpan@glitech.com
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
