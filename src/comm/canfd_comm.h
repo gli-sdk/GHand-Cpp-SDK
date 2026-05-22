@@ -18,16 +18,16 @@ namespace ghand {
 namespace internal {
 
 /**
- * @brief CANFD 通信实现类
+ * @brief CANFD communication implementation class
  *
- * 实现 IComm 接口，使用自定义 CANFD 协议与设备通信。
+ * Implements the IComm interface, communicating with devices using a custom CANFD protocol.
  */
 class CANFDComm : public IComm {
  public:
   explicit CANFDComm(const ProductConfig& config);
   ~CANFDComm() override;
 
-  // IComm 接口实现
+  // IComm interface implementation
   int Connect(const std::string& device_name) override;
   int Disconnect() override;
   bool IsConnected() const override { return connected_.load(); }
@@ -88,7 +88,7 @@ class CANFDComm : public IComm {
 
   ProductConfig config_;
 
-  // 请求-响应匹配（按功能码分槽，支持多请求并发）
+  // Request-response matching (slotted by function code, supports concurrent requests)
   struct ResponseSlot {
     std::vector<uint8_t> payload;
     bool ready = false;
@@ -97,12 +97,12 @@ class CANFDComm : public IComm {
   std::condition_variable response_cv_;
   std::map<uint8_t, ResponseSlot> response_slots_;
 
-  // 组包器（按 device_id + FrameType 隔离 RESPONSE / ACTIVE_REPORT）
+  // Packet assembler (isolated by device_id + FrameType for RESPONSE / ACTIVE_REPORT)
   std::mutex asm_mutex_;
   std::map<std::pair<uint8_t, canfd::FrameType>, canfd::PacketAssembler>
       assemblers_;
 
-  // 回调
+  // Callbacks
   JointsCallback joints_cb_;
   HandStateCallback hand_state_cb_;
   TactileDataCallback tactile_cb_;

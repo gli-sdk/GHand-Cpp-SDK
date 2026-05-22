@@ -18,10 +18,10 @@ class IComm;
 class DexHandCallbackManager;
 
 /**
- * @brief DexHand内部实现类
+ * @brief DexHand internal implementation class
  *
- * 该类包含DexHand的所有实现细节，通过Pimpl模式与公共API分离。
- * 用户代码不应直接访问此类，它仅用于SDK内部实现。
+ * This class contains all implementation details of DexHand, separated from the public API via the Pimpl idiom.
+ * User code should not access this class directly; it is intended for SDK internal use only.
  */
 class DexHand {
  public:
@@ -30,35 +30,35 @@ class DexHand {
 
   bool IsValid() const { return comm_ != nullptr; }
 
-  // 连接管理
+  // Connection management
   bool AutoConnect();
   bool Connect(const std::string& device_name);
   bool Disconnect();
   bool IsConnected() const;
 
-  // 设备信息
+  // Device info
   std::map<std::string, std::string> SearchAdapters() const;
   HandType GetHandType() const;
   DeviceInfo GetDeviceInfo() const;
 
-  // 控制操作
+  // Control operations
   void SetControlMode(ControlMode mode);
   bool MoveJoints(const std::vector<JointCommand>& joints);
   void Stop();
   bool ClearFault();
   bool InitJoint();
 
-  // 触觉传感器控制
+  // Tactile sensor control
   bool OpenTactile();
   bool CloseTactile();
   bool ZeroTactile();
 
-  // 回调注册
+  // Callback registration
   void SetJointsCallback(std::function<void(const std::vector<Joint>&)> cb);
   void SetHandStateCallback(std::function<void(const HandState&)> cb);
   void SetTactileDataCallback(std::function<void(const TactileData&)> cb);
 
-  // 数据轮询
+  // Data polling
   HandState GetHandData() const;
   std::vector<Joint> GetJointsData() const;
   TactileData GetTactileData() const;

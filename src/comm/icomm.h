@@ -17,45 +17,45 @@ using HandStateCallback = std::function<void(const HandState&)>;
 using TactileDataCallback = std::function<void(const TactileData&)>;
 
 /**
- * @brief 通信抽象接口
+ * @brief Communication abstraction interface
  *
- * 为 EtherCAT/CANFD/RS485 提供统一的业务级通信接口。
- * 实现类负责处理底层协议差异，向上层提供标准化的设备操作。
+ * Provides a unified business-level communication interface for EtherCAT/CANFD/RS485.
+ * Implementations handle underlying protocol differences and provide standardized device operations to upper layers.
  */
 class IComm {
  public:
   virtual ~IComm() = default;
 
-  // ===== 连接管理 =====
+  // ===== Connection Management =====
   virtual int Connect(const std::string& device_name) = 0;
   virtual int Disconnect() = 0;
   virtual bool IsConnected() const = 0;
   virtual std::map<std::string, std::string> SearchAdapters() = 0;
 
-  // ===== 设备信息 =====
+  // ===== Device Info =====
   virtual DeviceInfo GetDeviceInfo() = 0;
   virtual HandType GetHandType() = 0;
 
-  // ===== 运动控制 =====
+  // ===== Motion Control =====
   virtual bool MoveJoints(const std::vector<JointCommand>& joints,
                           ControlMode mode) = 0;
   virtual void Stop() = 0;
 
-  // ===== 系统操作 =====
+  // ===== System Operations =====
   virtual bool ClearFault() = 0;
   virtual bool InitJoint() = 0;
 
-  // ===== 触觉传感器 =====
+  // ===== Tactile Sensor =====
   virtual bool OpenTactile() = 0;
   virtual bool CloseTactile() = 0;
   virtual bool ZeroTactile() = 0;
 
-  // ===== 数据回调 =====
+  // ===== Data Callbacks =====
   virtual void SetJointsCallback(JointsCallback cb) = 0;
   virtual void SetHandStateCallback(HandStateCallback cb) = 0;
   virtual void SetTactileDataCallback(TactileDataCallback cb) = 0;
 
-  // ===== 固件更新 =====
+  // ===== Firmware Update =====
   virtual int BootUpdate(const std::string& device_name, uint16_t slave,
                          const std::string& filename,
                          std::function<void(int)> progress) = 0;

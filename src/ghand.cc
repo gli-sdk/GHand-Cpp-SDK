@@ -4,7 +4,7 @@
 
 namespace ghand {
 
-// 工厂函数
+// Factory function
 std::unique_ptr<DexHand> DexHand::Create(ProductType pt, CommType ct) {
   auto hand = std::unique_ptr<DexHand>(new DexHand(pt, ct));
   if (!hand->impl_->IsValid()) {
@@ -13,12 +13,12 @@ std::unique_ptr<DexHand> DexHand::Create(ProductType pt, CommType ct) {
   return hand;
 }
 
-// 构造/析构
+// Constructor / Destructor
 DexHand::DexHand(ProductType pt, CommType ct)
     : impl_(new internal::DexHand(pt, ct)) {}
 DexHand::~DexHand() {}
 
-// 转发所有调用
+// Forward all calls
 bool DexHand::AutoConnect() { return impl_->AutoConnect(); }
 
 bool DexHand::Connect(const std::string& device_name) {

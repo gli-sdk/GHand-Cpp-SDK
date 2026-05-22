@@ -10,7 +10,7 @@
 namespace ghand {
 namespace internal {
 
-// 每关节数据尺寸:uint16 angle(2B) + uint8 velocity(1B) + uint8 torque(1B)
+// Joint data size per joint: uint16 angle(2B) + uint8 velocity(1B) + uint8 torque(1B)
 constexpr size_t kCanfdJointDataSize = 4;
 
 CANFDComm::CANFDComm(const ProductConfig& config)
@@ -18,20 +18,20 @@ CANFDComm::CANFDComm(const ProductConfig& config)
 
 CANFDComm::~CANFDComm() { Disconnect(); }
 
-// device_name: ZLG 设备标识符，支持以下格式：
-//   1) "ZCAN_USBCANFD_100U:0:0"  标准 ZLG 格式（型号:设备索引:通道索引）
-//   2) "42:0:0"                  数字型号格式
-// 亦可通过 hand.SearchAdapters() 枚举可用设备后使用返回的 key 连接。
+// device_name: ZLG device identifier, supports the following formats:
+//   1) "ZCAN_USBCANFD_100U:0:0"  Standard ZLG format (model:device index:channel index)
+//   2) "42:0:0"                  Numeric model format
+// You can also enumerate available devices via hand.SearchAdapters() and use the returned key to connect.
 int CANFDComm::Connect(const std::string& device_name) {
-  LOG_INFO("CANFD connecting to: " << device_name);
+  GHAND_LOG_INFO("CANFD connecting to: " << device_name);
 
   if (!driver_) {
-    LOG_ERROR("CANFD driver not available");
+    GHAND_LOG_ERROR("CANFD driver not available");
     return -1;
   }
 
   if (driver_->Open(device_name, 1000000, 5000000) != 0) {
-    LOG_ERROR("Failed to open CANFD channel: " << device_name);
+    GHAND_LOG_ERROR("Failed to open CANFD channel: " << device_name);
     return -2;
   }
 
@@ -39,18 +39,18 @@ int CANFDComm::Connect(const std::string& device_name) {
   rx_running_ = true;
   rx_thread_ = std::thread(&CANFDComm::ReceiveThread, this);
 
-  // 读取真实设备 ID（覆盖默认 0x71）
+  // Read actual device ID (overrides default 0x71)
   std::vector<uint8_t> resp;
   if (SendRecvCmd(canfd::GET_SLAVE_ID, nullptr, 0, &resp, 1000) &&
       !resp.empty()) {
     device_id_ = resp[0];
-    LOG_INFO("CANFD device ID detected: 0x" << std::hex
+    GHAND_LOG_INFO("CANFD device ID detected: 0x" << std::hex
                                             << static_cast<int>(device_id_));
   } else {
-    LOG_WARNING("Failed to read device ID, using default 0x71");
+    GHAND_LOG_WARNING("Failed to read device ID, using default 0x71");
   }
 
-  // 订阅主动上报
+  // Subscribe to active reports
   SubscribeActiveReport(canfd::REPORT_JOINTS, 10);  // 10ms = 100Hz
   if (config_.has_tactile) {
     SubscribeActiveReport(canfd::REPORT_TACTILE, 50);  // 50ms = 20Hz
@@ -60,7 +60,7 @@ int CANFDComm::Connect(const std::string& device_name) {
 }
 
 int CANFDComm::Disconnect() {
-  LOG_INFO("CANFD disconnecting");
+  GHAND_LOG_INFO("CANFD disconnecting");
 
   if (IsConnected()) {
     UnsubscribeActiveReport(canfd::REPORT_JOINTS);
@@ -85,7 +85,7 @@ int CANFDComm::Disconnect() {
     response_cv_.notify_all();
   }
 
-  LOG_INFO("CANFD disconnected");
+  GHAND_LOG_INFO("CANFD disconnected");
   return 0;
 }
 
@@ -96,7 +96,7 @@ std::map<std::string, std::string> CANFDComm::SearchAdapters() {
   return {};
 }
 
-// ===== 设备信息 =====
+// ===== Device Info =====
 
 DeviceInfo CANFDComm::GetDeviceInfo() {
   DeviceInfo info;
@@ -139,47 +139,47 @@ HandType CANFDComm::GetHandType() {
   return HandType::NONE;
 }
 
-// ===== 运动控制 =====
+// ===== Motion Control =====
 
 bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
                            ControlMode mode) {
   if (!IsConnected()) {
-    LOG_ERROR("Cannot move joints: device not connected");
+    GHAND_LOG_ERROR("Cannot move joints: device not connected");
     return false;
   }
   if (joints.empty()) {
-    LOG_WARNING("MoveJoints called with empty joint list");
+    GHAND_LOG_WARNING("MoveJoints called with empty joint list");
     return false;
   }
 
-  // 构建 63B 参数 (CANFD 单帧 payload 上限，不含功能码)
-  // 布局与固件约定保持一致：
-  //   Byte[0]  data[1] : 模式+急停
-  //   Byte[1]  data[2] : 电机索引+控制数量
-  //   Byte[2]  data[3] : 大拇指 PIP 角度低字节
-  //   Byte[3]  data[4] : 大拇指 PIP 角度高字节
-  //   Byte[4]  data[5] : 大拇指 PIP 速度
-  //   Byte[5]  data[6] : 大拇指 PIP 力矩
-  //   ... 按 JointId 枚举顺序依次正序填充 ...
-  //   Byte[52] data[53]: 小指 MCP 力矩
-  //   Byte[53..62]     : 0，满足 CANFD 物理层要求
+  // Build 63B payload (CANFD single-frame payload limit, excluding function code)
+  // Layout consistent with firmware convention:
+  //   Byte[0]  data[1] : mode + emergency stop
+  //   Byte[1]  data[2] : motor index + control count
+  //   Byte[2]  data[3] : thumb PIP angle low byte
+  //   Byte[3]  data[4] : thumb PIP angle high byte
+  //   Byte[4]  data[5] : thumb PIP velocity
+  //   Byte[5]  data[6] : thumb PIP torque
+  //   ... filled sequentially in JointId enum order ...
+  //   Byte[52] data[53]: little finger MCP torque
+  //   Byte[53..62]     : 0, to satisfy CANFD physical layer requirements
   uint8_t param[63] = {0};
   param[0] = static_cast<uint8_t>(mode);
-  param[1] = 13;  // 从 THUMB_PIP 开始，共 13 个可控关节
+  param[1] = 13;  // starting from THUMB_PIP, 13 controllable joints
 
   size_t buf_offset = 2;
   for (int i = 0; i < static_cast<int>(JointId::NUM_JOINTS); ++i) {
     if (buf_offset + 3 >= sizeof(param)) break;
 
     JointId id = static_cast<JointId>(i);
-    // 跳过 DIP 关节（不可控）
+    // Skip DIP joints (not controllable)
     if (id == JointId::THUMB_DIP || id == JointId::FF_DIP ||
         id == JointId::MF_DIP || id == JointId::RF_DIP ||
         id == JointId::LF_DIP) {
       continue;
     }
 
-    // 查找该关节是否有命令（传入列表仅包含用户指定的关节）
+    // Find if this joint has a command (input list only contains user-specified joints)
     float angle = 0.0f;
     uint8_t velocity = 0;
     uint8_t torque = 0;
@@ -206,19 +206,19 @@ void CANFDComm::Stop() {
   if (!IsConnected()) return;
 
   uint8_t param[63] = {0};
-  param[0] = 0x01;  // 急停标志
+  param[0] = 0x01;  // emergency stop flag
 
   SendCmdOnly(canfd::CONTROL_JOINTS, param, sizeof(param));
 }
 
-// ===== 系统操作 =====
+// ===== System Operations =====
 
 bool CANFDComm::ClearFault() {
   if (!SendCmdOnly(canfd::CLEAR_FAULT, nullptr, 0)) {
     return false;
   }
 
-  // 轮询状态直到完成
+  // Poll status until complete
   int retries = 100;
   while (retries-- > 0) {
     std::vector<uint8_t> state_resp, error_resp;
@@ -231,7 +231,7 @@ bool CANFDComm::ClearFault() {
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
-  LOG_ERROR("Clear fault operation timed out");
+  GHAND_LOG_ERROR("Clear fault operation timed out");
   return false;
 }
 
@@ -252,11 +252,11 @@ bool CANFDComm::InitJoint() {
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
-  LOG_ERROR("Joint initialization timed out");
+  GHAND_LOG_ERROR("Joint initialization timed out");
   return false;
 }
 
-// ===== 触觉传感器 =====
+// ===== Tactile Sensor =====
 
 bool CANFDComm::OpenTactile() {
   std::vector<uint8_t> resp;
@@ -276,7 +276,7 @@ bool CANFDComm::ZeroTactile() {
          resp[0] == 1;
 }
 
-// ===== 数据回调 =====
+// ===== Data Callbacks =====
 
 void CANFDComm::SetJointsCallback(JointsCallback cb) {
   std::lock_guard<std::mutex> lock(cb_mutex_);
@@ -293,7 +293,7 @@ void CANFDComm::SetTactileDataCallback(TactileDataCallback cb) {
   tactile_cb_ = cb;
 }
 
-// ===== 固件更新 =====
+// ===== Firmware Update =====
 
 int CANFDComm::BootUpdate(const std::string& device_name, uint16_t slave,
                           const std::string& filename,
@@ -302,25 +302,25 @@ int CANFDComm::BootUpdate(const std::string& device_name, uint16_t slave,
   (void)slave;
   (void)filename;
   (void)progress;
-  LOG_WARNING("BootUpdate not supported on CANFD in Phase 1");
+  GHAND_LOG_WARNING("BootUpdate not supported on CANFD in Phase 1");
   return -1;
 }
 
-// ===== 内部协议方法 =====
+// ===== Internal Protocol Methods =====
 
 bool CANFDComm::SendRecvCmd(canfd::FunctionCode fc, const uint8_t* param,
                             uint8_t param_len, std::vector<uint8_t>* response,
                             int timeout_ms) {
   if (!driver_ || !IsConnected()) return false;
 
-  // 1. 登记等待槽位
+  // 1. Register waiting slot
   uint8_t fc_byte = static_cast<uint8_t>(fc);
   {
     std::lock_guard<std::mutex> lock(response_mutex_);
     response_slots_[fc_byte] = ResponseSlot{};
   }
 
-  // 2. 构造完整数据（1 字节 FC + 全部参数，支持多帧）
+  // 2. Construct full data (1 byte FC + all parameters, multi-frame supported)
   std::vector<uint8_t> full_data;
   full_data.reserve(1 + param_len);
   full_data.push_back(fc_byte);
@@ -330,7 +330,7 @@ bool CANFDComm::SendRecvCmd(canfd::FunctionCode fc, const uint8_t* param,
     memcpy(full_data.data() + offset, param, param_len);
   }
 
-  // 明确区分单帧/多帧发送
+  // Explicitly distinguish single-frame / multi-frame transmission
   bool sent = false;
   if (full_data.size() <= 64) {
     sent = SendSingleFrame(full_data.data(),
@@ -345,7 +345,7 @@ bool CANFDComm::SendRecvCmd(canfd::FunctionCode fc, const uint8_t* param,
     return false;
   }
 
-  // 3. 阻塞等待本功能码的响应（支持多帧组包）
+  // 3. Block waiting for response of this function code (multi-frame reassembly supported)
   {
     std::unique_lock<std::mutex> lock(response_mutex_);
     bool got_response =
@@ -357,10 +357,10 @@ bool CANFDComm::SendRecvCmd(canfd::FunctionCode fc, const uint8_t* param,
     auto it = response_slots_.find(fc_byte);
     if (!got_response || it == response_slots_.end() || !it->second.ready) {
       response_slots_.erase(fc_byte);
-      return false;  // 超时或 Disconnect 清空
+      return false;  // timeout or Disconnect cleared
     }
 
-    // 去掉首字节功能码，返回纯 payload
+    // Strip leading function code byte, return pure payload
     *response = std::vector<uint8_t>(it->second.payload.begin() + 1,
                                      it->second.payload.end());
     response_slots_.erase(it);
@@ -397,7 +397,7 @@ bool CANFDComm::SendSingleFrame(const uint8_t* data, uint8_t total_len) {
   frame.id = canfd::ArbitrationId(canfd::COMMAND, device_id_, 0, 1).raw;
   memcpy(frame.data, data, total_len);
 
-  // 填充到 CANFD 合法长度
+  // Pad to valid CANFD length
   const uint8_t valid_lens[] = {0, 1,  2,  3,  4,  5,  6,  7,
                                 8, 12, 16, 20, 24, 32, 48, 64};
   frame.len = 64;
@@ -419,7 +419,7 @@ bool CANFDComm::SendMultiFrame(const uint8_t* data, uint8_t total_len) {
 
   uint8_t offset = 0;
   uint8_t frame_idx = 0;
-  uint8_t total_frames = (total_len + 63) / 64;  // 向上取整
+  uint8_t total_frames = (total_len + 63) / 64;  // round up
 
   while (offset < total_len) {
     uint8_t chunk = std::min<uint8_t>(total_len - offset, 64);
@@ -430,7 +430,7 @@ bool CANFDComm::SendMultiFrame(const uint8_t* data, uint8_t total_len) {
                    .raw;
     memcpy(frame.data, data + offset, chunk);
 
-    // 填充到 CANFD 合法长度
+    // Pad to valid CANFD length
     if (frame_idx < total_frames - 1) {
       frame.len = 64;
     } else {
@@ -457,7 +457,7 @@ bool CANFDComm::SendMultiFrame(const uint8_t* data, uint8_t total_len) {
   return true;
 }
 
-// ===== 接收线程 =====
+// ===== Receive Thread =====
 
 void CANFDComm::ReceiveThread() {
   while (rx_running_) {
@@ -467,10 +467,10 @@ void CANFDComm::ReceiveThread() {
 
     canfd::ArbitrationId arb(frame.id);
 
-    // 只处理目标设备的帧
+    // Only process frames targeting this device
     if (arb.device_id() != device_id_ && device_id_ != 0) continue;
 
-    // 按 (device_id, FrameType) 分组组包，隔离 RESPONSE / ACTIVE_REPORT
+    // Group by (device_id, FrameType), isolating RESPONSE / ACTIVE_REPORT
     auto key = std::make_pair(device_id_, arb.frame_type());
     std::vector<uint8_t> payload;
     bool complete = false;
@@ -482,7 +482,7 @@ void CANFDComm::ReceiveThread() {
     if (!complete) continue;
 
     if (arb.frame_type() == canfd::RESPONSE) {
-      // 响应组包完成，按功能码投递到对应槽位
+      // Response assembly complete, dispatch to corresponding slot by function code
       std::lock_guard<std::mutex> lock(response_mutex_);
       if (!payload.empty()) {
         uint8_t fc = payload[0];
@@ -494,7 +494,7 @@ void CANFDComm::ReceiveThread() {
         }
       }
     } else if (arb.frame_type() == canfd::ACTIVE_REPORT) {
-      // 主动上报组包完成，解析
+      // Active report assembly complete, parse
       if (!payload.empty()) {
         ProcessActiveReport(payload,
                             static_cast<canfd::FunctionCode>(payload[0]));
@@ -531,7 +531,7 @@ bool CANFDComm::UnsubscribeActiveReport(canfd::FunctionCode fc) {
   return SendCmdOnly(fc, param, 1);
 }
 
-// ===== 数据解析 =====
+// ===== Data Parsing =====
 
 void CANFDComm::ParseJointStates(const uint8_t* data, size_t len) {
   if (len < config_.valid_joints.size() * kCanfdJointDataSize) return;
@@ -566,7 +566,7 @@ void CANFDComm::ParseJointStates(const uint8_t* data, size_t len) {
 void CANFDComm::ParseTactileForce(const uint8_t* data, size_t len) {
   if (!config_.has_tactile) return;
 
-  // 至少需要每个区域的合力数据（6 字节/区域）
+  // At least resultant force data per region (6 bytes/region) is required
   size_t min_size = config_.tactile_regions.size() * 6;
   if (len < min_size) return;
 
@@ -629,7 +629,7 @@ void CANFDComm::ParseHandError(const uint8_t* data, size_t len) {
   if (hand_state_cb_) hand_state_cb_(hand_state);
 }
 
-// ===== 角度转换 =====
+// ===== Angle Conversion =====
 
 float CANFDComm::RawToAngle(uint16_t raw, JointId id) {
   auto it = config_.joint_limits.find(id);

@@ -11,7 +11,7 @@
 namespace ghand {
 namespace internal {
 
-// Logger 类声明（仅此文件内部使用）
+// Logger class declaration (for internal use only in this file)
 class Logger {
  public:
   static Logger& GetInstance();
@@ -44,7 +44,7 @@ class Logger {
 };
 
 // ============================================================================
-// Logger 类实现
+// Logger class implementation
 // ============================================================================
 
 Logger::Logger()
@@ -69,11 +69,11 @@ Logger& Logger::GetInstance() {
 }
 
 void Logger::SetConsoleLevel(LogLevel level) {
-  // 只允许 INFO 和 DEBUG 级别
+  // Only INFO and DEBUG levels are allowed
   if (level != LogLevel::INFO && level != LogLevel::DEBUG) {
     std::cerr
         << "[ERROR] Invalid console log level. Only INFO and DEBUG are allowed."
-        << std::endl;
+        << '\n';
     return;
   }
 
@@ -84,15 +84,15 @@ void Logger::SetConsoleLevel(LogLevel level) {
 void Logger::SetFileLog(const std::string& filename, LogLevel level) {
   std::lock_guard<std::mutex> lock(mutex_);
 
-  // 关闭已有的文件流
+  // Close existing file stream
   if (file_stream_ && file_stream_->is_open()) {
     file_stream_->close();
   }
 
-  // 创建新的文件流
+  // Create new file stream
   file_stream_.reset(new std::ofstream(filename, std::ios::app));
   if (!file_stream_->is_open()) {
-    std::cerr << "[ERROR] Failed to open log file: " << filename << std::endl;
+    std::cerr << "[ERROR] Failed to open log file: " << filename << '\n';
     file_stream_.reset();
     return;
   }
@@ -104,16 +104,16 @@ void Logger::Log(LogLevel level, const char* file, int line,
                  const std::string& message) {
   std::lock_guard<std::mutex> lock(mutex_);
 
-  // 检查控制台日志级别
+  // Check console log level
   if (level >= console_level_) {
     std::string msg = FormatMessage(level, file, line, message, false);
-    std::cerr << msg << std::endl;
+    std::cerr << msg << '\n';
   }
 
-  // 检查文件日志级别
+  // Check file log level
   if (file_stream_ && file_stream_->is_open() && level >= file_level_) {
     std::string msg = FormatMessage(level, file, line, message, true);
-    *file_stream_ << msg << std::endl;
+    *file_stream_ << msg << '\n';
     file_stream_->flush();
   }
 }
@@ -174,8 +174,8 @@ std::string Logger::FormatMessage(LogLevel level, const char* file, int line,
   std::ostringstream oss;
 
   if (verbose) {
-    // 详细格式（用于文件日志）
-    // 提取文件名（去掉路径）
+    // Verbose format (for file logging)
+    // Extract filename (remove path)
     const char* filename = file;
     const char* last_slash = file;
     while (*file) {
@@ -190,7 +190,7 @@ std::string Logger::FormatMessage(LogLevel level, const char* file, int line,
         << "[" << LevelToString(level) << "] "
         << "[" << filename << ":" << line << "] " << message;
   } else {
-    // 简洁格式（用于控制台）
+    // Concise format (for console)
     oss << FormatTime(false) << " "
         << "[" << LevelToString(level) << "] " << message;
   }

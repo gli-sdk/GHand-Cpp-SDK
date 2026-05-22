@@ -5,14 +5,14 @@
 
 #include "ghand/ghand.h"
 
-// 关节状态显示回调函数
+// Joint status display callback function
 void DisplayJoints(const std::vector<ghand::Joint>& joints) {
-  std::cout << "\n========== Joint Status ==========" << std::endl;
+  std::cout << "\n========== Joint Status ==========" << '\n';
   std::cout << std::left << std::setw(20) << "Joint" << std::setw(10)
             << "Angle(deg)" << std::setw(10) << "Velocity(%)" << std::setw(10)
             << "Torque(%)" << std::setw(15) << "State"
-            << "Error" << std::endl;
-  std::cout << std::string(80, '-') << std::endl;
+            << "Error" << '\n';
+  std::cout << std::string(80, '-') << '\n';
 
   for (const auto& joint : joints) {
     std::cout << std::left << std::setw(20) << ghand::ToString(joint.id)
@@ -20,65 +20,65 @@ void DisplayJoints(const std::vector<ghand::Joint>& joints) {
               << joint.angle << std::setw(15) << +joint.velocity
               << std::setw(15) << +joint.torque << std::setw(15)
               << ghand::ToString(joint.state) << ghand::ToString(joint.error)
-              << std::endl;
+              << '\n';
   }
-  std::cout << "==================================" << std::endl;
+  std::cout << "==================================" << '\n';
 }
 
 int main() {
   auto hand =
       ghand::DexHand::Create(ghand::ProductType::G5, ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << std::endl;
+    std::cerr << "Failed to create DexHand" << '\n';
     return -1;
   }
 
-  // 尝试通过ETHERCAT连接灵巧手
-  std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
+  // Try to connect to the dexterous hand via EtherCAT
+  std::cout << "Connecting to dexterous hand via EtherCAT..." << '\n';
   bool success = hand->AutoConnect();
 
   if (success) {
-    std::cout << "Successfully connected to the dexterous hand!" << std::endl;
+    std::cout << "Successfully connected to the dexterous hand!" << '\n';
 
-    // 注册关节状态回调以实时显示关节数据
+    // Register joint status callback to display joint data in real time
     hand->SetJointsCallback(DisplayJoints);
-    std::cout << "Joint display callback registered." << std::endl;
+    std::cout << "Joint display callback registered." << '\n';
 
-    // 设置控制模式为位置模式（默认）
+    // Set control mode to position mode (default)
     hand->SetControlMode(ghand::ControlMode::POSITION);
 
-    // 定义关节命令：控制所有13个关节
-    // DIP关节会被自动跳过，无需控制
+    // Define joint commands: control all 13 joints
+    // DIP joints will be automatically skipped, no need to control
     std::vector<ghand::JointCommand> joints = {
         {ghand::JointId::FF_MCP, 30.0f, 100, 100},
         {ghand::JointId::FF_PIP, 45.0f, 100, 100},
     };
 
-    std::cout << "Moving joints..." << std::endl;
+    std::cout << "Moving joints..." << '\n';
     bool move_success = hand->MoveJoints(joints);
 
     if (move_success) {
-      std::cout << "Joints moved successfully!" << std::endl;
+      std::cout << "Joints moved successfully!" << '\n';
 
-      // 保持姿势5秒
+      // Hold pose for 5 seconds
       std::this_thread::sleep_for(std::chrono::seconds(5));
 
-      // 重置关节位置
+      // Reset joint positions
       std::vector<ghand::JointCommand> reset_joints = {
           {ghand::JointId::FF_MCP, 0.0f, 100, 100},
           {ghand::JointId::FF_PIP, 0.0f, 100, 100}};
 
-      std::cout << "Resetting joint positions..." << std::endl;
+      std::cout << "Resetting joint positions..." << '\n';
       hand->MoveJoints(reset_joints);
       std::this_thread::sleep_for(std::chrono::seconds(2));
     } else {
-      std::cout << "Failed to move joints!" << std::endl;
+      std::cout << "Failed to move joints!" << '\n';
     }
 
     hand->Disconnect();
-    std::cout << "Connection closed." << std::endl;
+    std::cout << "Connection closed." << '\n';
   } else {
-    std::cout << "Failed to connect to the dexterous hand!" << std::endl;
+    std::cout << "Failed to connect to the dexterous hand!" << '\n';
   }
 
   return 0;

@@ -13,18 +13,18 @@ namespace ghand {
 namespace internal {
 
 /**
- * @brief DexHand回调管理器内部实现类
+ * @brief DexHand callback manager internal implementation class
  *
- * 职责：
- * 1. 管理各类数据回调的注册
- * 2. 检测数据变化
- * 3. 在数据变化时触发相应的回调
- * 4. 保证数据新鲜度（100ms强制更新）
- * 5. 缓存最新数据，支持轮询访问
+ * Responsibilities:
+ * 1. Manage registration of various data callbacks
+ * 2. Detect data changes
+ * 3. Trigger corresponding callbacks when data changes
+ * 4. Ensure data freshness (forced update every 100 ms)
+ * 5. Cache the latest data to support polled access
  */
 class DexHandCallbackManager {
  public:
-  // 回调类型定义
+  // Callback type definitions
   using JointsCallback = std::function<void(const std::vector<Joint>&)>;
   using HandStateCallback = std::function<void(const HandState&)>;
   using TactileDataCallback = std::function<void(const TactileData&)>;
@@ -32,32 +32,32 @@ class DexHandCallbackManager {
   DexHandCallbackManager();
   ~DexHandCallbackManager() = default;
 
-  // 回调注册方法
+  // Callback registration methods
   void SetJointsCallback(JointsCallback callback);
   void SetHandStateCallback(HandStateCallback callback);
   void SetTactileDataCallback(TactileDataCallback callback);
 
-  // 数据更新方法（由DexHand调用）
+  // Data update methods (called by DexHand)
   void UpdateJoints(const std::vector<Joint>& joints);
   void UpdateTemperature(const HandState& temperature);
   void UpdateTactileData(const TactileData& data);
 
-  // 轮询访问方法（线程安全）
+  // Polled access methods (thread-safe)
   HandState GetHandData() const;
   std::vector<Joint> GetJointsData() const;
   TactileData GetTactileData() const;
 
  private:
-  // 变化检测方法
+  // Change detection methods
   bool HasJointDataChanged(const std::vector<Joint>& joints);
   bool HasTemperatureChanged(const HandState& temperature);
 
-  // 回调成员变量
+  // Callback member variables
   JointsCallback joints_callback_;
   HandStateCallback hand_state_callback_;
   TactileDataCallback tactile_data_callback_;
 
-  // 上次数据缓存（用于变化检测 + 轮询访问）
+  // Last data cache (used for change detection + polled access)
   mutable std::mutex data_mutex_;
   std::vector<Joint> last_joints_;
   HandState last_state_;
@@ -66,10 +66,10 @@ class DexHandCallbackManager {
   std::chrono::steady_clock::time_point last_joint_callback_time_;
   std::chrono::steady_clock::time_point last_temp_callback_time_;
 
-  // 变化检测阈值常量
-  static constexpr float kJointAngleThreshold = 1.0f;   // 1度
-  static constexpr float kTemperatureThreshold = 1.0f;  // 1摄氏度
-  static constexpr int kDataFreshnessMs = 100;          // 100ms数据新鲜度
+  // Change detection threshold constants
+  static constexpr float kJointAngleThreshold = 1.0f;   // 1 degree
+  static constexpr float kTemperatureThreshold = 1.0f;  // 1 degree Celsius
+  static constexpr int kDataFreshnessMs = 100;          // 100 ms data freshness
 };
 
 }  // namespace internal

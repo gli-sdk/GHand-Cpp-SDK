@@ -9,7 +9,7 @@ namespace ghand {
 namespace internal {
 namespace canfd {
 
-// 帧类型（仲裁域 bit[28:25]）
+// Frame type (arbitration field bits [28:25])
 enum FrameType : uint8_t {
   BROADCAST = 0x0,
   COMMAND = 0x1,
@@ -17,7 +17,7 @@ enum FrameType : uint8_t {
   ACTIVE_REPORT = 0x3,
 };
 
-// 功能码（数据域首字节）
+// Function code (first byte of data field)
 enum FunctionCode : uint8_t {
   GET_DEVICE_NAME = 0x10,
   GET_HW_VERSION = 0x11,
@@ -45,7 +45,7 @@ enum FunctionCode : uint8_t {
   REPORT_TACTILE = 0x92,
 };
 
-// 29-bit 仲裁域编码/解码
+// 29-bit arbitration field encoding/decoding
 struct ArbitrationId {
   uint32_t raw = 0;
 
@@ -53,16 +53,17 @@ struct ArbitrationId {
   explicit ArbitrationId(uint32_t id) : raw(id) {}
 
   /**
-   * @brief 构造 29-bit 扩展帧仲裁域（CAN ID）
+   * @brief Construct a 29-bit extended frame arbitration field (CAN ID)
    *
-   * 位域分布（从高位到低位）：
+   * Bit field layout (from MSB to LSB):
    *   bit[28:25]  FrameType  (4bit)
-   * 帧类型：COMMAND/RESPONSE/ACTIVE_REPORT/BROADCAST bit[24:17]  device_id
-   * (8bit)  目标从机地址（如 0x71） bit[16:13]  seq        (4bit)
-   * 帧索引（多帧组包时的第几片，单帧为 0） bit[12:9 ]  total      (4bit)
-   * 总分片数（单帧为 1，多帧组包时 >1） bit[8:0  ]            (9bit)  保留未用
+   * Frame type: COMMAND/RESPONSE/ACTIVE_REPORT/BROADCAST
+   *   bit[24:17]  device_id  (8bit)  Target slave address (e.g. 0x71)
+   *   bit[16:13]  seq        (4bit)  Frame index in multi-frame assembly (0 for single frame)
+   *   bit[12:9 ]  total      (4bit)  Total number of fragments (1 for single frame, >1 for multi-frame)
+   *   bit[8:0  ]            (9bit)  Reserved/unused
    *
-   * 将元数据嵌入 ID 可利用 CAN 硬件滤波器，减少数据域开销。
+   * Embedding metadata in the ID allows using CAN hardware filters and reduces data field overhead.
    */
   ArbitrationId(FrameType ft, uint8_t dev_id, uint8_t seq, uint8_t total) {
     raw = 0;
@@ -80,19 +81,17 @@ struct ArbitrationId {
   uint8_t total() const { return static_cast<uint8_t>((raw >> 9) & 0xF); }
 };
 
-// CANFD 单帧数据
+// CANFD single frame data
 struct Frame {
-  uint32_t id = 0;  // 29-bit 扩展帧仲裁域（CAN ID），由 ArbitrationId
-                    // 打包帧类型/设备ID/序列号
-  uint8_t data[64] = {0};  // 数据域，CANFD 最大 64 字节
-  uint8_t len = 0;         // 实际数据长度，必须为 CANFD
-                    // 合法长度之一（0,1,2,3,4,5,6,7,8,12,16,20,24,32,48,64）
-  bool is_fd = true;  // true=CANFD 格式，false=普通 CAN 格式
+  uint32_t id = 0;  // 29-bit extended frame arbitration field (CAN ID), packed with frame type/device ID/sequence by ArbitrationId
+  uint8_t data[64] = {0};  // Data field, CANFD max 64 bytes
+  uint8_t len = 0;         // Actual data length, must be one of the CANFD valid lengths (0,1,2,3,4,5,6,7,8,12,16,20,24,32,48,64)
+  bool is_fd = true;  // true=CANFD format, false=standard CAN format
   bool is_extended =
-      true;  // true=扩展帧（29-bit ID），false=标准帧（11-bit ID）
+      true;  // true=extended frame (29-bit ID), false=standard frame (11-bit ID)
 };
 
-// 多帧包组装器
+// Multi-frame packet assembler
 class PacketAssembler {
  public:
   bool Feed(const Frame& frame, std::vector<uint8_t>* out_payload);

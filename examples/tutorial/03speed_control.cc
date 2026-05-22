@@ -13,28 +13,28 @@
  * result in faster movement.
  */
 int main() {
-  std::cout << "========================================" << std::endl;
+  std::cout << "========================================" << '\n';
   std::cout << "  GHand Dexterous Hand SDK - Speed Control Demo        "
-            << std::endl;
-  std::cout << "========================================" << std::endl;
+            << '\n';
+  std::cout << "========================================" << '\n';
 
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << std::endl;
+    std::cerr << "Failed to create DexHand" << '\n';
     return -1;
   }
 
   // Connect device
-  std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
+  std::cout << "\nConnecting to dexterous hand via EtherCAT..." << '\n';
   bool success = hand->AutoConnect();
 
   if (!success) {
-    std::cerr << "Error: Unable to connect to dexterous hand!" << std::endl;
+    std::cerr << "Error: Unable to connect to dexterous hand!" << '\n';
     return 1;
   }
 
-  std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
+  std::cout << "✓ Successfully connected to dexterous hand!" << '\n';
 
   // Set control mode to position mode
   hand->SetControlMode(ghand::ControlMode::POSITION);
@@ -42,12 +42,12 @@ int main() {
   // ========== Demo 1: Fist movement with different speeds ==========
   std::cout
       << "\n========== Demo 1: Fist movement with different speeds =========="
-      << std::endl;
+      << '\n';
   std::cout << "Demonstrating fist movements at 25%, 50%, 75%, 100% speeds"
-            << std::endl;
+            << '\n';
   std::cout << "Observe the speed differences of finger movements at different "
                "speeds\n"
-            << std::endl;
+            << '\n';
 
   // Define fist gesture
   std::vector<ghand::JointCommand> fist_joints = {
@@ -84,7 +84,7 @@ int main() {
 
   for (uint8_t speed : speed_levels) {
     std::cout << ">>> Executing fist, speed: " << static_cast<int>(speed) << "%"
-              << std::endl;
+              << '\n';
 
     // Set speed and execute fist
     for (auto& joint : fist_joints) {
@@ -97,7 +97,7 @@ int main() {
     std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));
 
     std::cout << ">>> Opening hand, speed: " << static_cast<int>(speed) << "%"
-              << std::endl;
+              << '\n';
 
     // Set speed and open hand
     for (auto& joint : open_joints) {
@@ -106,18 +106,18 @@ int main() {
     hand->MoveJoints(open_joints);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));
-    std::cout << std::endl;
+    std::cout << '\n';
   }
 
   // ========== Demo 2: Gradual speed control ==========
   std::cout << "\n========== Demo 2: Gradual speed control =========="
-            << std::endl;
+            << '\n';
   std::cout << "Gradually increasing from 10% to 100%, observe speed changes\n"
-            << std::endl;
+            << '\n';
 
   for (int i = 1; i <= 10; i++) {
     uint8_t speed = i * 10;
-    std::cout << ">>> Speed: " << static_cast<int>(speed) << "%" << std::endl;
+    std::cout << ">>> Speed: " << static_cast<int>(speed) << "%" << '\n';
 
     // Set speed
     for (auto& joint : fist_joints) {
@@ -140,10 +140,10 @@ int main() {
   // ========== Demo 3: Different speeds for different fingers ==========
   std::cout << "\n========== Demo 3: Different speeds for different fingers "
                "=========="
-            << std::endl;
+            << '\n';
   std::cout
       << "Setting different speeds for each finger to create wave effect\n"
-      << std::endl;
+      << '\n';
 
   // Create joint commands with each finger moving at different speeds
   std::vector<ghand::JointCommand> wave_fist = {
@@ -166,31 +166,31 @@ int main() {
       {ghand::JointId::LF_MCP, 55.0f, 20, 50}};
 
   std::cout << ">>> Executing wave fist (thumb fastest, little finger slowest)"
-            << std::endl;
+            << '\n';
   hand->MoveJoints(wave_fist);
   std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
-  std::cout << ">>> Opening hand" << std::endl;
+  std::cout << ">>> Opening hand" << '\n';
   hand->MoveJoints(open_joints);
   std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
   // ========== Demo completed ==========
   std::cout << "\n========== Speed control demo completed =========="
-            << std::endl;
-  std::cout << "Key points:" << std::endl;
-  std::cout << "1. Speed parameter range: 0-100%" << std::endl;
+            << '\n';
+  std::cout << "Key points:" << '\n';
+  std::cout << "1. Speed parameter range: 0-100%" << '\n';
   std::cout << "2. Higher speed values result in faster joint movement"
-            << std::endl;
-  std::cout << "3. Each joint can be set with individual speed" << std::endl;
+            << '\n';
+  std::cout << "3. Each joint can be set with individual speed" << '\n';
   std::cout
       << "4. Different speed combinations can create complex motion effects"
-      << std::endl;
+      << '\n';
 
   // Disconnect
-  std::cout << "\nDisconnecting..." << std::endl;
+  std::cout << "\nDisconnecting..." << '\n';
   hand->Disconnect();
-  std::cout << "✓ Disconnected" << std::endl;
+  std::cout << "✓ Disconnected" << '\n';
 
-  std::cout << "\nDemo completed. Thank you for using!" << std::endl;
+  std::cout << "\nDemo completed. Thank you for using!" << '\n';
   return 0;
 }

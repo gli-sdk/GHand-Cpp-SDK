@@ -12,20 +12,20 @@
 
 namespace ghand {
 
-// 前向声明内部实现类
+// Forward declaration of internal implementation class
 namespace internal {
 class DexHand;
 }  // namespace internal
 
-// ========== 回调类型定义 ==========
+// ========== Callback Type Definitions ==========
 using JointsCallback = std::function<void(const std::vector<Joint>&)>;
 using HandStateCallback = std::function<void(const HandState&)>;
 using TactileDataCallback = std::function<void(const TactileData&)>;
 
 /**
- * @brief GHand DexHand 机械手控制接口
+ * @brief GHand DexHand robotic hand control interface
  *
- * 这是唯一的公共 API 类，提供对机械手的完整控制。
+ * This is the sole public API class, providing full control of the robotic hand.
  */
 #ifdef _WIN32
 #pragma warning(push)
@@ -38,128 +38,127 @@ class GHAND_API DexHand {
       CommType comm_type = CommType::ETHERCAT);
   ~DexHand();
 
-  // 禁止拷贝
+  // Disable copy
   DexHand(const DexHand&) = delete;
   DexHand& operator=(const DexHand&) = delete;
 
-  // ========== 连接管理 ==========
+  // ========== Connection Management ==========
   /**
-   * @brief 自动连接设备
-   * @return 成功返回 true
+   * @brief Auto-connect to device
+   * @return true on success
    */
   bool AutoConnect();
 
   /**
-   * @brief 连接到指定设备
-   * @param comm_type 通信类型
-   * @param device_name 设备名称（"auto" 表示自动搜索）
-   * @return 成功返回 true
+   * @brief Connect to specified device
+   * @param device_name Device name ("auto" for auto-discovery)
+   * @return true on success
    */
   bool Connect(const std::string& device_name = "auto");
 
   /**
-   * @brief 断开连接
+   * @brief Disconnect
    */
   bool Disconnect();
 
   /**
-   * @brief 检查是否已连接
+   * @brief Check if connected
    */
   bool IsConnected() const;
 
-  // ========== 设备信息 ==========
+  // ========== Device Info ==========
   /**
-   * @brief 搜索可用的通信适配器
-   * @return 适配器名称映射表
+   * @brief Search available communication adapters
+   * @return Adapter name mapping table
    */
   std::map<std::string, std::string> SearchAdapters();
 
   /**
-   * @brief 获取手部类型
+   * @brief Get hand type
    */
   HandType GetHandType();
 
   /**
-   * @brief 获取设备信息
+   * @brief Get device info
    */
   DeviceInfo GetDeviceInfo();
 
-  // ========== 运动控制 ==========
+  // ========== Motion Control ==========
   /**
-   * @brief 设置控制模式
+   * @brief Set control mode
    */
   void SetControlMode(ControlMode mode);
 
   /**
-   * @brief 控制关节运动
-   * @param joints 关节命令列表，角度单位为度（deg）
-   * @return 成功返回 true
+   * @brief Control joint movement
+   * @param joints Joint command list, angle in degrees (deg)
+   * @return true on success
    */
   bool MoveJoints(const std::vector<JointCommand>& joints);
 
   /**
-   * @brief 立即停止所有运动
+   * @brief Stop all motion immediately
    */
   void Stop();
 
   /**
-   * @brief 清除故障状态
+   * @brief Clear fault state
    */
   bool ClearFault();
 
   /**
-   * @brief 初始化关节
+   * @brief Initialize joints
    */
   bool InitJoint();
 
-  // ========== 触觉传感器 ==========
+  // ========== Tactile Sensor ==========
   /**
-   * @brief 打开触觉传感器
+   * @brief Open tactile sensor
    */
   bool OpenTactile();
 
   /**
-   * @brief 关闭触觉传感器
+   * @brief Close tactile sensor
    */
   bool CloseTactile();
 
   /**
-   * @brief 触觉传感器清零
+   * @brief Zero tactile sensor
    */
   bool ZeroTactile();
 
-  // ========== 数据获取 ==========
+  // ========== Data Access ==========
   /**
-   * @brief 获取手部状态（最新缓存数据，不触发硬件读取）
+   * @brief Get hand state (latest cached data, no hardware read triggered)
    */
   HandState GetHandData();
 
   /**
-   * @brief 获取关节数据（最新缓存数据，不触发硬件读取）
+   * @brief Get joint data (latest cached data, no hardware read triggered)
    */
   std::vector<Joint> GetJointsData();
 
   /**
-   * @brief 获取触觉数据（最新缓存数据，不触发硬件读取）
+   * @brief Get tactile data (latest cached data, no hardware read triggered)
    */
   TactileData GetTactileData();
 
-  // ========== 回调注册 ==========
+  // ========== Callback Registration ==========
   /**
-   * @brief 注册关节数据回调
-   * @param cb 回调函数
+   * @brief Register joint data callback
+   * @param cb Callback function
    */
   void SetJointsCallback(JointsCallback cb);
 
   /**
-   * @brief 注册手部状态回调
-   * @param cb 回调函数
+   * @brief Register hand state callback
+   * @param cb Callback function
    */
   void SetHandStateCallback(HandStateCallback cb);
 
   /**
-   * @brief 注册触觉数据回调
-   * @param cb 回调函数
+   * @brief Register tactile data callback
+   * @param cb Callback function
    */
   void SetTactileDataCallback(TactileDataCallback cb);
 

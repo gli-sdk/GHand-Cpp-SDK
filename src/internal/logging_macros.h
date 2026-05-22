@@ -5,7 +5,7 @@
 
 #include "ghand/logging.h"
 
-#define LOG_DEBUG(x)                                                           \
+#define GHAND_LOG_DEBUG(x)                                                           \
   do {                                                                         \
     std::ostringstream _log_stream;                                            \
     _log_stream << x;                                                          \
@@ -13,7 +13,7 @@
                _log_stream.str());                                             \
   } while (0)
 
-#define LOG_INFO(x)                                                            \
+#define GHAND_LOG_INFO(x)                                                            \
   do {                                                                         \
     std::ostringstream _log_stream;                                            \
     _log_stream << x;                                                          \
@@ -21,7 +21,7 @@
                _log_stream.str());                                             \
   } while (0)
 
-#define LOG_WARNING(x)                                                         \
+#define GHAND_LOG_WARNING(x)                                                         \
   do {                                                                         \
     std::ostringstream _log_stream;                                            \
     _log_stream << x;                                                          \
@@ -29,7 +29,7 @@
                _log_stream.str());                                             \
   } while (0)
 
-#define LOG_ERROR(x)                                                           \
+#define GHAND_LOG_ERROR(x)                                                           \
   do {                                                                         \
     std::ostringstream _log_stream;                                            \
     _log_stream << x;                                                          \

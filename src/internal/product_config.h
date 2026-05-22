@@ -12,7 +12,7 @@ namespace ghand {
 namespace internal {
 
 /**
- * @brief 单个触觉区域的配置
+ * @brief Configuration for a single tactile region
  */
 struct TactileRegionConfig {
   std::string name;
@@ -20,9 +20,9 @@ struct TactileRegionConfig {
 };
 
 /**
- * @brief 产品硬件配置
+ * @brief Product hardware configuration
  *
- * 从 JSON 配置文件加载的每产品差异化参数。
+ * Per-product differentiated parameters loaded from a JSON configuration file.
  */
 struct ProductConfig {
   std::string model;

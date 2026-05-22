@@ -34,7 +34,7 @@ class EtherCATComm : public IComm {
   explicit EtherCATComm(const ProductConfig& config);
   ~EtherCATComm() override;
 
-  // ===== IComm 接口实现 =====
+  // ===== IComm interface implementation =====
   int Connect(const std::string& device_name) override;
   int Disconnect() override;
   bool IsConnected() const override { return is_connected_; }
@@ -62,7 +62,7 @@ class EtherCATComm : public IComm {
                  const std::string& filename,
                  std::function<void(int)> progress) override;
 
-  // ===== 底层 EtherCAT API（保留供内部使用）=====
+  // ===== Low-level EtherCAT API (retained for internal use) =====
   int SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,
               int* size, void* data, int timeout);
 
@@ -75,7 +75,7 @@ class EtherCATComm : public IComm {
   uint8_t* ReadTxPDO(uint16_t slave);
 
  private:
-  // === 实例状态 ===
+  // === Instance State ===
   ecx_contextt ctx_{};
   uint8_t IOmap_[4096] = {0};
 
@@ -104,7 +104,7 @@ class EtherCATComm : public IComm {
 
   char file_buffer_[kFirmwareBufferSize] = {0};
 
-  // 回调
+  // Callbacks
   JointsCallback joints_callback_;
   HandStateCallback hand_state_callback_;
   TactileDataCallback tactile_callback_;
@@ -112,32 +112,32 @@ class EtherCATComm : public IComm {
 
   ProductConfig config_;
 
-  // === FOE 固件升级共享状态（同一时刻仅允许一个固件升级操作）===
+  // === FOE firmware update shared state (only one firmware update operation allowed at a time) ===
   static std::function<void(int)> progress_callback_;
   static EtherCATComm* foe_instance_;
 
-  // === 方法 ===
+  // === Methods ===
   void ResetContext();
   bool InputBin(const char* fname, int* length);
 
   void StartThreads();
   void StopThreads();
 
-  // 实例线程方法（由静态包装函数调用）
+  // Instance thread methods (called by static wrapper functions)
   void Ecatthread();
   void Ecatcheck();
 
-  // 静态线程入口（OSAL 要求 C 函数指针）
+  // Static thread entry points (required by OSAL to be C function pointers)
   static OSAL_THREAD_FUNC_RT EcatthreadWrapper(void* arg);
   static OSAL_THREAD_FUNC EcatcheckWrapper(void* arg);
 
-  // 静态辅助方法
+  // Static helper methods
   static void add_time_ns(ec_timet* ts, int64_t addtime);
   static void ec_sync(int64_t reftime, int64_t cycletime, int64_t* offsettime);
   static void FoeProgressHook(uint16_t slave, int32_t packetnumber,
                               int32_t totalsize);
 
-  // 解析 PDO 原始数据并触发结构化回调
+  // Parse PDO raw data and trigger structured callbacks
   void ParseAndNotify(const uint8_t* data, size_t size);
 };
 

@@ -1,4 +1,4 @@
-// 在包含任何头文件之前禁用 inline 宏冲突错误
+// Disable inline macro conflict errors before including any headers
 #ifdef _WIN32
 #define _USE_MATH_DEFINES
 #pragma warning(disable : 4005)
@@ -36,10 +36,10 @@ constexpr int64_t kNsecPerSec = 1000000000LL;
 namespace ghand {
 namespace internal {
 
-// 每关节数据尺寸: float(4B) + uint8 velocity(1B) + uint8 torque(1B)
+// Joint data size per joint: float(4B) + uint8 velocity(1B) + uint8 torque(1B)
 constexpr size_t kEthercatJointDataSize = 6;
 
-// === 静态成员定义 ===
+// === Static member definitions ===
 std::function<void(int)> EtherCATComm::progress_callback_ = nullptr;
 EtherCATComm* EtherCATComm::foe_instance_ = nullptr;
 static std::atomic<bool> print_debug_info{false};
@@ -51,7 +51,7 @@ EtherCATComm::~EtherCATComm() {
   Disconnect();
 }
 
-// === 静态线程包装函数 ===
+// === Static thread wrapper functions ===
 
 OSAL_THREAD_FUNC_RT EtherCATComm::EcatthreadWrapper(void* arg) {
   auto* self = static_cast<EtherCATComm*>(arg);
@@ -106,16 +106,16 @@ std::map<std::string, std::string> EtherCATComm::SearchAdapters() {
 }
 
 int EtherCATComm::Connect(const std::string& device_name) {
-  LOG_INFO("EtherCAT connecting to: " << device_name);
+  GHAND_LOG_INFO("EtherCAT connecting to: " << device_name);
 
   std::lock_guard<std::mutex> lock(context_mutex_);
 
-  // 步骤1：尝试获取设备锁（防止多进程同时访问）
+  // Step 1: try to acquire device lock (prevent multi-process access)
   std::string lock_path = GetAdapterLockPath(device_name);
   if (!device_lock_.Acquire(lock_path)) {
-    LOG_ERROR("Adapter " << device_name
+    GHAND_LOG_ERROR("Adapter " << device_name
                          << " is already locked by another process");
-    return -1;  // 设备已被占用
+    return -1;  // device already in use
   }
 
   memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
@@ -123,14 +123,14 @@ int EtherCATComm::Connect(const std::string& device_name) {
 
   ResetContext();
   if (ecx_init(&ctx_, device_name.c_str()) <= 0) {
-    LOG_ERROR("Unable to initialize EtherCAT adapter: " << device_name);
+    GHAND_LOG_ERROR("Unable to initialize EtherCAT adapter: " << device_name);
     device_lock_.Release();
     return -2;
   }
 
   int config_result = ecx_config_init(&ctx_);
   if (config_result <= 0 || ctx_.slavecount <= 0) {
-    LOG_ERROR("No devices found on adapter: " << device_name);
+    GHAND_LOG_ERROR("No devices found on adapter: " << device_name);
     device_lock_.Release();
     return -3;
   }
@@ -195,7 +195,7 @@ int EtherCATComm::Disconnect() {
     ecx_writestate(&ctx_, 0);
   }
 
-  // 释放设备锁
+  // Release device lock
   device_lock_.Release();
 
   return 0;
@@ -327,7 +327,7 @@ void EtherCATComm::Ecatthread() {
     if (dorun_ > 0) {
       cycle_++;
 
-      // 接收过程数据
+      // Receive process data
       uint8_t* pdo_copy = nullptr;
       size_t pdo_size = 0;
 
@@ -346,7 +346,7 @@ void EtherCATComm::Ecatthread() {
         }
       }
 
-      // 在锁外调用回调
+      // Call callbacks outside the lock
       if (pdo_copy != nullptr) {
         ParseAndNotify(pdo_copy, pdo_size);
         delete[] pdo_copy;
@@ -460,7 +460,7 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
                              std::function<void(int)> progress_callback) {
   (void)ifname;
 
-  // 预检查：写入 0x5A 到 0x2005:0x01
+  // Pre-check: write 0x5A to 0x2005:0x01
   std::uint8_t command = 0x5A;
   std::uint8_t state = 0xFF;
   int size = sizeof(std::uint8_t);
@@ -511,20 +511,20 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
       int update_result = ecx_FOEwrite(&ctx_, slave, file_name, 0, filesize,
                                        &file_buffer_, EC_TIMEOUTSTATE);
 
-      LOG_DEBUG("Releasing device lock after firmware update (result: "
+      GHAND_LOG_DEBUG("Releasing device lock after firmware update (result: "
                 << update_result << ")");
       device_lock_.Release();
 
       foe_instance_ = nullptr;
       return update_result;
     } else {
-      LOG_DEBUG("Releasing device lock after firmware file read failure");
+      GHAND_LOG_DEBUG("Releasing device lock after firmware file read failure");
       device_lock_.Release();
       foe_instance_ = nullptr;
       return -2;
     }
   } else {
-    LOG_DEBUG("Releasing device lock after BOOT state transition failure");
+    GHAND_LOG_DEBUG("Releasing device lock after BOOT state transition failure");
     device_lock_.Release();
     foe_instance_ = nullptr;
     return -1;
@@ -561,7 +561,7 @@ void EtherCATComm::FoeProgressHook(uint16 slave, int32 packetnumber,
   }
 }
 
-// ===== IComm 业务接口实现 =====
+// ===== IComm business interface implementation =====
 
 void EtherCATComm::SetJointsCallback(JointsCallback cb) {
   std::lock_guard<std::mutex> lock(callback_mutex_);
@@ -656,15 +656,15 @@ HandType EtherCATComm::GetHandType() {
 bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
                               ControlMode mode) {
   if (!IsConnected()) {
-    LOG_ERROR("Cannot move joints: device not connected");
+    GHAND_LOG_ERROR("Cannot move joints: device not connected");
     return false;
   }
   if (joints.empty()) {
-    LOG_WARNING("MoveJoints called with empty joint list");
+    GHAND_LOG_WARNING("MoveJoints called with empty joint list");
     return false;
   }
 
-  // EtherCAT PDO 需要固定长度，按 valid_joints 顺序补全缺失关节
+  // EtherCAT PDO requires fixed length; fill missing joints in valid_joints order
   std::map<JointId, JointCommand> joint_map;
   for (const auto& joint : joints) {
     joint_map[joint.id] = joint;
@@ -693,13 +693,13 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
     buffer[offset++] = torque;
   }
 
-  LOG_INFO("Sending PDO data");
+  GHAND_LOG_INFO("Sending PDO data");
   SendRxPDO(1, ECT_SDO_RXPDOASSIGN, buffer.size(), buffer.data());
   return true;
 }
 
 void EtherCATComm::Stop() {
-  LOG_INFO("Sending stop command");
+  GHAND_LOG_INFO("Sending stop command");
   std::vector<uint8_t> buffer(
       config_.valid_joints.size() * kEthercatJointDataSize + 2, 0);
   if (buffer.size() > 1) {
@@ -709,7 +709,7 @@ void EtherCATComm::Stop() {
 }
 
 bool EtherCATComm::ClearFault() {
-  LOG_INFO("Clearing device fault");
+  GHAND_LOG_INFO("Clearing device fault");
 
   std::uint8_t command = 0x01;
   std::uint8_t state = 0xFF;
@@ -727,12 +727,12 @@ bool EtherCATComm::ClearFault() {
       }
     }
   }
-  LOG_ERROR("Clear fault operation timed out");
+  GHAND_LOG_ERROR("Clear fault operation timed out");
   return false;
 }
 
 bool EtherCATComm::InitJoint() {
-  LOG_INFO("Initializing joint positions");
+  GHAND_LOG_INFO("Initializing joint positions");
 
   std::uint8_t command = 0x01;
   std::uint8_t state = 0xFF;
@@ -750,7 +750,7 @@ bool EtherCATComm::InitJoint() {
       }
     }
   }
-  LOG_ERROR("Joint initialization timed out");
+  GHAND_LOG_ERROR("Joint initialization timed out");
   return false;
 }
 
@@ -777,7 +777,7 @@ bool EtherCATComm::ZeroTactile() {
   return result > 0;
 }
 
-// ===== PDO 解析辅助函数 =====
+// ===== PDO parsing helper functions =====
 namespace {
 
 Force ParseResultantForce(const uint8_t* data) {
@@ -827,7 +827,7 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
   HandState parsed_temperature;
 
   if (data == nullptr || size == 0) {
-    LOG_WARNING("Received invalid data: null or empty");
+    GHAND_LOG_WARNING("Received invalid data: null or empty");
     return;
   }
 

@@ -6,6 +6,10 @@ namespace ghand {
 namespace internal {
 namespace canfd {
 
+// C++11: static constexpr non-integral member needs out-of-line definition
+constexpr decltype(PacketAssembler::kAssemblyTimeout)
+    PacketAssembler::kAssemblyTimeout;
+
 bool PacketAssembler::Feed(const Frame& frame,
                            std::vector<uint8_t>* out_payload) {
   if (!out_payload) return false;
@@ -16,12 +20,12 @@ bool PacketAssembler::Feed(const Frame& frame,
 
   auto now = std::chrono::steady_clock::now();
 
-  // 超时检测：正在组包且超过 500ms 未收齐，自动重置
+  // Timeout detection: if assembly is in progress and not completed within 500ms, auto-reset
   if (expected_total_ != 0 && (now - first_frame_time_) > kAssemblyTimeout) {
     Reset();
   }
 
-  // 单帧包（兼容 total=0 或 total=1，与发送端保持一致）
+  // Single-frame packet (compatible with total=0 or total=1, consistent with sender)
   if (total <= 1) {
     out_payload->assign(frame.data, frame.data + frame.len);
     return true;
@@ -37,7 +41,7 @@ bool PacketAssembler::Feed(const Frame& frame,
   }
 
   if (total != expected_total_) {
-    // 收到不同总帧数的包，重置
+    // Received packet with different total frame count, reset
     Reset();
     expected_total_ = total;
     frame_offsets_.assign(total, 0);
@@ -51,7 +55,7 @@ bool PacketAssembler::Feed(const Frame& frame,
   }
 
   if (received_mask_ & (1 << seq)) {
-    // 重复帧，忽略
+    // Duplicate frame, ignore
     return false;
   }
 
@@ -60,7 +64,7 @@ bool PacketAssembler::Feed(const Frame& frame,
   buffer_.insert(buffer_.end(), frame.data, frame.data + frame.len);
   received_mask_ |= (1 << seq);
 
-  // 检查是否收齐
+  // Check if all frames received
   uint16_t expected_mask = (1U << total) - 1;
   if (received_mask_ == expected_mask) {
     out_payload->clear();

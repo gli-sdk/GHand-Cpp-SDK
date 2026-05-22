@@ -18,12 +18,12 @@
 #include <wincrypt.h>
 #include <windows.h>
 
-// MinGW 可能没有定义这些常量，手动定义
+// MinGW may not define these constants; define them manually
 #ifndef _LK_NBLCK
-#define _LK_NBLCK 0x01 /* 非阻塞锁 */
-#define _LK_LOCK 0x02  /* 阻塞锁 */
-#define _LK_UNLCK 0x03 /* 解锁 */
-#define _LK_RLCK 0x04  /* 读锁 */
+#define _LK_NBLCK 0x01 /* Non-blocking lock */
+#define _LK_LOCK 0x02  /* Blocking lock */
+#define _LK_UNLCK 0x03 /* Unlock */
+#define _LK_RLCK 0x04  /* Read lock */
 #endif
 
 #else
@@ -38,65 +38,65 @@ namespace ghand {
 namespace internal {
 
 // =============================================================================
-// MD5 哈希函数实现（任务 1.3）
+// MD5 hash function implementation (Task 1.3)
 // =============================================================================
 
 namespace {
 
 /**
- * @brief 生成字符串的 MD5 哈希值
+ * @brief Generate MD5 hash of a string
  *
- * 平台特定的实现：
- * - Windows: 使用 Cryptographic API (CryptHashData)
- * - Linux: 使用 OpenSSL MD5() 函数
+ * Platform-specific implementation:
+ * - Windows: Uses Cryptographic API (CryptHashData)
+ * - Linux: Uses OpenSSL MD5() function
  *
- * @param input 输入字符串
- * @return 32 字符的十六进制 MD5 哈希字符串，失败返回空字符串
+ * @param input Input string
+ * @return 32-character hexadecimal MD5 hash string, empty string on failure
  */
 std::string MD5Hash(const std::string& input) {
 #ifdef _WIN32
-  // Windows 实现：使用 Cryptographic API
+  // Windows implementation: uses Cryptographic API
   HCRYPTPROV hProv = 0;
   HCRYPTHASH hHash = 0;
   BYTE rgbHash[16];
   DWORD cbHash = 16;
 
-  // 获取加密服务提供者句柄
+  // Acquire cryptographic service provider handle
   if (!CryptAcquireContext(&hProv, nullptr, nullptr, PROV_RSA_FULL,
                            CRYPT_VERIFYCONTEXT)) {
-    LOG_DEBUG("Failed to acquire crypt context");
+    GHAND_LOG_DEBUG("Failed to acquire crypt context");
     return "";
   }
 
-  // 创建哈希对象
+  // Create hash object
   if (!CryptCreateHash(hProv, CALG_MD5, 0, 0, &hHash)) {
     CryptReleaseContext(hProv, 0);
-    LOG_DEBUG("Failed to create hash");
+    GHAND_LOG_DEBUG("Failed to create hash");
     return "";
   }
 
-  // 计算哈希值
+  // Compute hash value
   if (!CryptHashData(hHash,
                      reinterpret_cast<BYTE*>(const_cast<char*>(input.c_str())),
                      static_cast<DWORD>(input.length()), 0)) {
     CryptDestroyHash(hHash);
     CryptReleaseContext(hProv, 0);
-    LOG_DEBUG("Failed to hash data");
+    GHAND_LOG_DEBUG("Failed to hash data");
     return "";
   }
 
-  // 获取哈希结果
+  // Retrieve hash result
   if (!CryptGetHashParam(hHash, HP_HASHVAL, rgbHash, &cbHash, 0)) {
     CryptDestroyHash(hHash);
     CryptReleaseContext(hProv, 0);
-    LOG_DEBUG("Failed to get hash param");
+    GHAND_LOG_DEBUG("Failed to get hash param");
     return "";
   }
 
   CryptDestroyHash(hHash);
   CryptReleaseContext(hProv, 0);
 
-  // 转换为十六进制字符串
+  // Convert to hexadecimal string
   std::stringstream ss;
   for (int i = 0; i < 16; i++) {
     ss << std::hex << std::setw(2) << std::setfill('0')
@@ -105,12 +105,12 @@ std::string MD5Hash(const std::string& input) {
   return ss.str();
 
 #else
-  // Linux 实现：使用 OpenSSL
+  // Linux implementation: uses OpenSSL
   unsigned char digest[16];
 
   MD5((unsigned char*)input.c_str(), input.length(), digest);
 
-  // 转换为十六进制字符串
+  // Convert to hexadecimal string
   std::stringstream ss;
   for (int i = 0; i < 16; i++) {
     ss << std::hex << std::setw(2) << std::setfill('0')
@@ -123,7 +123,7 @@ std::string MD5Hash(const std::string& input) {
 }  // anonymous namespace
 
 // =============================================================================
-// FileLock 类实现（任务 1.2）
+// FileLock class implementation (Task 1.2)
 // =============================================================================
 
 FileLock::FileLock() : fd_(-1), is_locked_(false) {}
@@ -132,21 +132,21 @@ FileLock::~FileLock() {
   try {
     Release();
   } catch (...) {
-    // 忽略析构时的所有异常，确保析构安全
+    // Ignore all exceptions during destruction to ensure safe cleanup
   }
 }
 
 bool FileLock::Acquire(const std::string& lock_file) {
   if (is_locked_) {
-    std::cerr << "Lock already acquired" << std::endl;
-    return false;  // 已经持有锁
+    std::cerr << "Lock already acquired" << '\n';
+    return false;  // Lock already held
   }
 
   lock_file_ = lock_file;
 
 #ifdef _WIN32
-  // Windows 实现：完全模拟 Python SDK 的方式
-  // 使用与 Python open() + msvcrt.locking() 相同的行为
+  // Windows implementation: fully mimics Python SDK approach
+  // Uses same behavior as Python open() + msvcrt.locking()
   FILE* file_ptr = nullptr;
   errno_t err = fopen_s(&file_ptr, lock_file.c_str(), "w");
   if (err != 0 || file_ptr == nullptr) {
@@ -180,7 +180,7 @@ bool FileLock::Acquire(const std::string& lock_file) {
   return true;
 
 #else
-  // Linux 实现：使用 open() + flock()
+  // Linux implementation: uses open() + flock()
   fd_ = open(lock_file.c_str(), O_WRONLY | O_CREAT, 0666);
   if (fd_ < 0) {
     return false;
@@ -205,21 +205,21 @@ bool FileLock::Acquire(const std::string& lock_file) {
 
 void FileLock::Release() {
   if (!is_locked_) {
-    return;  // 未持有锁，直接返回
+    return;  // Lock not held, return immediately
   }
 
 #ifdef _WIN32
-  // Windows 实现：释放锁并关闭文件
+  // Windows implementation: release lock and close file
   if (fd_ >= 0) {
-    // 1. 释放文件锁
+    // 1. Release file lock
     _locking(fd_, _LK_UNLCK, 1);
 
-    // 2. 关闭文件描述符
+    // 2. Close file descriptor
     _close(fd_);
     fd_ = -1;
   }
 
-  // 3. 删除锁文件
+  // 3. Delete lock file
   DeleteFileA(lock_file_.c_str());
 
 #else
@@ -237,36 +237,36 @@ void FileLock::Release() {
 bool FileLock::IsLocked() const { return is_locked_; }
 
 // =============================================================================
-// GetAdapterLockPath 函数实现（任务 1.4）
+// GetAdapterLockPath function implementation (Task 1.4)
 // =============================================================================
 
 std::string GetAdapterLockPath(const std::string& adapter_name) {
-  // 生成网卡名的 MD5 哈希
+  // Generate MD5 hash of adapter name
   std::string hash = MD5Hash(adapter_name);
   if (hash.empty()) {
     std::cerr << "Failed to generate MD5 hash for adapter: " << adapter_name
-              << std::endl;
+              << '\n';
     return "";
   }
 
 #ifdef _WIN32
-  // Windows: 使用 %TEMP% 目录
+  // Windows: uses %TEMP% directory
   char temp_path[MAX_PATH];
   DWORD result = GetTempPathA(MAX_PATH, temp_path);
   if (result == 0 || result > MAX_PATH) {
-    std::cerr << "Failed to get temp path" << std::endl;
+    std::cerr << "Failed to get temp path" << '\n';
     return "";
   }
 
   std::string lock_path(temp_path);
-  // 确保路径以反斜杠结尾
+  // Ensure path ends with backslash
   if (!lock_path.empty() && lock_path.back() != '\\') {
     lock_path += '\\';
   }
   lock_path += "ghand_ethernet_" + hash + ".lock";
 
 #else
-  // Linux: 固定使用 /tmp 目录
+  // Linux: fixed to use /tmp directory
   std::string lock_path = "/tmp/ghand_ethernet_" + hash + ".lock";
 #endif
 

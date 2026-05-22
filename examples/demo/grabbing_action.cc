@@ -54,20 +54,20 @@ bool HandZero(ghand::DexHand& hand) {
 }
 
 int main() {
-  std::cout << "***** 枭尧灵巧手 SDK - 抓取功能演示 *****\n" << std::endl;
+  std::cout << "***** Xiaoyao Dexterous Hand SDK - Grabbing Demo *****\n" << '\n';
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << std::endl;
+    std::cerr << "Failed to create DexHand" << '\n';
     return -1;
   }
   bool connected = hand->Connect("auto");
   if (!connected) {
     std::cout << "\n[Scan complete] Failed to connect to dexterous hand."
-              << std::endl;
+              << '\n';
     return 1;
   }
-  std::cout << "\n--- Device ready, starting grabbing demo ---\n" << std::endl;
+  std::cout << "\n--- Device ready, starting grabbing demo ---\n" << '\n';
 
   int gesture_cycle = 0;
   const int max_cycles = 0;
@@ -77,32 +77,32 @@ int main() {
     if (max_cycles > 0 && gesture_cycle > max_cycles) break;
 
     std::cout << "\n--- Round " << gesture_cycle << " demo started ---"
-              << std::endl;
+              << '\n';
 
     if (!Grab(*hand)) {
-      std::cout << "第 " << gesture_cycle << " 轮演示中的抓取动作执行失败"
-                << std::endl;
+      std::cout << "Round " << gesture_cycle << " grab action execution failed"
+                << '\n';
       break;
     }
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
     if (!HandZero(*hand)) {
-      std::cout << "第 " << gesture_cycle << " 轮演示中的复位动作执行失败"
-                << std::endl;
+      std::cout << "Round " << gesture_cycle << " reset action execution failed"
+                << '\n';
       break;
     }
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
     std::cout << "--- Round " << gesture_cycle << " demo finished ---\n"
-              << std::endl;
+              << '\n';
 
     if (max_cycles == 0) {
-      std::cout << "Press Ctrl+C to stop demo and exit\n" << std::endl;
+      std::cout << "Press Ctrl+C to stop demo and exit\n" << '\n';
     }
   }
 
   hand->Disconnect();
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  std::cout << "\n--- Demo finished, disconnecting ---" << std::endl;
+  std::cout << "\n--- Demo finished, disconnecting ---" << '\n';
   return 0;
 }

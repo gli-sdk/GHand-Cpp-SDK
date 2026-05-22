@@ -166,7 +166,7 @@ JointId JointIdFromString(const std::string& name) {
   if (name == "LF_DIP") return JointId::LF_DIP;
   if (name == "LF_PIP") return JointId::LF_PIP;
   if (name == "LF_MCP") return JointId::LF_MCP;
-  LOG_WARNING("Unknown joint name: " << name);
+  GHAND_LOG_WARNING("Unknown joint name: " << name);
   return JointId::NUM_JOINTS;
 }
 
@@ -174,7 +174,7 @@ ProductConfig LoadProductConfig(ProductType product) {
   ProductConfig config;
   std::string file_name = ProductTypeToFileName(product);
   if (file_name.empty()) {
-    LOG_ERROR("Unknown ProductType: " << static_cast<int>(product));
+    GHAND_LOG_ERROR("Unknown ProductType: " << static_cast<int>(product));
     return config;
   }
 
@@ -190,17 +190,17 @@ ProductConfig LoadProductConfig(ProductType product) {
   }
 
   if (found_path.empty()) {
-    LOG_ERROR("Product config file not found: " << file_name
+    GHAND_LOG_ERROR("Product config file not found: " << file_name
                                                 << ". Searched in: ");
     for (const auto& dir : search_paths) {
-      LOG_ERROR("  " << dir);
+      GHAND_LOG_ERROR("  " << dir);
     }
     return config;
   }
 
   std::ifstream ifs(found_path);
   if (!ifs) {
-    LOG_ERROR("Failed to open product config: " << found_path);
+    GHAND_LOG_ERROR("Failed to open product config: " << found_path);
     return config;
   }
 
@@ -244,14 +244,14 @@ ProductConfig LoadProductConfig(ProductType product) {
     }
 
     if (config.name.empty() || config.valid_joints.empty()) {
-      LOG_ERROR("Product config missing required fields in " << found_path);
+      GHAND_LOG_ERROR("Product config missing required fields in " << found_path);
       return ProductConfig();
     }
 
-    LOG_INFO("Loaded product config: " << config.name << " from "
+    GHAND_LOG_INFO("Loaded product config: " << config.name << " from "
                                        << found_path);
   } catch (const nlohmann::json::exception& e) {
-    LOG_ERROR("Failed to parse product config " << found_path << ": "
+    GHAND_LOG_ERROR("Failed to parse product config " << found_path << ": "
                                                 << e.what());
     config = ProductConfig();
   }
@@ -275,16 +275,16 @@ ProductConfig FindConfigByName(const std::string& device_name) {
 
   std::vector<std::string> search_paths = GetConfigSearchPaths();
   for (const auto& dir : search_paths) {
-    // 扫描目录下所有 .json 文件
+    // Scan all .json files in directory
     std::string pattern = dir + "*.json";
-    // 在 Windows 上用 FindFirstFile，Linux 上用 glob
-    // 以下使用平台无关的方式：尝试已知的产品文件名列表
-    // 也可以通过 dir 遍历实现，这里简化：直接在 search_paths 中逐文件尝试
+    // Use FindFirstFile on Windows, glob on Linux
+    // Platform-independent approach below: try known product file name list
+    // Directory traversal can also be used; simplified here: try files one by one in search_paths
   }
 
-  // 平台无关遍历：尝试直接打开目录列表中的常见文件名
-  // 实际实现：在搜索路径中遍历，对每个路径尝试列出 .json 文件
-  // 由于 C++11 没有 filesystem，使用平台相关的目录遍历
+  // Platform-independent traversal: try opening common file names in directory list
+  // Actual implementation: iterate through search paths and try listing .json files for each
+  // Since C++11 has no filesystem, use platform-specific directory traversal
   for (const auto& search_dir : search_paths) {
 #ifdef _WIN32
     std::string search_pattern = search_dir + "*.json";
@@ -313,7 +313,7 @@ ProductConfig FindConfigByName(const std::string& device_name) {
         nlohmann::json j = nlohmann::json::parse(json_content);
         std::string config_name = j.value("name", "");
         if (NameMatches(device_name, config_name)) {
-          // 找到匹配，完整加载这个 config
+          // Match found, fully load this config
           ProductConfig config;
           config.model = j.value("model", "");
           config.name = config_name;
@@ -349,12 +349,12 @@ ProductConfig FindConfigByName(const std::string& device_name) {
 #else
           closedir(dir);
 #endif
-          LOG_INFO("Auto-detected product config: " << config.name << " from "
+          GHAND_LOG_INFO("Auto-detected product config: " << config.name << " from "
                                                     << file_path);
           return config;
         }
       } catch (const nlohmann::json::exception&) {
-        // 跳过无法解析的 JSON 文件
+        // Skip unparseable JSON files
       }
 #ifdef _WIN32
     } while (FindNextFileA(hFind, &fd));
@@ -365,7 +365,7 @@ ProductConfig FindConfigByName(const std::string& device_name) {
 #endif
   }
 
-  LOG_ERROR(
+  GHAND_LOG_ERROR(
       "No matching product config found for device model: " << device_name);
   return ProductConfig();
 }

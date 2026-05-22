@@ -9,10 +9,10 @@
 #include <windows.h>
 #endif
 
-// 启用 ANSI 转义序列支持（Windows）
+// Enable ANSI escape sequence support (Windows)
 void EnableAnsiColors() {
 #ifdef _WIN32
-  // 设置控制台代码页为 UTF-8
+  // Set console code page to UTF-8
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
 
@@ -28,45 +28,45 @@ void EnableAnsiColors() {
 }
 
 int main() {
-  // 启用 ANSI 转义序列
+  // Enable ANSI escape sequences
   EnableAnsiColors();
 
   auto hand =
       ghand::DexHand::Create(ghand::ProductType::G5, ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << std::endl;
+    std::cerr << "Failed to create DexHand" << '\n';
     return -1;
   }
 
-  // ANSI 转义序列用于固定位置显示
-  // \033[H: 移动到屏幕左上角
-  // \033[J: 清除从光标到屏幕末尾
-  // \033[row;colH: 移动到指定行列
+  // ANSI escape sequences for fixed-position display
+  // \033[H: move to top-left corner of screen
+  // \033[J: clear from cursor to end of screen
+  // \033[row;colH: move to specified row and column
   const char* CLEAR_SCREEN = "\033[H\033[J";
-  const char* MOVE_CURSOR = "\033[H";  // 移动到左上角
+  const char* MOVE_CURSOR = "\033[H";  // move to top-left corner
 
   bool first_print = true;
 
-  // 注册触觉数据回调（一次性）
+  // Register tactile data callback (one-time)
   hand->SetTactileDataCallback([&first_print, CLEAR_SCREEN,
                                 MOVE_CURSOR](const ghand::TactileData& data) {
     if (first_print) {
-      // 第一次打印，显示标题
+      // First print, display title
       std::cout << CLEAR_SCREEN;
       std::cout << "+==================================================+"
-                << std::endl;
+                << '\n';
       std::cout << "|       Tactile Data - Real-time Display          |"
-                << std::endl;
+                << '\n';
       std::cout << "+--------------------------------------------------+"
-                << std::endl;
+                << '\n';
       first_print = false;
     } else {
-      // 后续更新，移动光标到数据区域
+      // Subsequent updates, move cursor to data area
       std::cout << MOVE_CURSOR;
-      std::cout << "\033[4H";  // 移动到第4行开始
+      std::cout << "\033[4H";  // move to start of line 4
     }
 
-    // 按区域遍历触觉数据（顺序与配置一致）
+    // Iterate over tactile data by region (order consistent with configuration)
     for (const auto& region : data.regions) {
       std::cout << "| " << std::setw(6) << region.region_name << ": "
                 << "state=" << std::setw(6) << (region.state ? "OK" : "FAIL")
@@ -76,32 +76,32 @@ int main() {
                 << std::fixed << std::setprecision(1)
                 << region.resultant_force.y << ", z=" << std::setw(6)
                 << std::fixed << std::setprecision(1)
-                << region.resultant_force.z << " N |" << std::endl;
+                << region.resultant_force.z << " N |" << '\n';
     }
 
     std::cout << "+==================================================+"
-              << std::endl;
-    std::cout << std::flush;  // 确保立即输出
+              << '\n';
+    std::cout << std::flush;  // ensure immediate output
   });
 
-  // 尝试通过ETHERCAT连接灵巧手
-  std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
+  // Try to connect to the dexterous hand via EtherCAT
+  std::cout << "Connecting to dexterous hand via EtherCAT..." << '\n';
   bool success = hand->AutoConnect();
 
   if (success) {
-    std::cout << "Successfully connected to the dexterous hand!" << std::endl;
+    std::cout << "Successfully connected to the dexterous hand!" << '\n';
 
-    // 打开触觉
+    // Open tactile
     hand->OpenTactile();
 
-    // 数据自动推送，无需轮询
+    // Data is automatically pushed, no polling needed
     std::this_thread::sleep_for(std::chrono::seconds(30));
 
     hand->CloseTactile();
     hand->Disconnect();
-    std::cout << "Connection closed." << std::endl;
+    std::cout << "Connection closed." << '\n';
   } else {
-    std::cout << "Failed to connect to the dexterous hand!" << std::endl;
+    std::cout << "Failed to connect to the dexterous hand!" << '\n';
   }
 
   return 0;

@@ -6,39 +6,39 @@ int main() {
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << std::endl;
+    std::cerr << "Failed to create DexHand" << '\n';
     return -1;
   }
 
-  // 尝试通过ETHERCAT自动连接灵巧手
-  std::cout << "Connecting to dexterous hand via EtherCAT..." << std::endl;
+  // Try to auto-connect to the dexterous hand via EtherCAT
+  std::cout << "Connecting to dexterous hand via EtherCAT..." << '\n';
   bool success = hand->AutoConnect();
 
   if (success) {
-    std::cout << "Successfully connected to the dexterous hand!" << std::endl;
+    std::cout << "Successfully connected to the dexterous hand!" << '\n';
 
-    // 获取手部类型
+    // Get hand type
     ghand::HandType type = hand->GetHandType();
-    std::cout << "Hand type: " << ghand::ToString(type) << std::endl;
+    std::cout << "Hand type: " << ghand::ToString(type) << '\n';
 
-    // 获取固件版本
+    // Get firmware version
     ghand::DeviceInfo device_info = hand->GetDeviceInfo();
     std::string version = device_info.software_version;
     if (!version.empty()) {
-      std::cout << "Firmware version: " << version << std::endl;
+      std::cout << "Firmware version: " << version << '\n';
     }
 
-    // 获取电机驱动版本
+    // Get motor driver version
     std::string motor_version = device_info.motor_driver_version;
     if (!motor_version.empty()) {
-      std::cout << "Motor driver version: " << motor_version << std::endl;
+      std::cout << "Motor driver version: " << motor_version << '\n';
     }
 
-    // 断开连接
+    // Disconnect
     hand->Disconnect();
-    std::cout << "Connection closed." << std::endl;
+    std::cout << "Connection closed." << '\n';
   } else {
-    std::cout << "Failed to connect to the dexterous hand!" << std::endl;
+    std::cout << "Failed to connect to the dexterous hand!" << '\n';
   }
 
   return 0;

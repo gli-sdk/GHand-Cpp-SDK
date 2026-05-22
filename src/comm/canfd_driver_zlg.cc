@@ -17,29 +17,32 @@
 #include <windows.h>
 #include <cfgmgr32.h>
 #include <devguid.h>
+#ifdef __MINGW32__
+#include <ntdef.h>
+#endif
 #include <ntddser.h>
 #include <setupapi.h>
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "cfgmgr32.lib")
 #endif
 
-// ZLG CAN 二次开发库头文件
+// ZLG CAN secondary development library header
 #include "zlgcan.h"
 
-// 利用编译时自动生成的 zlgcan_device_types.inc 构建宏名到数值的映射表，
-// 无需在代码中手动维护映射关系。
+// Use the compile-time generated zlgcan_device_types.inc to build a macro-name-to-value map,
+// eliminating the need to manually maintain mapping relationships in code.
 static const std::map<std::string, int>& GetZLGDeviceTypeMap() {
   static const std::map<std::string, int> kMap = [] {
     std::map<std::string, int> m;
-#define XX(name) m[#name] = name;
+#define GHAND_ZLG_MAP_ENTRY(name) m[#name] = name;
 #include "zlgcan_device_types.inc"
-#undef XX
+#undef GHAND_ZLG_MAP_ENTRY
     return m;
   }();
   return kMap;
 }
 
-// 已知 ZLG CANFD 设备类型列表
+// Known ZLG CANFD device type list
 static const int kCommonZLGDeviceTypes[] = {
     ZCAN_USBCANFD_100U,      ZCAN_USBCANFD_200U,        ZCAN_USBCANFD_400U,
     ZCAN_USBCANFD_MINI,      ZCAN_USBCANFD_800U,        ZCAN_PCIE_CANFD_100U,
@@ -52,13 +55,13 @@ namespace ghand {
 namespace internal {
 
 /**
- * @brief ZLG CANFD 驱动实现
+ * @brief ZLG CANFD driver implementation
  *
- * 封装 ZLG zlgcan.dll 的 C API，提供跨平台统一的 CANFD 操作接口。
+ * Wraps the ZLG zlgcan.dll C API to provide a cross-platform unified CANFD interface.
  *
- * Open() 的 name 参数格式："DeviceType:DeviceIndex:CanIndex"
- *  DeviceType 为 zlgcan.h 中宏定义对应的数字（如 "42" 对应
- * ZCAN_USBCANFD_100U）。 例如："42:0:0"
+ * Open() name parameter format: "DeviceType:DeviceIndex:CanIndex"
+ *  DeviceType is the numeric value of the macro defined in zlgcan.h (e.g., "42" for
+ * ZCAN_USBCANFD_100U). Example: "42:0:0"
  */
 static std::string FrameTypeString(canfd::FrameType ft) {
   switch (ft) {
@@ -87,9 +90,9 @@ static std::string HexDump(const uint8_t* data, uint8_t len) {
 
 #ifdef _WIN32
 struct ComPortEntry {
-  std::string port_name;      // 如 "COM3"
-  std::string friendly_name;  // 友好名称，如 "ZLG USBCANFD-100U (COM3)"
-  std::string device_desc;    // 设备描述，通常含型号
+  std::string port_name;      // e.g., "COM3"
+  std::string friendly_name;  // friendly name, e.g., "ZLG USBCANFD-100U (COM3)"
+  std::string device_desc;    // device description, usually contains model
   std::string serial_number;
   int vid = 0;
   int pid = 0;
@@ -168,20 +171,20 @@ static std::vector<ComPortEntry> EnumerateComPorts() {
 static bool IsZLGVID(int vid) { return vid == 0x3562 || vid == 0x0483; }
 
 /**
- * @brief 根据 USB VID/PID 确定 ZLG device_type
+ * @brief Determine ZLG device_type from USB VID/PID
  *
- * 映射表可根据实际连接的 ZLG 设备补充。
- * 常见 USBCANFD 系列 VID 为 0x3562，不同型号对应不同 PID。
+ * The mapping table can be extended based on actual connected ZLG devices.
+ * Common USBCANFD series VID is 0x3562, different models correspond to different PIDs.
  */
 static int GetZLGDeviceTypeFromVIDPID(int vid, int pid) {
   static const std::map<std::pair<int, int>, int> kVIDPIDToType = {
-      // ZLG USBCANFD 系列 (VID=0x3562)
+      // ZLG USBCANFD series (VID=0x3562)
       {{0x3562, 0x0101}, ZCAN_USBCANFD_100U},
       {{0x3562, 0x0102}, ZCAN_USBCANFD_200U},
       {{0x3562, 0x0103}, ZCAN_USBCANFD_400U},
       {{0x3562, 0x0104}, ZCAN_USBCANFD_MINI},
       {{0x3562, 0x0105}, ZCAN_USBCANFD_800U},
-      // 如有其他 VID/PID 组合请在此补充
+      // Add other VID/PID combinations here if needed
   };
   auto it = kVIDPIDToType.find({vid, pid});
   return (it != kVIDPIDToType.end()) ? it->second : 0;
@@ -208,15 +211,15 @@ static bool ResolveComPortToZLGDevice(const std::string& port_name,
     }
   }
   if (target_vid == 0) {
-    LOG_ERROR("COM port not found: " << port_name);
+    GHAND_LOG_ERROR("COM port not found: " << port_name);
     return false;
   }
   if (!IsZLGVID(target_vid)) {
-    LOG_WARNING("COM port " << port_name << " VID=0x" << std::hex << target_vid
+    GHAND_LOG_WARNING("COM port " << port_name << " VID=0x" << std::hex << target_vid
                             << " does not look like a ZLG device");
   }
 
-  // 辅助 lambda：尝试某一 device_type 的 0~7 索引，找到第一个能打开即返回
+  // Helper lambda: try device indices 0~7 for a given device_type, return on first success
   auto try_open = [&out_device_type, &out_device_index](int dev_type) -> bool {
     for (int dev_index = 0; dev_index < 8; ++dev_index) {
       long handle = ZCAN_OpenDevice(dev_type, dev_index, 0);
@@ -229,15 +232,15 @@ static bool ResolveComPortToZLGDevice(const std::string& port_name,
     return false;
   };
 
-  // 2. 名称未识别，尝试 VID/PID 映射表
+  // 2. Name not recognized, try VID/PID mapping table
   int vidpid_type = GetZLGDeviceTypeFromVIDPID(target_vid, target_pid);
   if (vidpid_type != 0 && try_open(vidpid_type)) {
-    LOG_INFO("Resolved " << port_name << " -> ZLG device type="
+    GHAND_LOG_INFO("Resolved " << port_name << " -> ZLG device type="
                          << *out_device_type << " index=" << *out_device_index
                          << " (from VID/PID)");
     return true;
   }
-  LOG_ERROR("Failed to find online ZLG device for " << port_name);
+  GHAND_LOG_ERROR("Failed to find online ZLG device for " << port_name);
   return false;
 }
 #endif  // _WIN32
@@ -251,19 +254,19 @@ class ZLGDriver : public CANFDDriver {
            uint32_t dbitrate) override {
     Close();
 
-    // 解析 name:
-    // "DeviceType:DeviceIndex:CanIndex[:AbitSamplePoint:DbitSamplePoint]" 或
-    // "COM3" 等 COM 端口名（Windows 下自动解析为 ZLG 设备参数）
-    int device_type = 48;  // 默认值
+    // Parse name:
+    // "DeviceType:DeviceIndex:CanIndex[:AbitSamplePoint:DbitSamplePoint]" or
+    // "COM3" etc. COM port name (Windows only, auto-resolved to ZLG device parameters)
+    int device_type = 48;  // default value
     int device_index = 0;
     int can_index = 0;
-    int abit_sample_point = 75;  // 0 表示不设置，使用设备默认
+    int abit_sample_point = 75;  // 0 means not set, use device default
     int dbit_sample_point = 80;
 
     std::string resolved_name = name;
 
 #ifdef _WIN32
-    // 检测 COM 端口名（如 "COM3" 或 "com3"）
+    // Detect COM port name (e.g., "COM3" or "com3")
     if (name.size() >= 3) {
       std::string prefix = name.substr(0, 3);
       std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::toupper);
@@ -272,9 +275,9 @@ class ZLGDriver : public CANFDDriver {
         if (ResolveComPortToZLGDevice(name, &resolved_type, &resolved_index)) {
           resolved_name = std::to_string(resolved_type) + ":" +
                           std::to_string(resolved_index) + ":0";
-          LOG_INFO("Resolved " << name << " to ZLG device " << resolved_name);
+          GHAND_LOG_INFO("Resolved " << name << " to ZLG device " << resolved_name);
         } else {
-          LOG_ERROR("Failed to resolve COM port: " << name);
+          GHAND_LOG_ERROR("Failed to resolve COM port: " << name);
           return -1;
         }
       }
@@ -297,7 +300,7 @@ class ZLGDriver : public CANFDDriver {
         try {
           device_type = std::stoi(parts[0]);
         } catch (...) {
-          LOG_ERROR("Invalid ZLG device type: "
+          GHAND_LOG_ERROR("Invalid ZLG device type: "
                     << parts[0]
                     << ". Please use the macro name defined in zlgcan.h (e.g., "
                        "\"ZCAN_USBCANFD_100U:0:0\") "
@@ -332,24 +335,24 @@ class ZLGDriver : public CANFDDriver {
     }
     can_index_ = can_index;
 
-    // 1.打开设备
+    // 1. Open device
     device_handle_ = ZCAN_OpenDevice(device_type, device_index, 0);
     if (device_handle_ == INVALID_DEVICE_HANDLE) {
-      LOG_ERROR("ZCAN_OpenDevice failed: type=" << device_type
+      GHAND_LOG_ERROR("ZCAN_OpenDevice failed: type=" << device_type
                                                 << " index=" << device_index
                                                 << " err=" << GetLastError());
       return -1;
     }
 
-    // 使用属性表设置波特率与采样点（部分 OEM 设备必须通过属性表配置）
+    // Use property table to set baud rate and sample point (some OEM devices must be configured via property table)
     IProperty* prop = GetIProperty(device_handle_);
     if (prop) {
-      // 2.设置CANFD标准
+      // 2. Set CANFD standard
       std::string abit = std::to_string(bitrate);
       std::string dbit = std::to_string(dbitrate);
       std::string ch_str = std::to_string(can_index);
 
-      // 路径格式: "<channel>/canfd_abit_baud_rate"
+      // Path format: "<channel>/canfd_abit_baud_rate"
       std::string abit_path = ch_str + "/canfd_abit_baud_rate";
       std::string dbit_path = ch_str + "/canfd_dbit_baud_rate";
 
@@ -360,7 +363,7 @@ class ZLGDriver : public CANFDDriver {
         return -4;
       }
 
-      // 3.设置采样点
+      // 3. Set sample point
       if (abit_sample_point > 0) {
         std::string abit_sp_path = ch_str + "/canfd_abit_sample_point";
         int c = prop->SetValue(abit_sp_path.c_str(),
@@ -372,41 +375,41 @@ class ZLGDriver : public CANFDDriver {
                                std::to_string(dbit_sample_point).c_str());
       }
 
-      // 4.设置终端电阻（不阻塞启动，失败后仅记录日志）
+      // 4. Set terminal resistance (non-blocking, log only on failure)
       std::string res_path = ch_str + "/initenal_resistance";
       if (1 != prop->SetValue(res_path.c_str(), "0")) {
-        LOG_WARNING("Failed to set initenal_resistance for channel "
+        GHAND_LOG_WARNING("Failed to set initenal_resistance for channel "
                     << can_index << ", try internal_resistance");
         res_path = ch_str + "/internal_resistance";
         if (1 != prop->SetValue(res_path.c_str(), "0")) {
-          LOG_WARNING("Failed to set internal_resistance for channel "
+          GHAND_LOG_WARNING("Failed to set internal_resistance for channel "
                       << can_index);
         }
       }
     }
 
-    // 5.初始化通道
+    // 5. Initialize channel
     ZCAN_CHANNEL_INIT_CONFIG config;
     memset(&config, 0, sizeof(config));
     config.can_type = TYPE_CANFD;
-    // abit_timing/dbit_timing 已经在属性表中配置，此处填 0 避免冲突
+    // abit_timing/dbit_timing already configured in property table, set 0 here to avoid conflict
     config.canfd.abit_timing = 0;
     config.canfd.dbit_timing = 0;
-    config.canfd.filter = 0;  // 接收所有帧
-    config.canfd.mode = 0;    // 正常模式
+    config.canfd.filter = 0;  // receive all frames
+    config.canfd.mode = 0;    // normal mode
 
     channel_handle_ =
         ZCAN_InitCAN(device_handle_, static_cast<UINT>(can_index), config);
     if (channel_handle_ == nullptr) {
-      LOG_ERROR("ZCAN_InitCAN failed for channel " << can_index);
+      GHAND_LOG_ERROR("ZCAN_InitCAN failed for channel " << can_index);
       ZCAN_CloseDevice(device_handle_);
       device_handle_ = INVALID_DEVICE_HANDLE;
       return -2;
     }
 
-    // 6.启动通道
+    // 6. Start channel
     if (ZCAN_StartCAN(*channel_handle_) != STATUS_OK) {
-      LOG_ERROR("ZCAN_StartCAN failed, error=" << GetLastError());
+      GHAND_LOG_ERROR("ZCAN_StartCAN failed, error=" << GetLastError());
       ZCAN_ResetCAN(*channel_handle_);
       ZCAN_CloseDevice(device_handle_);
       device_handle_ = INVALID_DEVICE_HANDLE;
@@ -414,7 +417,7 @@ class ZLGDriver : public CANFDDriver {
       return -3;
     }
 
-    LOG_INFO("ZLG CANFD opened: type="
+    GHAND_LOG_INFO("ZLG CANFD opened: type="
              << device_type << " index=" << device_index
              << " channel=" << can_index << " bitrate=" << bitrate
              << " dbitrate=" << dbitrate);
@@ -438,15 +441,15 @@ class ZLGDriver : public CANFDDriver {
     ZCAN_TransmitFD_Data canfd_data;
     memset(&canfd_data, 0, sizeof(canfd_data));
 
-    // 构建 CAN ID：扩展帧 + 29-bit ID
+    // Build CAN ID: extended frame + 29-bit ID
     canfd_data.frame.can_id = MAKE_CAN_ID(frame.id, 1, 0, 0);
     canfd_data.frame.len = frame.len;
-    canfd_data.frame.flags = CANFD_BRS;  // 启用数据段波特率切换
+    canfd_data.frame.flags = CANFD_BRS;  // enable data phase baud rate switching
     memcpy(canfd_data.frame.data, frame.data, frame.len);
-    canfd_data.transmit_type = 0;  // 正常发送
+    canfd_data.transmit_type = 0;  // normal transmission
 
     canfd::ArbitrationId arb(frame.id);
-    LOG_INFO("CH" << can_index_ << " TX "
+    GHAND_LOG_INFO("CH" << can_index_ << " TX "
                   << "ID=0x" << std::hex << frame.id << std::dec << " "
                   << FrameTypeString(arb.frame_type()) << " EXT"
                   << " DLC=" << static_cast<int>(frame.len)
@@ -462,7 +465,7 @@ class ZLGDriver : public CANFDDriver {
     ZCAN_ReceiveFD_Data rx;
     memset(&rx, 0, sizeof(rx));
 
-    // wait_time: -1 表示阻塞等待，0 表示非阻塞，>0 表示超时毫秒
+    // wait_time: -1 means blocking, 0 means non-blocking, >0 means timeout in milliseconds
     int zlg_wait = timeout_ms;
     if (timeout_ms < 0) zlg_wait = -1;
 
@@ -476,7 +479,7 @@ class ZLGDriver : public CANFDDriver {
     frame->is_extended = IS_EFF(rx.frame.can_id);
 
     canfd::ArbitrationId arb(frame->id);
-    // LOG_INFO("CH" << can_index_ << " RX "
+    // GHAND_LOG_INFO("CH" << can_index_ << " RX "
     //           << "ID=0x" << std::hex << frame->id << std::dec
     //           << " " << FrameTypeString(arb.frame_type())
     //           << (frame->is_extended ? " EXT" : " STD")
@@ -490,7 +493,7 @@ class ZLGDriver : public CANFDDriver {
     std::map<std::string, std::string> adapters;
 
 #ifdef _WIN32
-    // 优先通过 COM 端口枚举 ZLG 设备
+    // Prefer enumerating ZLG devices via COM ports
     auto ports = EnumerateComPorts();
     for (const auto& port : ports) {
       if (!IsZLGVID(port.vid)) continue;
@@ -503,7 +506,7 @@ class ZLGDriver : public CANFDDriver {
     }
 #endif
 
-    // Fallback：直接枚举实际连接的 ZLG CANFD 设备
+    // Fallback: enumerate actually connected ZLG CANFD devices directly
     for (int dev_type : kCommonZLGDeviceTypes) {
       for (int dev_index = 0; dev_index < 8; ++dev_index) {
         long handle = ZCAN_OpenDevice(dev_type, dev_index, 0);

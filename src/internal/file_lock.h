@@ -13,19 +13,19 @@ namespace ghand {
 namespace internal {
 
 /**
- * @brief 跨平台文件锁内部实现类
+ * @brief Cross-platform file lock internal implementation class
  *
- * 提供进程间的互斥访问机制，防止多个进程同时使用同一设备。
- * 使用 RAII 模式管理锁的生命周期，确保异常安全。
+ * Provides inter-process mutual exclusion to prevent multiple processes from using the same device simultaneously.
+ * Uses RAII to manage the lock lifecycle, ensuring exception safety.
  *
- * 平台支持：
- * - Windows: 使用 CreateFile 独占模式
- * - Linux: 使用 flock 系统调用
+ * Platform support:
+ * - Windows: uses CreateFile exclusive mode
+ * - Linux: uses flock system call
  *
- * 锁文件格式：ghand_ethernet_{md5(adapter_name)}.lock
- * 锁文件位置：
- * - Windows: %TEMP% 目录
- * - Linux: /tmp 目录
+ * Lock file format: ghand_ethernet_{md5(adapter_name)}.lock
+ * Lock file location:
+ * - Windows: %TEMP% directory
+ * - Linux: /tmp directory
  */
 class FileLock {
  public:

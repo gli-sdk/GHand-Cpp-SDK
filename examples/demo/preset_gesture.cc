@@ -161,11 +161,11 @@ void PrintError() {
 
   // Print hand state errors
   if (ghand::HasError(g_hand_state)) {
-    std::cerr << "\n[ERROR] Hand state error detected!" << std::endl;
-    std::cerr << "Error: " << ghand::ToString(g_hand_state.error) << std::endl;
-    std::cerr << "State: " << ghand::ToString(g_hand_state.state) << std::endl;
+    std::cerr << "\n[ERROR] Hand state error detected!" << '\n';
+    std::cerr << "Error: " << ghand::ToString(g_hand_state.error) << '\n';
+    std::cerr << "State: " << ghand::ToString(g_hand_state.state) << '\n';
     std::cerr << "Temperature: " << g_hand_state.temperature << " degC"
-              << std::endl;
+              << '\n';
   }
 
   // Print joint errors
@@ -182,13 +182,13 @@ void PrintError() {
 
   if (!faulty_joints.empty()) {
     if (ghand::HasError(g_hand_state)) {
-      std::cerr << std::endl;
+      std::cerr << '\n';
     }
     std::cerr << "[ERROR] Detected " << faulty_joints.size()
-              << " faulty joint(s)" << std::endl;
-    std::cerr << "Faulty joints:" << std::endl;
+              << " faulty joint(s)" << '\n';
+    std::cerr << "Faulty joints:" << '\n';
     for (const auto& fault : faulty_joints) {
-      std::cerr << fault << std::endl;
+      std::cerr << fault << '\n';
     }
   }
 }
@@ -205,23 +205,23 @@ std::vector<ghand::JointCommand> CreateJointsFromGesture(
 }
 
 int main() {
-  std::cout << "========================================" << std::endl;
-  std::cout << "  GHand Dexterous Hand SDK - Preset Gesture Demo" << std::endl;
-  std::cout << "========================================" << std::endl;
+  std::cout << "========================================" << '\n';
+  std::cout << "  GHand Dexterous Hand SDK - Preset Gesture Demo" << '\n';
+  std::cout << "========================================" << '\n';
 
   // Connect to device
   auto hand =
       ghand::DexHand::Create(ghand::ProductType::G5, ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << std::endl;
+    std::cerr << "Failed to create DexHand" << '\n';
     return -1;
   }
-  std::cout << "\nConnecting to dexterous hand..." << std::endl;
+  std::cout << "\nConnecting to dexterous hand..." << '\n';
   if (!hand->AutoConnect()) {
-    std::cerr << "Failed to connect!" << std::endl;
+    std::cerr << "Failed to connect!" << '\n';
     return 1;
   }
-  std::cout << "Connected successfully" << std::endl;
+  std::cout << "Connected successfully" << '\n';
 
   // Set control mode
   hand->SetControlMode(ghand::ControlMode::POSITION);
@@ -242,13 +242,13 @@ int main() {
   const int kCycleDelayMs = 500;
   const int kErrorCheckIntervalMs = 100;
 
-  std::cout << "\nStarting gesture demonstration..." << std::endl;
-  std::cout << "Press Ctrl+C to stop\n" << std::endl;
+  std::cout << "\nStarting gesture demonstration..." << '\n';
+  std::cout << "Press Ctrl+C to stop\n" << '\n';
 
   bool has_error = false;
   while (!has_error) {
     cycle++;
-    std::cout << "\n========== Cycle " << cycle << " ==========" << std::endl;
+    std::cout << "\n========== Cycle " << cycle << " ==========" << '\n';
 
     // Execute each gesture
     for (auto gesture : gestures) {
@@ -258,7 +258,7 @@ int main() {
         break;
       }
 
-      std::cout << "\nExecuting: " << GetGestureName(gesture) << std::endl;
+      std::cout << "\nExecuting: " << GetGestureName(gesture) << '\n';
 
       // Get gesture definition and execute
       auto it = GESTURE_DEFINITIONS.find(gesture);
@@ -286,9 +286,9 @@ int main() {
     if (has_error) break;
 
     std::cout << "\n========== Cycle " << cycle
-              << " completed ==========" << std::endl;
+              << " completed ==========" << '\n';
     std::cout << "Press Ctrl+C to stop, or continue to next cycle...\n"
-              << std::endl;
+              << '\n';
 
     // Wait between cycles with error checking
     int elapsed = 0;
@@ -307,16 +307,16 @@ int main() {
   // Handle error if detected
   if (has_error) {
     PrintError();
-    std::cerr << "\nStopping all motion and clearing fault..." << std::endl;
+    std::cerr << "\nStopping all motion and clearing fault..." << '\n';
     hand->Stop();
     hand->ClearFault();
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
 
   // Cleanup
-  std::cout << "\nDisconnecting..." << std::endl;
+  std::cout << "\nDisconnecting..." << '\n';
   hand->Disconnect();
-  std::cout << "Disconnected. Thank you!" << std::endl;
+  std::cout << "Disconnected. Thank you!" << '\n';
 
   return has_error ? 1 : 0;
 }

@@ -15,7 +15,7 @@ int main() {
   auto temp_hand = ghand::DexHand::Create(ghand::ProductType::G5,
                                            ghand::CommType::ETHERCAT);
   if (!temp_hand) {
-    std::cerr << "Failed to create DexHand" << std::endl;
+    std::cerr << "Failed to create DexHand" << '\n';
     return -1;
   }
   std::map<std::string, std::string> adapters = temp_hand->SearchAdapters();

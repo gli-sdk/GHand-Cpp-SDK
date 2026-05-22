@@ -10,37 +10,37 @@
 
 namespace ghand {
 
-// ===== 手部类型定义 =====
+// ===== Hand Type Definitions =====
 enum class HandType : uint8_t {
   NONE,
   LEFT,
   RIGHT,
-  NUM_HANDS  // 仅用于计数，不是有效值
+  NUM_HANDS  // For counting only, not a valid value
 };
 
 /**
- * @brief 获取手部类型的字符串表示（用于调试/日志）
- * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ * @brief Get string representation of hand type (for debug/logging)
+ * @warning Do not call in real-time control loops (string processing overhead)
  */
 std::string GHAND_API ToString(HandType type);
 
-// ===== 手指类型定义 =====
+// ===== Finger Type Definitions =====
 enum class FingerType : uint8_t {
   THUMB,
   FF,
   MF,
   RF,
   LF,
-  NUM_FINGERS  // 仅用于计数，不是有效值
+  NUM_FINGERS  // For counting only, not a valid value
 };
 
 /**
- * @brief 获取手指类型的字符串表示（用于调试/日志）
- * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ * @brief Get string representation of finger type (for debug/logging)
+ * @warning Do not call in real-time control loops (string processing overhead)
  */
 std::string GHAND_API ToString(FingerType finger);
 
-// ===== 力数据结构 =====
+// ===== Force Data Structure =====
 struct Force {
   float x;
   float y;
@@ -51,48 +51,48 @@ struct Force {
 };
 
 enum class State : uint8_t {
-  STOPPED = 0,            // 停止
-  RUNNING = 1,            // 正常运行中
-  ABNORMAL_RUNNING = 2,   // 异常运行
-  PROTECTIVE_STOPPED = 3  // 保护性停止
+  STOPPED = 0,            // Stopped
+  RUNNING = 1,            // Normal operation
+  ABNORMAL_RUNNING = 2,   // Abnormal operation
+  PROTECTIVE_STOPPED = 3  // Protective stop
 };
 
 /**
- * @brief 获取状态的字符串表示（用于调试/日志）
- * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ * @brief Get string representation of state (for debug/logging)
+ * @warning Do not call in real-time control loops (string processing overhead)
  */
 std::string GHAND_API ToString(State state);
 
 enum class ErrorCode : uint8_t {
   NORMAL = 0,
-  // 电机错误
-  MOTOR_HARDWARE_OVERCURRENT = 1,  // 电机硬件过流
-  MOTOR_SOFTWARE_OVERCURRENT = 2,  // 电机软件过流
-  MOTOR_BUS_OVERCURRENT = 3,       // 电机母线过流
-  MOTOR_PHASE_LOST = 4,            // 电机缺相
-  MOTOR_STALLED = 5,               // 电机堵转
-  MOTOR_DRIVER_OVERTEMP = 6,       // 电机驱动芯片过温
-  MOTOR_COMM_ERROR = 7,            // 电机通信错误
-  // 手指错误
-  JOINT_CONFLICT = 11,  // 关节冲突
-  TIP_CONFLICT = 12,    // 指尖冲突
-  // 手部错误
-  LOW_TEMP = 21,      // 温度过低
-  HIGH_TEMP = 22,     // 温度过高
-  LOW_VOLTAGE = 23,   // 电压过低
-  HIGH_VOLTAGE = 24,  // 电压过高
-  // 触觉传感器错误
-  TACTILE_ERROR = 31,  // 触觉传感器错误
-  // 数据处理错误
-  PARAM_ERROR = 101,  // 参数错误
-  TIMEOUT = 102,      // 超时
-  // 其他
-  UNKNOWN_ERROR = 201  // 未知错误
+  // Motor errors
+  MOTOR_HARDWARE_OVERCURRENT = 1,  // Motor hardware overcurrent
+  MOTOR_SOFTWARE_OVERCURRENT = 2,  // Motor software overcurrent
+  MOTOR_BUS_OVERCURRENT = 3,       // Motor bus overcurrent
+  MOTOR_PHASE_LOST = 4,            // Motor phase loss
+  MOTOR_STALLED = 5,               // Motor stall
+  MOTOR_DRIVER_OVERTEMP = 6,       // Motor driver overtemperature
+  MOTOR_COMM_ERROR = 7,            // Motor communication error
+  // Finger errors
+  JOINT_CONFLICT = 11,  // Joint conflict
+  TIP_CONFLICT = 12,    // Tip conflict
+  // Hand errors
+  LOW_TEMP = 21,      // Temperature too low
+  HIGH_TEMP = 22,     // Temperature too high
+  LOW_VOLTAGE = 23,   // Voltage too low
+  HIGH_VOLTAGE = 24,  // Voltage too high
+  // Tactile sensor errors
+  TACTILE_ERROR = 31,  // Tactile sensor error
+  // Data processing errors
+  PARAM_ERROR = 101,  // Parameter error
+  TIMEOUT = 102,      // Timeout
+  // Other
+  UNKNOWN_ERROR = 201  // Unknown error
 };
 
 /**
- * @brief 获取错误码的字符串表示（用于调试/日志）
- * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ * @brief Get string representation of error code (for debug/logging)
+ * @warning Do not call in real-time control loops (string processing overhead)
  */
 std::string GHAND_API ToString(ErrorCode error);
 
@@ -119,27 +119,27 @@ enum class JointId : uint8_t {
 };
 
 /**
- * @brief 获取关节ID的字符串表示（用于调试/日志）
- * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ * @brief Get string representation of joint ID (for debug/logging)
+ * @warning Do not call in real-time control loops (string processing overhead)
  */
 std::string GHAND_API ToString(JointId id);
 
-// ===== 产品类型定义 =====
+// ===== Product Type Definitions =====
 enum class ProductType : uint8_t { G5, AUTO };
 
 /**
- * @brief 获取产品类型的字符串表示（用于调试/日志）
- * @warning 不应在实时控制循环中调用（有字符串处理开销）
+ * @brief Get string representation of product type (for debug/logging)
+ * @warning Do not call in real-time control loops (string processing overhead)
  */
 std::string GHAND_API ToString(ProductType type);
 
-// ===== 通信类型定义 =====
+// ===== Communication Type Definitions =====
 enum class CommType : uint8_t { ETHERCAT, CANFD, RS485 };
 
-// ===== 控制模式定义 =====
+// ===== Control Mode Definitions =====
 enum class ControlMode : uint8_t { POSITION = 0, TORQUE = 1, SPEED = 2 };
 
-// ===== 设备信息结构 =====
+// ===== Device Info Structure =====
 struct DeviceInfo {
   std::string device_name;
   std::string hardware_version;
@@ -149,7 +149,7 @@ struct DeviceInfo {
 };
 
 /**
- * @brief 手部状态数据结构
+ * @brief Hand state data structure
  */
 struct HandState {
   State state;
@@ -158,37 +158,39 @@ struct HandState {
 };
 
 /**
- * @brief 单个触觉区域的传感器数据
+ * @brief Sensor data for a single tactile region
  */
 struct RegionTactile {
-  const char* region_name;                // 区域名称（由设备端提供）
-  bool state;                             // 传感器状态 (true=正常, false=异常)
-  Force resultant_force;                  // 合力数据
-  std::vector<Force> distributed_forces;  // 分布力数据
+  const char* region_name;                // Region name (provided by device)
+  bool state;                             // Sensor state (true=normal, false=abnormal)
+  Force resultant_force;                  // Resultant force data
+  std::vector<Force> distributed_forces;  // Distributed force data
 };
 
 /**
- * @brief 触觉数据结构
+ * @brief Tactile data structure
  *
- * 设计说明：
- * - regions 按设备协议定义的顺序排列，与协议帧字节序一致
- * - region_name 指向设备返回的字符串，生命周期与 TactileData 数据帧相同
- * - sensor_state 按位编码：bit 0-4 分别对应区域 0-4
- * - sensor_error 为全局错误码
+ * Design notes:
+ * - regions are ordered according to device protocol definition, consistent
+ *   with protocol frame byte order
+ * - region_name points to string returned by device, lifetime same as
+ *   TactileData frame
+ * - sensor_state is bit-encoded: bits 0-4 correspond to regions 0-4
+ * - sensor_error is global error code
  */
 struct TactileData {
-  uint8_t sensor_state;  // 保留原始字节（调试用）
-  uint8_t sensor_error;  // 全局错误码
+  uint8_t sensor_state;  // Raw byte reserved (for debugging)
+  uint8_t sensor_error;  // Global error code
 
   std::vector<RegionTactile> regions;
 };
 
-// 关节命令结构体，用于参数化关节控制
+// Joint command structure for parameterized joint control
 struct JointCommand {
-  JointId id;       // 关节标识符
-  float angle;      // 目标角度（deg）
-  int8_t velocity;  // 目标速度（-100~100%，根据控制模式）
-  int8_t torque;    // 目标力矩（-100~100%，根据控制模式）
+  JointId id;       // Joint identifier
+  float angle;      // Target angle (deg)
+  int8_t velocity;  // Target velocity (-100~100%, depending on control mode)
+  int8_t torque;    // Target torque (-100~100%, depending on control mode)
 };
 
 struct Joint {
@@ -200,7 +202,7 @@ struct Joint {
   int8_t torque;
 };
 
-// ===== HandState / Joint 查询函数 =====
+// ===== HandState / Joint Query Functions =====
 
 inline bool IsNormal(const HandState& hs) {
   return (hs.state == State::STOPPED || hs.state == State::RUNNING) &&

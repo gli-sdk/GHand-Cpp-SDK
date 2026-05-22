@@ -18,28 +18,28 @@
  * - Higher torque is suitable for operations requiring more force
  */
 int main() {
-  std::cout << "========================================" << std::endl;
+  std::cout << "========================================" << '\n';
   std::cout << "  GHand Dexterous Hand SDK - Torque Control Demo        "
-            << std::endl;
-  std::cout << "========================================" << std::endl;
+            << '\n';
+  std::cout << "========================================" << '\n';
 
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << std::endl;
+    std::cerr << "Failed to create DexHand" << '\n';
     return -1;
   }
 
   // Connect device
-  std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
+  std::cout << "\nConnecting to dexterous hand via EtherCAT..." << '\n';
   bool success = hand->AutoConnect();
 
   if (!success) {
-    std::cerr << "Error: Unable to connect to dexterous hand!" << std::endl;
+    std::cerr << "Error: Unable to connect to dexterous hand!" << '\n';
     return 1;
   }
 
-  std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
+  std::cout << "✓ Successfully connected to dexterous hand!" << '\n';
 
   // Set control mode to position mode
   hand->SetControlMode(ghand::ControlMode::POSITION);
@@ -47,11 +47,11 @@ int main() {
   // ========== Demo 1: Fist movement with different torque levels ==========
   std::cout << "\n========== Demo 1: Fist movement with different torque "
                "levels =========="
-            << std::endl;
+            << '\n';
   std::cout << "Demonstrating fist movements at 20%, 40%, 60%, 80%, 100% torque"
-            << std::endl;
+            << '\n';
   std::cout << "Observe the force differences at different torque levels\n"
-            << std::endl;
+            << '\n';
 
   // Define fist gesture
   std::vector<ghand::JointCommand> fist_joints = {
@@ -88,7 +88,7 @@ int main() {
 
   for (uint8_t torque : torque_levels) {
     std::cout << ">>> Executing fist, torque: " << static_cast<int>(torque)
-              << "%" << std::endl;
+              << "%" << '\n';
 
     // Set torque and execute fist
     for (auto& joint : fist_joints) {
@@ -100,7 +100,7 @@ int main() {
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
     std::cout << ">>> Opening hand, torque: " << static_cast<int>(torque) << "%"
-              << std::endl;
+              << '\n';
 
     // Set torque and open hand
     for (auto& joint : open_joints) {
@@ -109,15 +109,15 @@ int main() {
     hand->MoveJoints(open_joints);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    std::cout << std::endl;
+    std::cout << '\n';
   }
 
   // ========== Demo 2: Torque control for OK gesture ==========
   std::cout << "\n========== Demo 2: Torque control for OK gesture =========="
-            << std::endl;
+            << '\n';
   std::cout << "Executing OK gesture with different torque to simulate gentle "
                "and firm pinching\n"
-            << std::endl;
+            << '\n';
 
   // Define OK gesture
   std::vector<ghand::JointCommand> ok_joints = {
@@ -136,7 +136,7 @@ int main() {
       {ghand::JointId::LF_MCP, 0.0f, 50, 0}};
 
   // Gentle pinch
-  std::cout << ">>> Gentle pinch (30% torque)" << std::endl;
+  std::cout << ">>> Gentle pinch (30% torque)" << '\n';
   for (auto& joint : ok_joints) {
     joint.torque = 30;
   }
@@ -148,7 +148,7 @@ int main() {
   std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
   // Firm pinch
-  std::cout << ">>> Firm pinch (80% torque)" << std::endl;
+  std::cout << ">>> Firm pinch (80% torque)" << '\n';
   for (auto& joint : ok_joints) {
     joint.torque = 80;
   }
@@ -162,10 +162,10 @@ int main() {
   // ========== Demo 3: Different torque for different fingers ==========
   std::cout << "\n========== Demo 3: Different torque for different fingers "
                "=========="
-            << std::endl;
+            << '\n';
   std::cout << "Setting different torque for each finger to simulate real "
                "grasping scenarios\n"
-            << std::endl;
+            << '\n';
 
   // Simulate grasping object: thumb and index finger with high torque, other
   // fingers relaxed
@@ -191,23 +191,23 @@ int main() {
   std::cout << ">>> Executing two-finger pinch (thumb and index finger at 90% "
                "torque, other "
                "fingers at 30-50% torque)"
-            << std::endl;
+            << '\n';
   hand->MoveJoints(pinch_grip);
   std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
-  std::cout << ">>> Opening hand" << std::endl;
+  std::cout << ">>> Opening hand" << '\n';
   hand->MoveJoints(open_joints);
   std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
   // ========== Demo 4: Gradual torque control ==========
   std::cout << "\n========== Demo 4: Gradual torque control =========="
-            << std::endl;
+            << '\n';
   std::cout << "Gradually increasing from 10% to 100%, observe torque changes\n"
-            << std::endl;
+            << '\n';
 
   for (int i = 1; i <= 10; i++) {
     uint8_t torque = i * 10;
-    std::cout << ">>> Torque: " << static_cast<int>(torque) << "%" << std::endl;
+    std::cout << ">>> Torque: " << static_cast<int>(torque) << "%" << '\n';
 
     // Set torque
     for (auto& joint : fist_joints) {
@@ -229,28 +229,28 @@ int main() {
 
   // ========== Demo completed ==========
   std::cout << "\n========== Torque control demo completed =========="
-            << std::endl;
-  std::cout << "Key points:" << std::endl;
-  std::cout << "1. Torque parameter range: 0-100%" << std::endl;
+            << '\n';
+  std::cout << "Key points:" << '\n';
+  std::cout << "1. Torque parameter range: 0-100%" << '\n';
   std::cout << "2. Higher torque values produce higher output torque and "
                "stronger grip"
-            << std::endl;
+            << '\n';
   std::cout << "3. Low torque is suitable for gentle operations and handling "
                "fragile items"
-            << std::endl;
+            << '\n';
   std::cout << "4. High torque is suitable for grasping operations requiring "
                "more force"
-            << std::endl;
-  std::cout << "5. Each joint can be set with individual torque" << std::endl;
+            << '\n';
+  std::cout << "5. Each joint can be set with individual torque" << '\n';
   std::cout
       << "6. Different torque combinations can simulate real grasping scenarios"
-      << std::endl;
+      << '\n';
 
   // Disconnect
-  std::cout << "\nDisconnecting..." << std::endl;
+  std::cout << "\nDisconnecting..." << '\n';
   hand->Disconnect();
-  std::cout << "✓ Disconnected" << std::endl;
+  std::cout << "✓ Disconnected" << '\n';
 
-  std::cout << "\nDemo completed. Thank you for using!" << std::endl;
+  std::cout << "\nDemo completed. Thank you for using!" << '\n';
   return 0;
 }

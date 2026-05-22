@@ -1,4 +1,4 @@
-// 在包含 Windows 头文件之前先定义这些宏，避免 winsock.h/winsock2.h 冲突
+// Define these macros before including Windows headers to avoid winsock.h/winsock2.h conflicts
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
@@ -286,16 +286,16 @@ bool ProcessGloveData(const char* data, HandData& left_hand,
 // ========== Main Program ==========
 
 int main() {
-  std::cout << "========================================" << std::endl;
+  std::cout << "========================================" << '\n';
   std::cout << "  GHand Dexterous Hand SDK - Glove Control        "
-            << std::endl;
-  std::cout << "========================================" << std::endl;
+            << '\n';
+  std::cout << "========================================" << '\n';
 
 #ifdef _WIN32
   // Initialize Winsock
   WSADATA wsa_data;
   if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
-    std::cerr << "Error: WSAStartup failed" << std::endl;
+    std::cerr << "Error: WSAStartup failed" << '\n';
     return 1;
   }
 #endif
@@ -303,7 +303,7 @@ int main() {
   // Create UDP socket
   SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (sock == INVALID_SOCKET) {
-    std::cerr << "Error: Unable to create socket" << std::endl;
+    std::cerr << "Error: Unable to create socket" << '\n';
 #ifdef _WIN32
     WSACleanup();
 #endif
@@ -320,7 +320,7 @@ int main() {
   if (bind(sock, (sockaddr*)&server_addr, sizeof(server_addr)) ==
       SOCKET_ERROR) {
     std::cerr << "Error: Unable to bind to " << kUdpIp << ":" << kUdpPort
-              << std::endl;
+              << '\n';
     closesocket(sock);
 #ifdef _WIN32
     WSACleanup();
@@ -329,24 +329,24 @@ int main() {
   }
 
   std::cout << "\n✓ Listening for data on " << kUdpIp << ":" << kUdpPort
-            << "..." << std::endl;
+            << "..." << '\n';
 
   // Connect dexterous hand
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << std::endl;
+    std::cerr << "Failed to create DexHand" << '\n';
     closesocket(sock);
 #ifdef _WIN32
     WSACleanup();
 #endif
     return 1;
   }
-  std::cout << "\nConnecting to dexterous hand via EtherCAT..." << std::endl;
+  std::cout << "\nConnecting to dexterous hand via EtherCAT..." << '\n';
   bool success = hand->AutoConnect();
 
   if (!success) {
-    std::cerr << "Error: Unable to connect to dexterous hand!" << std::endl;
+    std::cerr << "Error: Unable to connect to dexterous hand!" << '\n';
     closesocket(sock);
 #ifdef _WIN32
     WSACleanup();
@@ -354,10 +354,10 @@ int main() {
     return 1;
   }
 
-  std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
+  std::cout << "✓ Successfully connected to dexterous hand!" << '\n';
   std::cout << "\nStarting to receive glove data and control dexterous hand..."
-            << std::endl;
-  std::cout << "Press Ctrl+C to exit program\n" << std::endl;
+            << '\n';
+  std::cout << "Press Ctrl+C to exit program\n" << '\n';
 
   // Set receive timeout to avoid permanent blocking
 #ifdef _WIN32
@@ -384,7 +384,7 @@ int main() {
 
   try {
     while (true) {
-      // 接收 UDP 数据
+      // Receive UDP data
       char buffer[32 * 1024];
       sockaddr_in client_addr;
       socklen_t client_len = sizeof(client_addr);
@@ -396,17 +396,17 @@ int main() {
 #ifdef _WIN32
         int error = WSAGetLastError();
         if (error == WSAETIMEDOUT) {
-          // 超时，继续循环
+          // Timeout, continue loop
           continue;
         }
 #endif
-        std::cerr << "错误: 接收数据失败" << std::endl;
+        std::cerr << "Error: Failed to receive data" << '\n';
         break;
       }
 
       buffer[recv_len] = '\0';
 
-      // 检查是否需要处理数据
+      // Check if data needs to be processed
       auto current_time = std::chrono::steady_clock::now();
       double elapsed =
           std::chrono::duration<double>(current_time - last_process_time)
@@ -423,7 +423,7 @@ int main() {
             std::cout << "[Glove Data] Left hand thumb MCP: bend="
                       << left_hand.thumb.mcp_bend
                       << ", sway=" << left_hand.thumb.mcp_sway
-                      << ", roll=" << left_hand.thumb.mcp_roll << std::endl;
+                      << ", roll=" << left_hand.thumb.mcp_roll << '\n';
           }
 
           // Use left hand data to control dexterous hand
@@ -493,7 +493,7 @@ int main() {
           if (data_count % 100 == 0 && joints_received &&
               !last_joints.empty()) {
             std::cout << "[Dexterous Hand Status] Processed " << data_count
-                      << " frames" << std::endl;
+                      << " frames" << '\n';
           }
         }
 
@@ -502,17 +502,17 @@ int main() {
     }
 
   } catch (const std::exception& e) {
-    std::cout << "\nProgram exception: " << e.what() << std::endl;
+    std::cout << "\nProgram exception: " << e.what() << '\n';
   }
 
   // Cleanup
-  std::cout << "\nCleaning up resources..." << std::endl;
+  std::cout << "\nCleaning up resources..." << '\n';
   hand->Disconnect();
   closesocket(sock);
 #ifdef _WIN32
   WSACleanup();
 #endif
 
-  std::cout << "✓ Program exited" << std::endl;
+  std::cout << "✓ Program exited" << '\n';
   return 0;
 }
