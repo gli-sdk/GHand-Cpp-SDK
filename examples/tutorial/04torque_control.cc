@@ -5,35 +5,26 @@
 
 #include "ghand/ghand.h"
 
-using ghand::DexHand;
-\nusing ghand::JointCommand;
-\nusing ghand::JointId;
-\nusing ghand::ControlMode;
-\nusing ghand::ProductType;
-\nusing ghand::CommType;
-\n
-
-    /**
-     * @brief Torque control demonstration
-     *
-     * This example shows how to control dexterous hand joint movements using
-     * different torque percentages. Torque parameter range: 0-100%, higher
-     * values produce higher output torque.
-     *
-     * Note:
-     * - Torque control affects the gripping force of fingers
-     * - Lower torque is suitable for gentle operations
-     * - Higher torque is suitable for operations requiring more force
-     */
-
-    int
-    main() {
+/**
+ * @brief Torque control demonstration
+ *
+ * This example shows how to control dexterous hand joint movements using
+ * different torque percentages. Torque parameter range: 0-100%, higher
+ * values produce higher output torque.
+ *
+ * Note:
+ * - Torque control affects the gripping force of fingers
+ * - Lower torque is suitable for gentle operations
+ * - Higher torque is suitable for operations requiring more force
+ */
+int main() {
   std::cout << "========================================" << std::endl;
   std::cout << "  GHand Dexterous Hand SDK - Torque Control Demo        "
             << std::endl;
   std::cout << "========================================" << std::endl;
 
-  auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
+  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << std::endl;
     return -1;
@@ -51,7 +42,7 @@ using ghand::DexHand;
   std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
 
   // Set control mode to position mode
-  hand->SetControlMode(ControlMode::POSITION);
+  hand->SetControlMode(ghand::ControlMode::POSITION);
 
   // ========== Demo 1: Fist movement with different torque levels ==========
   std::cout << "\n========== Demo 1: Fist movement with different torque "
@@ -63,34 +54,34 @@ using ghand::DexHand;
             << std::endl;
 
   // Define fist gesture
-  std::vector<JointCommand> fist_joints = {
-      {JointId::THUMB_PIP, 40.0f, 50, 0},
-      {JointId::THUMB_MCP, 30.0f, 50, 0},
-      {JointId::THUMB_SWING, 30.0f, 50, 0},
-      {JointId::THUMB_ROTATION, 4.0f, 50, 0},
-      {JointId::FF_PIP, 65.0f, 50, 0},
-      {JointId::FF_MCP, 55.0f, 50, 0},
-      {JointId::MF_PIP, 65.0f, 50, 0},
-      {JointId::MF_MCP, 55.0f, 50, 0},
-      {JointId::RF_PIP, 65.0f, 50, 0},
-      {JointId::RF_MCP, 55.0f, 50, 0},
-      {JointId::LF_PIP, 65.0f, 50, 0},
-      {JointId::LF_MCP, 55.0f, 50, 0}};
+  std::vector<ghand::JointCommand> fist_joints = {
+      {ghand::JointId::THUMB_PIP, 40.0f, 50, 0},
+      {ghand::JointId::THUMB_MCP, 30.0f, 50, 0},
+      {ghand::JointId::THUMB_SWING, 30.0f, 50, 0},
+      {ghand::JointId::THUMB_ROTATION, 4.0f, 50, 0},
+      {ghand::JointId::FF_PIP, 65.0f, 50, 0},
+      {ghand::JointId::FF_MCP, 55.0f, 50, 0},
+      {ghand::JointId::MF_PIP, 65.0f, 50, 0},
+      {ghand::JointId::MF_MCP, 55.0f, 50, 0},
+      {ghand::JointId::RF_PIP, 65.0f, 50, 0},
+      {ghand::JointId::RF_MCP, 55.0f, 50, 0},
+      {ghand::JointId::LF_PIP, 65.0f, 50, 0},
+      {ghand::JointId::LF_MCP, 55.0f, 50, 0}};
 
   // Define open hand gesture
-  std::vector<JointCommand> open_joints = {
-      {JointId::THUMB_PIP, 0.0f, 50, 0},
-      {JointId::THUMB_MCP, 0.0f, 50, 0},
-      {JointId::THUMB_SWING, 0.0f, 50, 0},
-      {JointId::THUMB_ROTATION, 0.0f, 50, 0},
-      {JointId::FF_PIP, 0.0f, 50, 0},
-      {JointId::FF_MCP, 0.0f, 50, 0},
-      {JointId::MF_PIP, 0.0f, 50, 0},
-      {JointId::MF_MCP, 0.0f, 50, 0},
-      {JointId::RF_PIP, 0.0f, 50, 0},
-      {JointId::RF_MCP, 0.0f, 50, 0},
-      {JointId::LF_PIP, 0.0f, 50, 0},
-      {JointId::LF_MCP, 0.0f, 50, 0}};
+  std::vector<ghand::JointCommand> open_joints = {
+      {ghand::JointId::THUMB_PIP, 0.0f, 50, 0},
+      {ghand::JointId::THUMB_MCP, 0.0f, 50, 0},
+      {ghand::JointId::THUMB_SWING, 0.0f, 50, 0},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 50, 0},
+      {ghand::JointId::FF_PIP, 0.0f, 50, 0},
+      {ghand::JointId::FF_MCP, 0.0f, 50, 0},
+      {ghand::JointId::MF_PIP, 0.0f, 50, 0},
+      {ghand::JointId::MF_MCP, 0.0f, 50, 0},
+      {ghand::JointId::RF_PIP, 0.0f, 50, 0},
+      {ghand::JointId::RF_MCP, 0.0f, 50, 0},
+      {ghand::JointId::LF_PIP, 0.0f, 50, 0},
+      {ghand::JointId::LF_MCP, 0.0f, 50, 0}};
 
   // Test different torque values
   std::vector<uint8_t> torque_levels = {20, 40, 60, 80, 100};
@@ -129,19 +120,20 @@ using ghand::DexHand;
             << std::endl;
 
   // Define OK gesture
-  std::vector<JointCommand> ok_joints = {{JointId::THUMB_PIP, 40.0f, 50, 0},
-                                         {JointId::THUMB_MCP, 30.0f, 50, 0},
-                                         {JointId::THUMB_SWING, 30.0f, 50, 0},
-                                         {JointId::THUMB_ROTATION, 4.0f, 50, 0},
-                                         {JointId::FF_PIP, 30.0f, 50, 0},
-                                         {JointId::FF_MCP, 50.0f, 50, 0},
-                                         {JointId::FF_SWING, 0.0f, 50, 0},
-                                         {JointId::MF_PIP, 0.0f, 50, 0},
-                                         {JointId::MF_MCP, 0.0f, 50, 0},
-                                         {JointId::RF_PIP, 0.0f, 50, 0},
-                                         {JointId::RF_MCP, 0.0f, 50, 0},
-                                         {JointId::LF_PIP, 0.0f, 50, 0},
-                                         {JointId::LF_MCP, 0.0f, 50, 0}};
+  std::vector<ghand::JointCommand> ok_joints = {
+      {ghand::JointId::THUMB_PIP, 40.0f, 50, 0},
+      {ghand::JointId::THUMB_MCP, 30.0f, 50, 0},
+      {ghand::JointId::THUMB_SWING, 30.0f, 50, 0},
+      {ghand::JointId::THUMB_ROTATION, 4.0f, 50, 0},
+      {ghand::JointId::FF_PIP, 30.0f, 50, 0},
+      {ghand::JointId::FF_MCP, 50.0f, 50, 0},
+      {ghand::JointId::FF_SWING, 0.0f, 50, 0},
+      {ghand::JointId::MF_PIP, 0.0f, 50, 0},
+      {ghand::JointId::MF_MCP, 0.0f, 50, 0},
+      {ghand::JointId::RF_PIP, 0.0f, 50, 0},
+      {ghand::JointId::RF_MCP, 0.0f, 50, 0},
+      {ghand::JointId::LF_PIP, 0.0f, 50, 0},
+      {ghand::JointId::LF_MCP, 0.0f, 50, 0}};
 
   // Gentle pinch
   std::cout << ">>> Gentle pinch (30% torque)" << std::endl;
@@ -177,24 +169,24 @@ using ghand::DexHand;
 
   // Simulate grasping object: thumb and index finger with high torque, other
   // fingers relaxed
-  std::vector<JointCommand> pinch_grip = {
+  std::vector<ghand::JointCommand> pinch_grip = {
       // Thumb - high torque (mainly for grasping)
-      {JointId::THUMB_PIP, 40.0f, 50, 90},
-      {JointId::THUMB_MCP, 30.0f, 50, 90},
-      {JointId::THUMB_SWING, 30.0f, 50, 90},
-      {JointId::THUMB_ROTATION, 4.0f, 50, 90},
+      {ghand::JointId::THUMB_PIP, 40.0f, 50, 90},
+      {ghand::JointId::THUMB_MCP, 30.0f, 50, 90},
+      {ghand::JointId::THUMB_SWING, 30.0f, 50, 90},
+      {ghand::JointId::THUMB_ROTATION, 4.0f, 50, 90},
       // Index finger - high torque (mainly for grasping)
-      {JointId::FF_PIP, 65.0f, 50, 90},
-      {JointId::FF_MCP, 55.0f, 50, 90},
-      {JointId::FF_SWING, 0.0f, 50, 90},
+      {ghand::JointId::FF_PIP, 65.0f, 50, 90},
+      {ghand::JointId::FF_MCP, 55.0f, 50, 90},
+      {ghand::JointId::FF_SWING, 0.0f, 50, 90},
       // Middle finger - medium torque (auxiliary support)
-      {JointId::MF_PIP, 65.0f, 50, 50},
-      {JointId::MF_MCP, 55.0f, 50, 50},
+      {ghand::JointId::MF_PIP, 65.0f, 50, 50},
+      {ghand::JointId::MF_MCP, 55.0f, 50, 50},
       // Ring and little fingers - low torque (relaxed)
-      {JointId::RF_PIP, 65.0f, 50, 30},
-      {JointId::RF_MCP, 55.0f, 50, 30},
-      {JointId::LF_PIP, 65.0f, 50, 30},
-      {JointId::LF_MCP, 55.0f, 50, 30}};
+      {ghand::JointId::RF_PIP, 65.0f, 50, 30},
+      {ghand::JointId::RF_MCP, 55.0f, 50, 30},
+      {ghand::JointId::LF_PIP, 65.0f, 50, 30},
+      {ghand::JointId::LF_MCP, 55.0f, 50, 30}};
 
   std::cout << ">>> Executing two-finger pinch (thumb and index finger at 90% "
                "torque, other "

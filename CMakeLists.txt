@@ -56,7 +56,7 @@ set(SOURCES
     src/comm/canfd_driver_zlg.cc
     src/comm/canfd_protocol.cc
     src/comm/ethercat_comm.cc
-    src/internal/ghand.cc
+    src/internal/dexhand.cc
     src/internal/dexhand_callback_manager.cc
     src/internal/file_lock.cc
     src/internal/product_config_loader.cc

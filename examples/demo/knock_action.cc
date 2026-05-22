@@ -5,56 +5,50 @@
 
 #include "ghand/ghand.h"
 
-using ghand::DexHand;
-\nusing ghand::JointCommand;
-\nusing ghand::JointId;
-\nusing ghand::CommType;
-\n
-
-    // Knock pose
-    std::vector<JointCommand> MakeKnockPose() {
+// Knock pose
+std::vector<ghand::JointCommand> MakeKnockPose() {
   return {
-      {JointId::THUMB_PIP, 60.0f, 100, 100},
-      {JointId::THUMB_MCP, 0.0f, 100, 100},
-      {JointId::THUMB_SWING, 20.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 75.0f, 100, 100},
-      {JointId::FF_MCP, 0.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 75.0f, 100, 100},
-      {JointId::MF_MCP, 0.0f, 100, 100},
-      {JointId::RF_PIP, 75.0f, 100, 100},
-      {JointId::RF_MCP, 70.0f, 100, 100},
-      {JointId::LF_PIP, 74.0f, 100, 100},
-      {JointId::LF_MCP, 70.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 60.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 75.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 75.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 75.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 70.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 74.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 70.0f, 100, 100},
   };
 }
 
 // Open hand pose
-std::vector<JointCommand> MakeOpenHand() {
+std::vector<ghand::JointCommand> MakeOpenHand() {
   return {
-      {JointId::THUMB_PIP, 0.0f, 100, 100},
-      {JointId::THUMB_MCP, 0.0f, 100, 100},
-      {JointId::THUMB_SWING, 20.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 0.0f, 100, 100},
-      {JointId::FF_MCP, 0.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 0.0f, 100, 100},
-      {JointId::MF_MCP, 0.0f, 100, 100},
-      {JointId::RF_PIP, 0.0f, 100, 100},
-      {JointId::RF_MCP, 0.0f, 100, 100},
-      {JointId::LF_PIP, 0.0f, 100, 100},
-      {JointId::LF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 0.0f, 100, 100},
   };
 }
 
-bool Knock(DexHand& hand) {
+bool Knock(ghand::DexHand& hand) {
   auto joints = MakeKnockPose();
   return hand.MoveJoints(joints);
 }
 
-bool HandZero(DexHand& hand) {
+bool HandZero(ghand::DexHand& hand) {
   auto joints = MakeOpenHand();
   return hand.MoveJoints(joints);
 }
@@ -65,8 +59,13 @@ int main() {
 #endif
   std::cout << "***** Xiaoyao Dexterous Hand SDK - Knock Demo *****\n"
             << std::endl;
-  DexHand hand;
-  bool connected = hand.Connect(CommType::ETHERCAT, "auto");
+  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                      ghand::CommType::ETHERCAT);
+  if (!hand) {
+    std::cerr << "Failed to create DexHand" << std::endl;
+    return -1;
+  }
+  bool connected = hand->Connect("auto");
   if (!connected) {
     std::cout << "\n[Scan complete] Failed to connect to dexterous hand."
               << std::endl;
@@ -84,7 +83,7 @@ int main() {
     std::cout << "\n--- Round " << gesture_cycle << " demo started ---"
               << std::endl;
 
-    if (!Knock(hand)) {
+    if (!Knock(*hand)) {
       std::cout << "Round " << gesture_cycle << " knock action execution failed"
                 << std::endl;
       break;

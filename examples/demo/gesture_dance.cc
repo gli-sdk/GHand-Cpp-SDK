@@ -5,197 +5,188 @@
 
 #include "ghand/ghand.h"
 
-using ghand::DexHand;
-\nusing ghand::JointCommand;
-\nusing ghand::JointId;
-\nusing ghand::ProductType;
-\nusing ghand::CommType;
-\n
+// ========== Gesture Pose Definitions ==========
 
-    // ========== Gesture Pose Definitions ==========
-
-    // Thumb touches little finger
-    std::vector<JointCommand> MakeThumbTouchLittle() {
+// Thumb touches little finger
+std::vector<ghand::JointCommand> MakeThumbTouchLittle() {
   return {
-      {JointId::THUMB_PIP, 20.0f, 100, 100},
-      {JointId::THUMB_MCP, 50.0f, 100, 100},
-      {JointId::THUMB_SWING, 60.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 0.0f, 100, 100},
-      {JointId::FF_MCP, 0.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 0.0f, 100, 100},
-      {JointId::MF_MCP, 0.0f, 100, 100},
-      {JointId::RF_PIP, 0.0f, 100, 100},
-      {JointId::RF_MCP, 0.0f, 100, 100},
-      {JointId::LF_PIP, 56.0f, 100, 100},
-      {JointId::LF_MCP, 28.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 50.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 60.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 56.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 28.0f, 100, 100},
   };
 }
 
 // Thumb touches ring finger
-std::vector<JointCommand> MakeThumbTouchRing() {
+std::vector<ghand::JointCommand> MakeThumbTouchRing() {
   return {
-      {JointId::THUMB_PIP, 19.0f, 100, 100},
-      {JointId::THUMB_MCP, 38.0f, 100, 100},
-      {JointId::THUMB_SWING, 45.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 0.0f, 100, 100},
-      {JointId::FF_MCP, 0.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 0.0f, 100, 100},
-      {JointId::MF_MCP, 0.0f, 100, 100},
-      {JointId::RF_PIP, 67.0f, 100, 100},
-      {JointId::RF_MCP, 39.0f, 100, 100},
-      {JointId::LF_PIP, 0.0f, 100, 100},
-      {JointId::LF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 19.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 38.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 45.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 67.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 39.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 0.0f, 100, 100},
   };
 }
 
 // Thumb touches middle finger
-std::vector<JointCommand> MakeThumbTouchMiddle() {
+std::vector<ghand::JointCommand> MakeThumbTouchMiddle() {
   return {
-      {JointId::THUMB_PIP, 17.0f, 100, 100},
-      {JointId::THUMB_MCP, 27.0f, 100, 100},
-      {JointId::THUMB_SWING, 30.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 0.0f, 100, 100},
-      {JointId::FF_MCP, 0.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 40.0f, 100, 100},
-      {JointId::MF_MCP, 57.0f, 100, 100},
-      {JointId::RF_PIP, 0.0f, 100, 100},
-      {JointId::RF_MCP, 0.0f, 100, 100},
-      {JointId::LF_PIP, 0.0f, 100, 100},
-      {JointId::LF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 17.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 27.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 30.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 40.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 57.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 0.0f, 100, 100},
   };
 }
 
 // Thumb touches index finger
-std::vector<JointCommand> MakeThumbTouchIndex() {
+std::vector<ghand::JointCommand> MakeThumbTouchIndex() {
   return {
-      {JointId::THUMB_PIP, 13.0f, 100, 100},
-      {JointId::THUMB_MCP, 14.0f, 100, 100},
-      {JointId::THUMB_SWING, 20.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 51.0f, 100, 100},
-      {JointId::FF_MCP, 46.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 0.0f, 100, 100},
-      {JointId::MF_MCP, 0.0f, 100, 100},
-      {JointId::RF_PIP, 0.0f, 100, 100},
-      {JointId::RF_MCP, 0.0f, 100, 100},
-      {JointId::LF_PIP, 0.0f, 100, 100},
-      {JointId::LF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 13.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 14.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 51.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 46.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 0.0f, 100, 100},
   };
 }
 
 // Fist pose
-std::vector<JointCommand> MakeFist() {
+std::vector<ghand::JointCommand> MakeFist() {
   return {
-      {JointId::THUMB_PIP, 40.0f, 100, 100},
-      {JointId::THUMB_MCP, 30.0f, 100, 100},
-      {JointId::THUMB_SWING, 30.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 65.0f, 100, 100},
-      {JointId::FF_MCP, 55.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 65.0f, 100, 100},
-      {JointId::MF_MCP, 55.0f, 100, 100},
-      {JointId::RF_PIP, 65.0f, 100, 100},
-      {JointId::RF_MCP, 55.0f, 100, 100},
-      {JointId::LF_PIP, 65.0f, 100, 100},
-      {JointId::LF_MCP, 55.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 40.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 30.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 30.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 65.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 55.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 65.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 55.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 65.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 55.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 65.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 55.0f, 100, 100},
   };
 }
 
 // Open index finger
-std::vector<JointCommand> MakeOpenIndexFinger() {
+std::vector<ghand::JointCommand> MakeOpenIndexFinger() {
   return {
-      {JointId::THUMB_PIP, 30.0f, 100, 100},
-      {JointId::THUMB_MCP, 20.0f, 100, 100},
-      {JointId::THUMB_SWING, 20.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 0.0f, 100, 100},
-      {JointId::FF_MCP, 0.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 75.0f, 100, 100},
-      {JointId::MF_MCP, 70.0f, 100, 100},
-      {JointId::RF_PIP, 75.0f, 100, 100},
-      {JointId::RF_MCP, 70.0f, 100, 100},
-      {JointId::LF_PIP, 70.0f, 100, 100},
-      {JointId::LF_MCP, 70.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 30.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 75.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 70.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 75.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 70.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 70.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 70.0f, 100, 100},
   };
 }
 
 // Open middle finger
-std::vector<JointCommand> MakeOpenMiddleFinger() {
+std::vector<ghand::JointCommand> MakeOpenMiddleFinger() {
   return {
-      {JointId::THUMB_PIP, 30.0f, 100, 100},
-      {JointId::THUMB_MCP, 20.0f, 100, 100},
-      {JointId::THUMB_SWING, 20.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 0.0f, 100, 100},
-      {JointId::FF_MCP, 0.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 0.0f, 100, 100},
-      {JointId::MF_MCP, 0.0f, 100, 100},
-      {JointId::RF_PIP, 75.0f, 100, 100},
-      {JointId::RF_MCP, 70.0f, 100, 100},
-      {JointId::LF_PIP, 70.0f, 100, 100},
-      {JointId::LF_MCP, 70.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 30.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 75.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 70.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 70.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 70.0f, 100, 100},
   };
 }
 
 // Open hand pose
-std::vector<JointCommand> MakeOpenHand() {
+std::vector<ghand::JointCommand> MakeOpenHand() {
   return {
-      {JointId::THUMB_PIP, 0.0f, 100, 100},
-      {JointId::THUMB_MCP, 0.0f, 100, 100},
-      {JointId::THUMB_SWING, 20.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 0.0f, 100, 100},
-      {JointId::FF_MCP, 0.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 0.0f, 100, 100},
-      {JointId::MF_MCP, 0.0f, 100, 100},
-      {JointId::RF_PIP, 0.0f, 100, 100},
-      {JointId::RF_MCP, 0.0f, 100, 100},
-      {JointId::LF_PIP, 0.0f, 100, 100},
-      {JointId::LF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 0.0f, 100, 100},
   };
 }
 
 // OK pose
-std::vector<JointCommand> MakeOK() {
+std::vector<ghand::JointCommand> MakeOK() {
   return {
-      {JointId::THUMB_PIP, 40.0f, 100, 100},
-      {JointId::THUMB_MCP, 30.0f, 100, 100},
-      {JointId::THUMB_SWING, 30.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 30.0f, 100, 100},
-      {JointId::FF_MCP, 50.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 0.0f, 100, 100},
-      {JointId::MF_MCP, 0.0f, 100, 100},
-      {JointId::RF_PIP, 0.0f, 100, 100},
-      {JointId::RF_MCP, 0.0f, 100, 100},
-      {JointId::LF_PIP, 0.0f, 100, 100},
-      {JointId::LF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 40.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 30.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 30.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 30.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 50.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 0.0f, 100, 100},
   };
 }
 
 // ========== Action Execution Functions ==========
 
-bool HandZero(DexHand& hand) {
+bool HandZero(ghand::DexHand& hand) {
   auto joints = MakeOpenHand();
   return hand.MoveJoints(joints);
 }
 
-bool HandZero(DexHand& hand);
-
-bool ThumbTouch(DexHand& hand) {
-  const std::vector<std::vector<JointCommand>> poses = {
+bool ThumbTouch(ghand::DexHand& hand) {
+  const std::vector<std::vector<ghand::JointCommand>> poses = {
       MakeThumbTouchLittle(), MakeThumbTouchRing(), MakeThumbTouchMiddle(),
       MakeThumbTouchIndex()};
   for (const auto& pose : poses) {
@@ -205,13 +196,13 @@ bool ThumbTouch(DexHand& hand) {
   return HandZero(hand);
 }
 
-bool FistThenOpen(DexHand& hand) {
+bool FistThenOpen(ghand::DexHand& hand) {
   if (!hand.MoveJoints(MakeFist())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
   return HandZero(hand);
 }
 
-bool SeqOpenFinger(DexHand& hand) {
+bool SeqOpenFinger(ghand::DexHand& hand) {
   if (!hand.MoveJoints(MakeFist())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
   if (!hand.MoveJoints(MakeOpenIndexFinger())) return false;
@@ -221,14 +212,14 @@ bool SeqOpenFinger(DexHand& hand) {
   return HandZero(hand);
 }
 
-bool MakeOKGesture(DexHand& hand) {
+bool MakeOKGesture(ghand::DexHand& hand) {
   if (!hand.MoveJoints(MakeOK())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
   return HandZero(hand);
 }
 
 // ========== First Action Group ==========
-bool FirstAction(DexHand& hand) {
+bool FirstAction(ghand::DexHand& hand) {
   if (!ThumbTouch(hand)) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
   for (int i = 0; i < 2; i++) {
@@ -239,7 +230,7 @@ bool FirstAction(DexHand& hand) {
 }
 
 // ========== Second Action Group ==========
-bool SecondAction(DexHand& hand) {
+bool SecondAction(ghand::DexHand& hand) {
   if (!SeqOpenFinger(hand)) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
   if (!MakeOKGesture(hand)) return false;
@@ -249,7 +240,8 @@ bool SecondAction(DexHand& hand) {
 // ========== Main Function ==========
 int main() {
   std::cout << "***** 枭尧灵巧手 SDK - 手势舞功能演示 *****\n" << std::endl;
-  auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
+  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << std::endl;
     return -1;

@@ -9,21 +9,10 @@
 
 #include "ghand/ghand.h"
 
-using ghand::DexHand;
-\nusing ghand::JointCommand;
-\nusing ghand::JointId;
-\nusing ghand::ControlMode;
-\nusing ghand::HandType;
-\nusing ghand::ProductType;
-\nusing ghand::CommType;
-\nusing ghand::State;
-\nusing ghand::ToString;
-\n
-
-    /**
-     * @brief Joint parameter structure
-     */
-    struct JointParams {
+/**
+ * @brief Joint parameter structure
+ */
+struct JointParams {
   float angle;  // Angle (degrees)
   int speed;    // Speed (0-100)
   int torque;   // Torque (0-100)
@@ -66,7 +55,8 @@ void DisplaySetJoints(
     const JointParams& params = pair.second;
 
     // Get joint name
-    std::string joint_name = ToString(static_cast<JointId>(joint_id));
+    std::string joint_name =
+        ghand::ToString(static_cast<ghand::JointId>(joint_id));
 
     std::cout << std::left << std::setw(20) << joint_name << std::fixed
               << std::setprecision(1) << std::setw(10) << params.angle
@@ -147,7 +137,8 @@ int main() {
             << std::endl;
   std::cout << "========================================" << std::endl;
 
-  auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
+  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << std::endl;
     return -1;
@@ -165,22 +156,22 @@ int main() {
   std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
 
   // Display device information
-  DeviceInfo info = hand->GetDeviceInfo();
-  HandType hand_type = hand->GetHandType();
+  ghand::DeviceInfo info = hand->GetDeviceInfo();
+  ghand::HandType hand_type = hand->GetHandType();
   std::cout << "\nDevice Information:" << std::endl;
   std::cout << "  Device Name: " << info.device_name << std::endl;
   std::cout << "  Hardware Version: " << info.hardware_version << std::endl;
   std::cout << "  Software Version: " << info.software_version << std::endl;
   std::cout << "  Serial Number: " << info.serial_number << std::endl;
-  std::cout << "  Hand Type: " << ToString(hand_type) << std::endl;
+  std::cout << "  Hand Type: " << ghand::ToString(hand_type) << std::endl;
 
   // Set control mode to position mode
-  hand->SetControlMode(ControlMode::POSITION);
+  hand->SetControlMode(ghand::ControlMode::POSITION);
 
   // Register joint data callback (for reading feedback)
-  std::vector<Joint> last_joints;
+  std::vector<ghand::Joint> last_joints;
   bool joints_received = false;
-  hand->SetJointsCallback([&](const std::vector<Joint>& joints) {
+  hand->SetJointsCallback([&](const std::vector<ghand::Joint>& joints) {
     last_joints = joints;
     joints_received = true;
   });
@@ -223,7 +214,8 @@ int main() {
 
           // Get current parameters (if any)
           JointParams& params = joint_params[joint_id];
-          std::string joint_name = ToString(static_cast<JointId>(joint_id));
+          std::string joint_name =
+              ghand::ToString(static_cast<ghand::JointId>(joint_id));
 
           std::cout << "\nSetting parameters for joint " << joint_name << ":"
                     << std::endl;
@@ -244,7 +236,7 @@ int main() {
       }
 
       // Build joint command list
-      std::vector<JointCommand> joints;
+      std::vector<ghand::JointCommand> joints;
 
       if (joint_params.empty()) {
         std::cout
@@ -256,7 +248,8 @@ int main() {
           const JointParams& params = pair.second;
 
           // Use angle directly (degrees)
-          joints.push_back({static_cast<JointId>(joint_id), params.angle,
+          joints.push_back({static_cast<ghand::JointId>(joint_id),
+                            params.angle,
                             static_cast<int8_t>(params.speed),
                             static_cast<int8_t>(params.torque)});
         }
@@ -283,11 +276,13 @@ int main() {
 
           // Only display first 5 joints as example
           for (size_t i = 0; i < std::min(size_t(5), last_joints.size()); ++i) {
-            const Joint& joint = last_joints[i];
+            const ghand::Joint& joint = last_joints[i];
             // GetJoints() returns angles in degrees, no conversion needed
-            std::cout << std::left << std::setw(20) << ToString(joint.id)
-                      << std::fixed << std::setprecision(1) << std::setw(12)
-                      << joint.angle << ToString(joint.state) << std::endl;
+            std::cout << std::left << std::setw(20)
+                      << ghand::ToString(joint.id) << std::fixed
+                      << std::setprecision(1) << std::setw(12)
+                      << joint.angle << ghand::ToString(joint.state)
+                      << std::endl;
           }
           if (last_joints.size() > 5) {
             std::cout << "... (and " << (last_joints.size() - 5)

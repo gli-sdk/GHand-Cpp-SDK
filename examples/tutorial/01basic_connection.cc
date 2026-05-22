@@ -2,13 +2,9 @@
 
 #include "ghand/ghand.h"
 
-using ghand::DexHand;
-\nusing ghand::HandType;
-\nusing ghand::ProductType;
-\nusing ghand::CommType;
-\nusing ghand::ToString;
-\n int main() {
-  auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
+int main() {
+  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << std::endl;
     return -1;
@@ -22,11 +18,11 @@ using ghand::DexHand;
     std::cout << "Successfully connected to the dexterous hand!" << std::endl;
 
     // 获取手部类型
-    HandType type = hand->GetHandType();
-    std::cout << "Hand type: " << ToString(type) << std::endl;
+    ghand::HandType type = hand->GetHandType();
+    std::cout << "Hand type: " << ghand::ToString(type) << std::endl;
 
     // 获取固件版本
-    DeviceInfo device_info = hand->GetDeviceInfo();
+    ghand::DeviceInfo device_info = hand->GetDeviceInfo();
     std::string version = device_info.software_version;
     if (!version.empty()) {
       std::cout << "Firmware version: " << version << std::endl;

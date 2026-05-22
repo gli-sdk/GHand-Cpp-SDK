@@ -24,19 +24,12 @@ const int SOCKET_ERROR = -1;
 
 #include "ghand/ghand.h"
 
-using ghand::DexHand;
-\nusing ghand::JointCommand;
-\nusing ghand::JointId;
-\nusing ghand::ProductType;
-\nusing ghand::CommType;
-\n
+// ========== Data Structures ==========
 
-    // ========== Data Structures ==========
-
-    /**
-     * @brief Thumb finger data (9 sensors)
-     */
-    struct ThumbFinger {
+/**
+ * @brief Thumb finger data (9 sensors)
+ */
+struct ThumbFinger {
   float mcp_bend, mcp_sway, mcp_roll;
   float pip_bend, pip_sway, pip_roll;
   float dip_bend, dip_sway, dip_roll;
@@ -339,7 +332,8 @@ int main() {
             << "..." << std::endl;
 
   // Connect dexterous hand
-  auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
+  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << std::endl;
     closesocket(sock);
@@ -378,9 +372,9 @@ int main() {
 #endif
 
   // Register joint data callback (for displaying feedback)
-  std::vector<Joint> last_joints;
+  std::vector<ghand::Joint> last_joints;
   bool joints_received = false;
-  hand->SetJointsCallback([&](const std::vector<Joint>& joints) {
+  hand->SetJointsCallback([&](const std::vector<ghand::Joint>& joints) {
     last_joints = joints;
     joints_received = true;
   });
@@ -433,62 +427,62 @@ int main() {
           }
 
           // Use left hand data to control dexterous hand
-          std::vector<JointCommand> joints;
+          std::vector<ghand::JointCommand> joints;
           const int speed = 100;
           const int torque = 100;
 
           // Thumb joints
-          joints.push_back({JointId::THUMB_PIP,
+          joints.push_back({ghand::JointId::THUMB_PIP,
                             ClipAngle(left_hand.thumb.pip_bend, 0, 75), speed,
                             torque});
-          joints.push_back({JointId::THUMB_MCP,
+          joints.push_back({ghand::JointId::THUMB_MCP,
                             ClipAngle(left_hand.thumb.mcp_bend - 40, 0, 55),
                             speed, torque});
           joints.push_back(
-              {JointId::THUMB_SWING,
+              {ghand::JointId::THUMB_SWING,
                ClipAngle(-(left_hand.thumb.mcp_roll + left_hand.thumb.pip_roll +
                            left_hand.thumb.dip_roll) -
                              85,
                          0, 90),
                speed, torque});
-          joints.push_back({JointId::THUMB_ROTATION,
+          joints.push_back({ghand::JointId::THUMB_ROTATION,
                             ClipAngle(-left_hand.thumb.dip_sway, -30, 60),
                             speed, torque});
 
           // Index finger joints
-          joints.push_back({JointId::FF_PIP,
+          joints.push_back({ghand::JointId::FF_PIP,
                             ClipAngle(left_hand.index.pip_bend, 0, 75), speed,
                             torque});
-          joints.push_back({JointId::FF_MCP,
+          joints.push_back({ghand::JointId::FF_MCP,
                             ClipAngle(left_hand.index.mcp_bend, 0, 70), speed,
                             torque});
           joints.push_back(
-              {JointId::FF_SWING,
+              {ghand::JointId::FF_SWING,
                ClipAngle(left_hand.index.mcp_sway + left_hand.index.pip_sway,
                          -15, 15),
                speed, torque});
 
           // Middle finger joints
-          joints.push_back({JointId::MF_PIP,
+          joints.push_back({ghand::JointId::MF_PIP,
                             ClipAngle(left_hand.middle.pip_bend, 0, 75), speed,
                             torque});
-          joints.push_back({JointId::MF_MCP,
+          joints.push_back({ghand::JointId::MF_MCP,
                             ClipAngle(left_hand.middle.mcp_bend, 0, 70), speed,
                             torque});
 
           // Ring finger joints
-          joints.push_back({JointId::RF_PIP,
+          joints.push_back({ghand::JointId::RF_PIP,
                             ClipAngle(left_hand.ring.pip_bend, 0, 75), speed,
                             torque});
-          joints.push_back({JointId::RF_MCP,
+          joints.push_back({ghand::JointId::RF_MCP,
                             ClipAngle(left_hand.ring.mcp_bend, 0, 70), speed,
                             torque});
 
           // Little finger joints
-          joints.push_back({JointId::LF_PIP,
+          joints.push_back({ghand::JointId::LF_PIP,
                             ClipAngle(left_hand.pinky.pip_bend, 0, 75), speed,
                             torque});
-          joints.push_back({JointId::LF_MCP,
+          joints.push_back({ghand::JointId::LF_MCP,
                             ClipAngle(left_hand.pinky.mcp_bend, 0, 70), speed,
                             torque});
 

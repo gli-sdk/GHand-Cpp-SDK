@@ -9,26 +9,15 @@
 
 #include "ghand/ghand.h"
 
-using ghand::DexHand;
-\nusing ghand::JointCommand;
-\nusing ghand::JointId;
-\nusing ghand::ControlMode;
-\nusing ghand::HandState;
-\nusing ghand::ProductType;
-\nusing ghand::CommType;
-\nusing ghand::State;
-\nusing ghand::ToString;
-\n
+// ========== Gesture Type Definitions ==========
 
-    // ========== Gesture Type Definitions ==========
-
-    enum class GestureType {
-      OPEN_HAND,
-      FIST,
-      OK,
-      THUMBS_UP,
-      SIX_SIGN
-    };
+enum class GestureType {
+  OPEN_HAND,
+  FIST,
+  OK,
+  THUMBS_UP,
+  SIX_SIGN
+};
 
 std::string GetGestureName(GestureType gesture) {
   switch (gesture) {

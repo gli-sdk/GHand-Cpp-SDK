@@ -5,64 +5,58 @@
 
 #include "ghand/ghand.h"
 
-using ghand::DexHand;
-\nusing ghand::JointCommand;
-\nusing ghand::JointId;
-\nusing ghand::ProductType;
-\nusing ghand::CommType;
-\n
-
-    // Clap pose
-    std::vector<JointCommand> MakeClapPose() {
+// Clap pose
+std::vector<ghand::JointCommand> MakeClapPose() {
   return {
-      {JointId::THUMB_PIP, 15.0f, 100, 100},
-      {JointId::THUMB_MCP, 0.0f, 100, 100},
-      {JointId::THUMB_SWING, 30.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 15.0f, 100, 100},
-      {JointId::FF_MCP, 19.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 0.0f, 100, 100},
-      {JointId::MF_MCP, 20.0f, 100, 100},
-      {JointId::RF_PIP, 19.0f, 100, 100},
-      {JointId::RF_MCP, 0.0f, 100, 100},
-      {JointId::LF_PIP, 14.0f, 100, 100},
-      {JointId::LF_MCP, 6.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 15.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 30.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 15.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 19.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 20.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 19.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 14.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 6.0f, 100, 100},
   };
 }
 
 // Open hand pose
-std::vector<JointCommand> MakeOpenHand() {
+std::vector<ghand::JointCommand> MakeOpenHand() {
   return {
-      {JointId::THUMB_PIP, 0.0f, 100, 100},
-      {JointId::THUMB_MCP, 0.0f, 100, 100},
-      {JointId::THUMB_SWING, 20.0f, 100, 100},
-      {JointId::THUMB_ROTATION, 0.0f, 100, 100},
-      {JointId::FF_PIP, 0.0f, 100, 100},
-      {JointId::FF_MCP, 0.0f, 100, 100},
-      {JointId::FF_SWING, 0.0f, 100, 100},
-      {JointId::MF_PIP, 0.0f, 100, 100},
-      {JointId::MF_MCP, 0.0f, 100, 100},
-      {JointId::RF_PIP, 0.0f, 100, 100},
-      {JointId::RF_MCP, 0.0f, 100, 100},
-      {JointId::LF_PIP, 0.0f, 100, 100},
-      {JointId::LF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_PIP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::MF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::RF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::RF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::LF_PIP, 0.0f, 100, 100},
+      {ghand::JointId::LF_MCP, 0.0f, 100, 100},
   };
 }
 
-bool Clap(DexHand& hand) {
+bool Clap(ghand::DexHand& hand) {
   auto joints = MakeClapPose();
   return hand.MoveJoints(joints);
 }
 
-bool HandZero(DexHand& hand) {
+bool HandZero(ghand::DexHand& hand) {
   auto joints = MakeOpenHand();
   return hand.MoveJoints(joints);
 }
 
 int main() {
   std::cout << "***** 枭尧灵巧手 SDK - 拍功能演示 *****\n" << std::endl;
-  auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
+  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << std::endl;
     return -1;

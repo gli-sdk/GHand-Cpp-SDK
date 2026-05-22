@@ -11,10 +11,14 @@
 #include "logging_macros.h"
 
 #ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #include <cfgmgr32.h>
 #include <devguid.h>
+#include <ntddser.h>
 #include <setupapi.h>
-#include <windows.h>
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "cfgmgr32.lib")
 #endif

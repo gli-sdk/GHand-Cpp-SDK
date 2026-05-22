@@ -5,30 +5,21 @@
 
 #include "ghand/ghand.h"
 
-using ghand::DexHand;
-\nusing ghand::JointCommand;
-\nusing ghand::JointId;
-\nusing ghand::ControlMode;
-\nusing ghand::ProductType;
-\nusing ghand::CommType;
-\n
-
-    /**
-     * @brief Speed control demonstration
-     *
-     * This example shows how to control dexterous hand joint movements using
-     * different speed percentages. Speed parameter range: 0-100%, higher values
-     * result in faster movement.
-     */
-
-    int
-    main() {
+/**
+ * @brief Speed control demonstration
+ *
+ * This example shows how to control dexterous hand joint movements using
+ * different speed percentages. Speed parameter range: 0-100%, higher values
+ * result in faster movement.
+ */
+int main() {
   std::cout << "========================================" << std::endl;
   std::cout << "  GHand Dexterous Hand SDK - Speed Control Demo        "
             << std::endl;
   std::cout << "========================================" << std::endl;
 
-  auto hand = DexHand::Create(ProductType::G5, CommType::ETHERCAT);
+  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << std::endl;
     return -1;
@@ -46,7 +37,7 @@ using ghand::DexHand;
   std::cout << "✓ Successfully connected to dexterous hand!" << std::endl;
 
   // Set control mode to position mode
-  hand->SetControlMode(ControlMode::POSITION);
+  hand->SetControlMode(ghand::ControlMode::POSITION);
 
   // ========== Demo 1: Fist movement with different speeds ==========
   std::cout
@@ -59,34 +50,34 @@ using ghand::DexHand;
             << std::endl;
 
   // Define fist gesture
-  std::vector<JointCommand> fist_joints = {
-      {JointId::THUMB_PIP, 40.0f, 0, 50},
-      {JointId::THUMB_MCP, 30.0f, 0, 50},
-      {JointId::THUMB_SWING, 30.0f, 0, 50},
-      {JointId::THUMB_ROTATION, 4.0f, 0, 50},
-      {JointId::FF_PIP, 65.0f, 0, 50},
-      {JointId::FF_MCP, 55.0f, 0, 50},
-      {JointId::MF_PIP, 65.0f, 0, 50},
-      {JointId::MF_MCP, 55.0f, 0, 50},
-      {JointId::RF_PIP, 65.0f, 0, 50},
-      {JointId::RF_MCP, 55.0f, 0, 50},
-      {JointId::LF_PIP, 65.0f, 0, 50},
-      {JointId::LF_MCP, 55.0f, 0, 50}};
+  std::vector<ghand::JointCommand> fist_joints = {
+      {ghand::JointId::THUMB_PIP, 40.0f, 0, 50},
+      {ghand::JointId::THUMB_MCP, 30.0f, 0, 50},
+      {ghand::JointId::THUMB_SWING, 30.0f, 0, 50},
+      {ghand::JointId::THUMB_ROTATION, 4.0f, 0, 50},
+      {ghand::JointId::FF_PIP, 65.0f, 0, 50},
+      {ghand::JointId::FF_MCP, 55.0f, 0, 50},
+      {ghand::JointId::MF_PIP, 65.0f, 0, 50},
+      {ghand::JointId::MF_MCP, 55.0f, 0, 50},
+      {ghand::JointId::RF_PIP, 65.0f, 0, 50},
+      {ghand::JointId::RF_MCP, 55.0f, 0, 50},
+      {ghand::JointId::LF_PIP, 65.0f, 0, 50},
+      {ghand::JointId::LF_MCP, 55.0f, 0, 50}};
 
   // Define open hand gesture
-  std::vector<JointCommand> open_joints = {
-      {JointId::THUMB_PIP, 0.0f, 0, 50},
-      {JointId::THUMB_MCP, 0.0f, 0, 50},
-      {JointId::THUMB_SWING, 0.0f, 0, 50},
-      {JointId::THUMB_ROTATION, 0.0f, 0, 50},
-      {JointId::FF_PIP, 0.0f, 0, 50},
-      {JointId::FF_MCP, 0.0f, 0, 50},
-      {JointId::MF_PIP, 0.0f, 0, 50},
-      {JointId::MF_MCP, 0.0f, 0, 50},
-      {JointId::RF_PIP, 0.0f, 0, 50},
-      {JointId::RF_MCP, 0.0f, 0, 50},
-      {JointId::LF_PIP, 0.0f, 0, 50},
-      {JointId::LF_MCP, 0.0f, 0, 50}};
+  std::vector<ghand::JointCommand> open_joints = {
+      {ghand::JointId::THUMB_PIP, 0.0f, 0, 50},
+      {ghand::JointId::THUMB_MCP, 0.0f, 0, 50},
+      {ghand::JointId::THUMB_SWING, 0.0f, 0, 50},
+      {ghand::JointId::THUMB_ROTATION, 0.0f, 0, 50},
+      {ghand::JointId::FF_PIP, 0.0f, 0, 50},
+      {ghand::JointId::FF_MCP, 0.0f, 0, 50},
+      {ghand::JointId::MF_PIP, 0.0f, 0, 50},
+      {ghand::JointId::MF_MCP, 0.0f, 0, 50},
+      {ghand::JointId::RF_PIP, 0.0f, 0, 50},
+      {ghand::JointId::RF_MCP, 0.0f, 0, 50},
+      {ghand::JointId::LF_PIP, 0.0f, 0, 50},
+      {ghand::JointId::LF_MCP, 0.0f, 0, 50}};
 
   // Test different speed values
   std::vector<uint8_t> speed_levels = {25, 50, 75, 100};
@@ -155,24 +146,24 @@ using ghand::DexHand;
       << std::endl;
 
   // Create joint commands with each finger moving at different speeds
-  std::vector<JointCommand> wave_fist = {
+  std::vector<ghand::JointCommand> wave_fist = {
       // Thumb - fastest
-      {JointId::THUMB_PIP, 40.0f, 100, 50},
-      {JointId::THUMB_MCP, 30.0f, 100, 50},
-      {JointId::THUMB_SWING, 30.0f, 100, 50},
-      {JointId::THUMB_ROTATION, 4.0f, 100, 50},
+      {ghand::JointId::THUMB_PIP, 40.0f, 100, 50},
+      {ghand::JointId::THUMB_MCP, 30.0f, 100, 50},
+      {ghand::JointId::THUMB_SWING, 30.0f, 100, 50},
+      {ghand::JointId::THUMB_ROTATION, 4.0f, 100, 50},
       // Index finger - fast
-      {JointId::FF_PIP, 65.0f, 80, 50},
-      {JointId::FF_MCP, 55.0f, 80, 50},
+      {ghand::JointId::FF_PIP, 65.0f, 80, 50},
+      {ghand::JointId::FF_MCP, 55.0f, 80, 50},
       // Middle finger - medium
-      {JointId::MF_PIP, 65.0f, 60, 50},
-      {JointId::MF_MCP, 55.0f, 60, 50},
+      {ghand::JointId::MF_PIP, 65.0f, 60, 50},
+      {ghand::JointId::MF_MCP, 55.0f, 60, 50},
       // Ring finger - slow
-      {JointId::RF_PIP, 65.0f, 40, 50},
-      {JointId::RF_MCP, 55.0f, 40, 50},
+      {ghand::JointId::RF_PIP, 65.0f, 40, 50},
+      {ghand::JointId::RF_MCP, 55.0f, 40, 50},
       // Little finger - slowest
-      {JointId::LF_PIP, 65.0f, 20, 50},
-      {JointId::LF_MCP, 55.0f, 20, 50}};
+      {ghand::JointId::LF_PIP, 65.0f, 20, 50},
+      {ghand::JointId::LF_MCP, 55.0f, 20, 50}};
 
   std::cout << ">>> Executing wave fist (thumb fastest, little finger slowest)"
             << std::endl;

@@ -1,6 +1,6 @@
 #include "ghand/ghand.h"
 
-#include "internal/ghand.h"
+#include "internal/dexhand.h"
 
 namespace ghand {
 

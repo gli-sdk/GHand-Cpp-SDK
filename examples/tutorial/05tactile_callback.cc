@@ -7,15 +7,10 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#endif
 
-using ghand::DexHand;
-\nusing ghand::ProductType;
-\nusing ghand::CommType;
-\nusing ghand::TactileData;
-\n #endif
-
-    // 启用 ANSI 转义序列支持（Windows）
-    void EnableAnsiColors() {
+// 启用 ANSI 转义序列支持（Windows）
+void EnableAnsiColors() {
 #ifdef _WIN32
   // 设置控制台代码页为 UTF-8
   SetConsoleOutputCP(CP_UTF8);
