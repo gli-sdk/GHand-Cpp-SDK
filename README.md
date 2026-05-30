@@ -198,7 +198,7 @@ ghand-sdk-cpp/
 
 - **GLI Open Source Hub**: [GLI GitHub Organization](https://github.com/gli-sdk)
 - **Official Documentation**: [GHand Dexterous Hand Docs](https://fcnzogxju7xr.feishu.cn/docx/AhZ6ds2iCoguaAxIzBxciYHinNo)
-- **C++ SDK**: [GHand SDK C++](https://github.com/gli-sdk/ghand_sdk_cpp)
+- **Python SDK**: [GHand Python SDK](https://github.com/gli-sdk/GHand-Python-SDK)
 
 ## 📋 Changelog
 

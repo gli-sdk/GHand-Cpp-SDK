@@ -12,22 +12,16 @@ GHand SDK C++ 是GHand灵巧手的 C++ 开发包，支持 EtherCAT 、CANFD 和 
 
 ## ✨ 功能特性
 
-- 支持多种通信方式：EtherCAT、CANFD、RS485
-- 提供对5根手指每个关节的独立控制
-- 关节级控制，支持角度、速度和扭矩参数
-- 数据实时回调：支持关节数据、触觉合力和分布力数据的实时推送
-- 支持左手和右手设备
-- Windows 平台动态链接库 (DLL) 形式提供
+- 支持 EtherCAT、CANFD 和 RS485 通信
+- 5 根手指独立关节控制（位置、速度、扭矩）
+- 关节状态与触觉数据实时回调
+- 支持左手与右手设备
+- 通过设备名称匹配自动识别产品类型
+- Windows 动态链接库 (DLL) 形式提供
 
 ## 📖 官方文档
 
-完整的 API 文档请查看 [C++ SDK 开发者文档](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)，包含：
-- 完整的接口说明和参数定义
-- 详细的代码示例和使用场景
-- 常见问题解答和技术支持信息
-- 环境配置和安装流程
-
-详细的 API 签名说明请查看头文件中的注释。
+详细技术规格和 API 参考请查看：[C++ SDK 开发者文档](https://fcnzogxju7xr.feishu.cn/docx/PlY7dUod5o3tZYxzXiUc0BN1nyd)
 
 ## 📑 目录
 
@@ -202,9 +196,9 @@ ghand-sdk-cpp/
 
 ## 🌐 开源与生态资源
 
-查看 Glitech 更多开源项目和生态工具：
-
-- [GLI SDK GitHub 组织](https://github.com/gli-sdk)
+- **GLI 开源中心**：[GLI SDK GitHub 组织](https://github.com/gli-sdk)
+- **官方文档**：[GHand 灵巧手文档](https://fcnzogxju7xr.feishu.cn/docx/AhZ6ds2iCoguaAxIzBxciYHinNo)
+- **Python SDK**：[GHand Python SDK](https://github.com/gli-sdk/GHand-Python-SDK)
 
 ## 📋 更新日志
 
