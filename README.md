@@ -206,7 +206,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes.
 
 ## 📞 Support & Feedback
 
-- 📋 **Technical Support:** For project-specific issues, open an `Issues` in this repository.
+- 📋 **Technical Support:** For project-specific issues, open an `Issue` in this repository.
 - 📧 **General Inquiries:** [support@glitech.com](mailto:support@glitech.com)
 
 ## 📄 License
