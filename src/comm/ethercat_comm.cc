@@ -664,20 +664,21 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
     return false;
   }
 
-  // EtherCAT PDO requires fixed length; fill missing joints in valid_joints order
+  // EtherCAT PDO requires fixed length; fill missing joints in joint_limits order
   std::map<JointId, JointCommand> joint_map;
   for (const auto& joint : joints) {
     joint_map[joint.id] = joint;
   }
 
   std::vector<uint8_t> buffer(
-      config_.valid_joints.size() * kEthercatJointDataSize + 2, 0);
+      config_.joint_limits.size() * kEthercatJointDataSize + 2, 0);
   size_t offset = 0;
 
   buffer[offset++] = static_cast<uint8_t>(mode);
   buffer[offset++] = 0;  // stop
 
-  for (const auto& joint_id : config_.valid_joints) {
+  for (const auto& kv : config_.joint_limits) {
+    auto joint_id = kv.first;
     float angle = 0.0f;
     uint8_t velocity = 0;
     uint8_t torque = 0;
@@ -701,7 +702,7 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
 void EtherCATComm::Stop() {
   GHAND_LOG_INFO("Sending stop command");
   std::vector<uint8_t> buffer(
-      config_.valid_joints.size() * kEthercatJointDataSize + 2, 0);
+      config_.joint_limits.size() * kEthercatJointDataSize + 2, 0);
   if (buffer.size() > 1) {
     buffer[1] = 1;
   }
