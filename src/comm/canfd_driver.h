@@ -1,0 +1,73 @@
+#ifndef SRC_INTERNAL_CANFD_DRIVER_H_
+#define SRC_INTERNAL_CANFD_DRIVER_H_
+
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "canfd_protocol.h"
+
+namespace ghand {
+namespace internal {
+
+/**
+ * @brief Platform-independent CANFD driver interface
+ *
+ * Implemented by the ZLG driver (unified for Windows/Linux) or platform-specific implementations.
+ */
+class CANFDDriver {
+ public:
+  virtual ~CANFDDriver() = default;
+
+  /**
+   * @brief Open CANFD channel
+   * @param name Channel name (e.g. "can0" or "PCAN_USBBUS1")
+   * @param bitrate Arbitration segment baud rate (e.g. 1000000)
+   * @param dbitrate Data segment baud rate (e.g. 5000000)
+   * @return 0 on success, negative value on failure
+   */
+  virtual int Open(const std::string& name, uint32_t bitrate,
+                   uint32_t dbitrate) = 0;
+
+  /**
+   * @brief Close driver
+   */
+  virtual void Close() = 0;
+
+  /**
+   * @brief Send a single frame
+   * @param frame CANFD frame
+   * @return 0 on success, negative value on failure
+   */
+  virtual int Send(const canfd::Frame& frame) = 0;
+
+  /**
+   * @brief Receive a single frame (blocking)
+   * @param frame Output frame
+   * @param timeout_ms Timeout in milliseconds
+   * @return 0 on success, negative value on failure or timeout
+   */
+  virtual int Receive(canfd::Frame* frame, int timeout_ms) = 0;
+
+  /**
+   * @brief Enumerate available adapters
+   * @return Mapping of adapter name to description
+   */
+  virtual std::map<std::string, std::string> EnumerateAdapters() = 0;
+
+  /**
+   * @brief Check if the channel is open
+   */
+  virtual bool IsOpen() const = 0;
+};
+
+// Factory function: create a platform-specific CANFD driver instance
+std::unique_ptr<CANFDDriver> CreateZLGDriver();
+
+}  // namespace internal
+}  // namespace ghand
+
+#endif  // SRC_INTERNAL_CANFD_DRIVER_H_

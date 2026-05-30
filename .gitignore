@@ -1,2 +1,32 @@
+# IDE
 .vscode
-build
+.claude/
+.clang-format
+
+# 构建产物
+/build/
+/build*/
+*.dll
+*.exe
+*.obj
+*.pdb
+
+
+
+# 文档
+openspec/
+IMPLEMENTATION_COMPLETE.md
+CRITICAL_FIX.md
+LOCK_MUTEX_TEST.md
+docs/MIGRATION_GUIDE.md
+README.md
+openspec/config.yaml
+CHANGELOG.md
+openspec/specs/software-licensing/spec.md
+docs/LOGGING.md
+docs/LINUX.md
+xiaoyao-sdk-cpp/
+docs/CPP_SDK_USER_GUIDE.md
+CLAUDE.md
+tests/
+.claudeignore

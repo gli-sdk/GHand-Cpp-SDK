@@ -1,1 +1,0 @@
-#include "xiaoyao/finger.h"
