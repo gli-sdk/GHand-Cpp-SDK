@@ -179,8 +179,14 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
       continue;
     }
 
-    // Find if this joint has a command (input list only contains user-specified joints)
+    // Find if this joint has a command (input list only contains user-specified joints).
+    // For missing joints, use the minimum valid angle from joint_limits instead of 0.
     float angle = 0.0f;
+    auto limit_it = config_.joint_limits.find(id);
+    if (limit_it != config_.joint_limits.end()) {
+      angle = limit_it->second.first;
+    }
+
     uint8_t velocity = 0;
     uint8_t torque = 0;
     for (const auto& joint : joints) {
