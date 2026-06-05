@@ -163,9 +163,9 @@ class GHAND_API DexHand {
   void SetTactileDataCallback(TactileDataCallback cb);
 
   // Firmware update
-  int BootUpdate(const std::string& ifname, uint16_t slave,
-                 const std::string& filename,
-                 std::function<void(int)> progress_callback);
+  FirmwareUpdateError BootUpdate(
+      const std::string& filename,
+      std::function<void(int)> progress_callback);
 
  private:
   DexHand(ProductType product_type, CommType comm_type);

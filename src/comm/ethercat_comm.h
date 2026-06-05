@@ -131,6 +131,9 @@ class EtherCATComm : public IComm {
   static OSAL_THREAD_FUNC_RT EcatthreadWrapper(void* arg);
   static OSAL_THREAD_FUNC EcatcheckWrapper(void* arg);
 
+  // Firmware version helper
+  std::string ReadFirmwareVersion(uint8_t mcu_id);
+
   // Static helper methods
   static void add_time_ns(ec_timet* ts, int64_t addtime);
   static void ec_sync(int64_t reftime, int64_t cycletime, int64_t* offsettime);

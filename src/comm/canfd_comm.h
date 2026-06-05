@@ -51,9 +51,12 @@ class CANFDComm : public IComm {
   void SetHandStateCallback(HandStateCallback cb) override;
   void SetTactileDataCallback(TactileDataCallback cb) override;
 
-  int BootUpdate(const std::string& device_name, uint16_t slave,
+  FirmwareUpdateError BootUpdate(const std::string& device_name, uint16_t slave,
                  const std::string& filename,
                  std::function<void(int)> progress) override;
+  bool QueryFirmwareUpdateResults(uint8_t* main_result, uint8_t* pos_result,
+                                  uint8_t* tac_result,
+                                  uint8_t* motor_result) override;
 
  private:
   bool SendRecvCmd(canfd::FunctionCode fc, const uint8_t* param,

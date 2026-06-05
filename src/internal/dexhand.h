@@ -64,9 +64,10 @@ class DexHand {
   TactileData GetTactileData() const;
 
   // Firmware update
-  int BootUpdate(const std::string& ifname, uint16_t slave,
-                 const std::string& filename,
-                 std::function<void(int)> progress_callback);
+  FirmwareUpdateError BootUpdate(
+      const std::string& ifname, uint16_t slave,
+      const std::string& filename,
+      std::function<void(int)> progress_callback);
 
  private:
   bool ConnectToDevice(const std::string& device_name);

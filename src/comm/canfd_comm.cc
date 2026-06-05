@@ -295,15 +295,27 @@ void CANFDComm::SetTactileDataCallback(TactileDataCallback cb) {
 
 // ===== Firmware Update =====
 
-int CANFDComm::BootUpdate(const std::string& device_name, uint16_t slave,
-                          const std::string& filename,
-                          std::function<void(int)> progress) {
+FirmwareUpdateError CANFDComm::BootUpdate(
+    const std::string& device_name, uint16_t slave,
+    const std::string& filename,
+    std::function<void(int)> progress) {
   (void)device_name;
   (void)slave;
   (void)filename;
   (void)progress;
   GHAND_LOG_WARNING("BootUpdate not supported on CANFD in Phase 1");
-  return -1;
+  return FirmwareUpdateError::NOT_SUPPORTED;
+}
+
+bool CANFDComm::QueryFirmwareUpdateResults(uint8_t* main_result,
+                                            uint8_t* pos_result,
+                                            uint8_t* tac_result,
+                                            uint8_t* motor_result) {
+  (void)main_result;
+  (void)pos_result;
+  (void)tac_result;
+  (void)motor_result;
+  return false;
 }
 
 // ===== Internal Protocol Methods =====
