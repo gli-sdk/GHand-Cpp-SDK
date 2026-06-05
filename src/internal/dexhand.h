@@ -65,7 +65,6 @@ class DexHand {
 
   // Firmware update
   FirmwareUpdateError BootUpdate(
-      const std::string& ifname, uint16_t slave,
       const std::string& filename,
       std::function<void(int)> progress_callback);
 

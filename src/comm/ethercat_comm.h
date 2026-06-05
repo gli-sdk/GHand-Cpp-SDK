@@ -58,9 +58,12 @@ class EtherCATComm : public IComm {
   void SetHandStateCallback(HandStateCallback cb) override;
   void SetTactileDataCallback(TactileDataCallback cb) override;
 
-  int BootUpdate(const std::string& device_name, uint16_t slave,
-                 const std::string& filename,
-                 std::function<void(int)> progress) override;
+  FirmwareUpdateError BootUpdate(
+                                 const std::string& filename,
+                                 std::function<void(int)> progress) override;
+  bool QueryFirmwareUpdateResults(uint8_t* main_result, uint8_t* pos_result,
+                                  uint8_t* tac_result,
+                                  uint8_t* motor_result) override;
 
   // ===== Low-level EtherCAT API (retained for internal use) =====
   int SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,

@@ -296,11 +296,8 @@ void CANFDComm::SetTactileDataCallback(TactileDataCallback cb) {
 // ===== Firmware Update =====
 
 FirmwareUpdateError CANFDComm::BootUpdate(
-    const std::string& device_name, uint16_t slave,
     const std::string& filename,
     std::function<void(int)> progress) {
-  (void)device_name;
-  (void)slave;
   (void)filename;
   (void)progress;
   GHAND_LOG_WARNING("BootUpdate not supported on CANFD in Phase 1");

@@ -289,7 +289,7 @@ TactileData DexHand::GetTactileData() const {
   return callback_manager_->GetTactileData();
 }
 
-int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
+FirmwareUpdateError DexHand::BootUpdate(
                         const std::string& filename,
                         std::function<void(int)> progress_callback) {
   GHAND_LOG_INFO("Starting firmware update: " << filename);
@@ -298,23 +298,47 @@ int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
   const int retry_delay_ms = 1000;
   std::string last_version = comm_->GetDeviceInfo().software_version;
 
-  int ret = comm_->BootUpdate(ifname, slave, filename, progress_callback);
-  if (ret == 1) {
+  FirmwareUpdateError ret =
+      comm_->BootUpdate(filename, progress_callback);
+  if (ret == FirmwareUpdateError::SUCCESS) {
     for (int i = 0; i < retry_count; i++) {
       progress_callback(100);
       std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
       if (Connect(device_name_)) {
-        if (IsVersionNewer(last_version,
-                           comm_->GetDeviceInfo().software_version)) {
-          return 1;
-        } else {
-          return -12;
+        uint8_t main_result = 0, pos_result = 0, tac_result = 0,
+                motor_result = 0;
+        if (!comm_->QueryFirmwareUpdateResults(
+                &main_result, &pos_result, &tac_result, &motor_result)) {
+          return FirmwareUpdateError::QUERY_FAILED;
         }
+
+        GHAND_LOG_INFO("Firmware update results - main: "
+                       << static_cast<int>(main_result)
+                       << ", pos: " << static_cast<int>(pos_result)
+                       << ", tac: " << static_cast<int>(tac_result)
+                       << ", motor: " << static_cast<int>(motor_result));
+
+        if (main_result != 1)
+          return FirmwareUpdateError::MAIN_CONTROLLER_FAILED;
+        if (pos_result != 1)
+          return FirmwareUpdateError::POSITION_SENSOR_FAILED;
+        if (tac_result != 1)
+          return FirmwareUpdateError::TACTILE_SENSOR_FAILED;
+        if (motor_result != 1)
+          return FirmwareUpdateError::MOTOR_DRIVER_FAILED;
+
+        if (!IsVersionNewer(
+                last_version,
+                comm_->GetDeviceInfo().software_version)) {
+          GHAND_LOG_WARNING("Firmware version not updated after upgrade");
+        }
+
+        return FirmwareUpdateError::SUCCESS;
       }
     }
     comm_->Disconnect();
-    return -11;
+    return FirmwareUpdateError::RECONNECT_FAILED;
   } else {
     for (int i = 0; i < retry_count; i++) {
       std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
@@ -324,7 +348,7 @@ int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
       }
     }
     comm_->Disconnect();
-    return ret;
+    return FirmwareUpdateError::RECONNECT_FAILED;
   }
 }
 
