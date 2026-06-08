@@ -21,7 +21,7 @@ GHand SDK C++ 是GHand灵巧手的 C++ 开发包，支持 EtherCAT 、CANFD 和 
 
 ## 📖 官方文档
 
-详细技术规格和 API 参考请查看：[C++ SDK 开发者文档](https://fcnzogxju7xr.feishu.cn/docx/PlY7dUod5o3tZYxzXiUc0BN1nyd)
+详细技术规格和 API 参考请查看：[C++ SDK 开发者文档](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)
 
 ## 📑 目录
 
@@ -73,10 +73,12 @@ GHand SDK C++ 是GHand灵巧手的 C++ 开发包，支持 EtherCAT 、CANFD 和 
 | [nlohmann/json](https://github.com/nlohmann/json) | JSON 解析 | MIT |
 | [ZLG CAN](https://www.zlg.cn/) | CANFD 驱动（Windows） | 专有 |
 | WinPcap | 数据包捕获（Windows） | BSD |
+| [libmodbus](https://github.com/stephane/libmodbus) | Modbus RTU/RS485 支持 | LGPL-2.1 |
 
 ### 系统库（仅 Linux）
 - libpcap-dev
 - libssl-dev
+- libmodbus-dev
 - pthreads
 
 ## 📦 安装
@@ -152,6 +154,19 @@ int main() {
 }
 ```
 
+### RS485 示例
+
+```cpp
+auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                   ghand::CommType::RS485);
+auto adapters = hand->SearchAdapters();
+if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
+    auto info = hand->GetDeviceInfo();
+    printf("设备: %s\n", info.device_name.c_str());
+    hand->Disconnect();
+}
+```
+
 ## 🔨 源码编译
 
 ### Windows
@@ -165,11 +180,13 @@ cmake --build . --config Release
 .\examples\Release\basic_connection.exe
 ```
 
+> **Windows RS485 使用提示：** 如果使用 RS485 通信，请将 `libmodbus.dll` 与 `ghand.dll` 放在同一目录（或系统 `PATH` 中的目录）。当 `third_party/lib/windows/` 中存在该 DLL 时，构建系统会自动复制。
+
 ### Linux
 
 ```bash
 # 安装依赖
-sudo apt install -y cmake build-essential pkg-config libpcap-dev libssl-dev
+sudo apt install -y cmake build-essential pkg-config libpcap-dev libssl-dev libmodbus-dev
 
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release

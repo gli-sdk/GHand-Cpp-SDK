@@ -17,6 +17,7 @@
 #include "ghand/logging.h"
 #include "logging_macros.h"
 #include "product_config_loader.h"
+#include "rs485_comm.h"
 
 namespace {
 
@@ -74,6 +75,8 @@ DexHand::DexHand(ProductType product_type, CommType comm_type)
       comm_ = std::unique_ptr<CANFDComm>(new CANFDComm(config_));
       break;
     case CommType::RS485:
+      comm_ = std::unique_ptr<RS485Comm>(new RS485Comm(config_));
+      break;
     default:
       GHAND_LOG_WARNING("Unsupported communication type");
       break;
@@ -124,6 +127,9 @@ bool DexHand::ConnectToDevice(const std::string& device_name) {
             break;
           case CommType::CANFD:
             comm_.reset(new CANFDComm(config_));
+            break;
+          case CommType::RS485:
+            comm_.reset(new RS485Comm(config_));
             break;
           default:
             break;
