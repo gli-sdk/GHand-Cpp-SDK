@@ -1,6 +1,7 @@
 #include <chrono>
 #include <iostream>
 #include <map>
+#include <set>
 #include <thread>
 #include <vector>
 
@@ -11,9 +12,9 @@ int main() {
   std::cout << "  GHand Dexterous Hand SDK - Multi-Hand Control Demo\n";
   std::cout << "========================================\n";
 
-  // Search for network adapters
+  // Search for CANFD adapters
   auto temp_hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                           ghand::CommType::ETHERCAT);
+                                           ghand::CommType::CANFD);
   if (!temp_hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     return -1;
@@ -21,11 +22,11 @@ int main() {
   std::map<std::string, std::string> adapters = temp_hand->SearchAdapters();
 
   if (adapters.empty()) {
-    std::cerr << "No available network adapters found\n";
+    std::cerr << "No available CANFD adapters found\n";
     return 1;
   }
 
-  std::cout << "\nFound " << adapters.size() << " available adapters:\n";
+  std::cout << "\nFound " << adapters.size() << " available CANFD adapters:\n";
   for (const auto& adapter : adapters) {
     const std::string& name = adapter.first;
     const std::string& desc = adapter.second;
@@ -34,14 +35,21 @@ int main() {
 
   // Create multiple hand instances
   std::vector<std::unique_ptr<ghand::DexHand>> hands;
+  std::set<std::string> connected_adapter_bases;
 
   std::cout << "\nAttempting to connect devices...\n";
   for (const auto& adapter : adapters) {
     const std::string& name = adapter.first;
+    std::string adapter_base = name.substr(0, name.find(':'));
+    if (connected_adapter_bases.count(adapter_base) != 0) {
+      std::cout << "Skipping alternate channel: " << name << '\n';
+      continue;
+    }
     auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                        ghand::CommType::ETHERCAT);
+                                        ghand::CommType::CANFD);
     if (hand->Connect(name)) {
       hands.push_back(std::move(hand));
+      connected_adapter_bases.insert(adapter_base);
       std::cout << "Connected device: " << name << '\n';
     } else {
       std::cout << "Connection failed: " << name << '\n';

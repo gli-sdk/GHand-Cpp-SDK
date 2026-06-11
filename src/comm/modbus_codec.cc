@@ -55,7 +55,7 @@ uint32_t ParseSerialNumber(const uint8_t* raw_bytes, size_t len) {
 
 uint8_t ParseHandType(const uint8_t* raw_bytes, size_t len) {
     if (len < 2) return 0;
-    return raw_bytes[0];
+    return raw_bytes[1];
 }
 
 HandState ParseHandInfo(const uint16_t* raw, size_t count) {

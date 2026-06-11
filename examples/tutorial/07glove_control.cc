@@ -333,7 +333,7 @@ int main() {
 
   // Connect dexterous hand
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::ETHERCAT);
+                                      ghand::CommType::RS485);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     closesocket(sock);

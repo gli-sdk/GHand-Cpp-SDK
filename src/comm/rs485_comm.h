@@ -11,13 +11,15 @@
 #include "icomm.h"
 #include "product_config.h"
 
+
+
 #ifdef GHAND_NO_LIBMODBUS
 // Stub modbus context when libmodbus is not available
 struct modbus_t;
 #else
 // Forward declare libmodbus context
 struct modbus;
-typedef struct modbus modbus_t;
+typedef struct _modbus modbus_t;
 #endif
 
 namespace ghand {
@@ -67,6 +69,7 @@ class RS485Comm : public IComm {
 
  private:
   bool WriteTactileControl(uint16_t command);
+  bool HasCallbacks();
   void EnsurePollStarted();
   void StopPoll();
   void PollLoop();
@@ -91,6 +94,7 @@ class RS485Comm : public IComm {
   HandStateCallback hand_state_cb_;
   TactileDataCallback tactile_cb_;
   std::mutex cb_mutex_;
+  std::mutex io_mutex_;
 };
 
 }  // namespace internal

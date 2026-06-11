@@ -298,6 +298,12 @@ int CANFDComm::Connect(const std::string& device_name) {
     return -2;
   }
 
+  for (uint8_t dst : {0x31, 0x32}) {
+    uint8_t data[] = {0x00, 0x30, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00};
+    uint32_t can_id = PackArbitration(src_id_, dst, 0, 0x05, 1, 1, 0, 0);
+    SendFrame(can_id, data, sizeof(data));
+  }
+
   connected_.store(true);
 
   // Node ID detection (optional, currently skipped as in Python)
@@ -323,6 +329,12 @@ int CANFDComm::Disconnect() {
   GHAND_LOG_INFO("CANFD disconnecting");
 
   StopPoll();
+  {
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    joints_poll_enabled_ = false;
+    hand_state_poll_enabled_ = false;
+    tactile_poll_enabled_ = false;
+  }
 
   if (connected_.load()) {
     DeleteConnection();
@@ -441,9 +453,35 @@ bool CANFDComm::WriteTactileControl(uint16_t command) {
   return WriteSingleRegister(0x002B, command);
 }
 
-bool CANFDComm::OpenTactile() { return WriteTactileControl(0x0100); }
+bool CANFDComm::OpenTactile() {
+  if (!WriteTactileControl(0x0100)) return false;
 
-bool CANFDComm::CloseTactile() { return WriteTactileControl(0x0200); }
+  bool should_start = false;
+  {
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    tactile_poll_enabled_ = static_cast<bool>(tactile_cb_);
+    should_start = tactile_poll_enabled_;
+  }
+  if (should_start) {
+    EnsurePollStarted();
+  }
+  return true;
+}
+
+bool CANFDComm::CloseTactile() {
+  bool ok = WriteTactileControl(0x0200);
+  bool should_stop = false;
+  {
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    tactile_poll_enabled_ = false;
+    should_stop = !joints_poll_enabled_ && !hand_state_poll_enabled_ &&
+                  !tactile_poll_enabled_;
+  }
+  if (should_stop) {
+    StopPoll();
+  }
+  return ok;
+}
 
 bool CANFDComm::ZeroTactile() { return WriteTactileControl(0x0400); }
 
@@ -529,32 +567,63 @@ TactileData CANFDComm::GetTactileData() {
 // ===== Callbacks =====
 
 void CANFDComm::SetJointsCallback(JointsCallback cb) {
+  bool should_start = false;
+  bool should_stop = false;
   {
     std::lock_guard<std::mutex> lock(cb_mutex_);
     joints_cb_ = cb;
+    if (connected_.load()) {
+      joints_poll_enabled_ = static_cast<bool>(cb);
+    }
+    should_start = joints_poll_enabled_ && connected_.load();
+    should_stop = !joints_poll_enabled_ && !hand_state_poll_enabled_ &&
+                  !tactile_poll_enabled_;
   }
-  if (cb && IsConnected()) {
+  if (should_start) {
     EnsurePollStarted();
-  } else if (!cb && !hand_state_cb_) {
+  } else if (should_stop) {
     StopPoll();
   }
 }
 
 void CANFDComm::SetHandStateCallback(HandStateCallback cb) {
+  bool should_start = false;
+  bool should_stop = false;
   {
     std::lock_guard<std::mutex> lock(cb_mutex_);
     hand_state_cb_ = cb;
+    if (connected_.load()) {
+      hand_state_poll_enabled_ = static_cast<bool>(cb);
+    }
+    should_start = hand_state_poll_enabled_ && connected_.load();
+    should_stop = !joints_poll_enabled_ && !hand_state_poll_enabled_ &&
+                  !tactile_poll_enabled_;
   }
-  if (cb && IsConnected()) {
+  if (should_start) {
     EnsurePollStarted();
-  } else if (!cb && !joints_cb_) {
+  } else if (should_stop) {
     StopPoll();
   }
 }
 
 void CANFDComm::SetTactileDataCallback(TactileDataCallback cb) {
-  std::lock_guard<std::mutex> lock(cb_mutex_);
-  tactile_cb_ = cb;
+  bool should_start = false;
+  bool should_stop = false;
+  {
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    tactile_cb_ = cb;
+    if (connected_.load()) {
+      tactile_poll_enabled_ = static_cast<bool>(cb);
+    }
+    should_start = tactile_poll_enabled_ && connected_.load();
+    should_stop = !joints_poll_enabled_ && !hand_state_poll_enabled_ &&
+                  !tactile_poll_enabled_;
+  }
+  if (should_start) {
+    EnsurePollStarted();
+  } else if (should_stop) {
+    StopPoll();
+  }
 }
 
 // ===== Firmware Update =====
@@ -595,24 +664,63 @@ void CANFDComm::StopPoll() {
 }
 
 void CANFDComm::PollLoop() {
+  auto last_tactile_time = std::chrono::steady_clock::time_point{};
+
   while (!poll_stop_.load()) {
     if (!connected_.load()) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       continue;
     }
 
-    if (config_.valid_joints.empty()) {
+    JointsCallback joints_cb;
+    HandStateCallback hand_state_cb;
+    TactileDataCallback tactile_cb;
+    bool joints_poll_enabled = false;
+    bool hand_state_poll_enabled = false;
+    bool tactile_poll_enabled = false;
+    {
+      std::lock_guard<std::mutex> lock(cb_mutex_);
+      joints_cb = joints_cb_;
+      hand_state_cb = hand_state_cb_;
+      tactile_cb = tactile_cb_;
+      joints_poll_enabled = joints_poll_enabled_;
+      hand_state_poll_enabled = hand_state_poll_enabled_;
+      tactile_poll_enabled = tactile_poll_enabled_;
+    }
+
+    if ((!joints_poll_enabled || !joints_cb) &&
+        (!hand_state_poll_enabled || !hand_state_cb) &&
+        (!tactile_poll_enabled || !tactile_cb)) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       continue;
     }
 
     try {
-      auto joints = GetJoints();
-      auto hand_state = GetHandInfo();
+      std::vector<Joint> joints;
+      HandState hand_state;
+      TactileData tactile_data;
+      bool has_tactile_data = false;
 
-      std::lock_guard<std::mutex> lock(cb_mutex_);
-      if (joints_cb_) joints_cb_(joints);
-      if (hand_state_cb_) hand_state_cb_(hand_state);
+      if (joints_poll_enabled && joints_cb && !config_.valid_joints.empty()) {
+        joints = GetJoints();
+      }
+      if (hand_state_poll_enabled && hand_state_cb) {
+        hand_state = GetHandInfo();
+      }
+      auto now = std::chrono::steady_clock::now();
+      if (tactile_poll_enabled && tactile_cb &&
+          (last_tactile_time.time_since_epoch().count() == 0 ||
+           now - last_tactile_time >= std::chrono::milliseconds(100))) {
+        tactile_data = GetTactileData();
+        has_tactile_data = true;
+        last_tactile_time = now;
+      }
+
+      if (joints_poll_enabled && joints_cb) joints_cb(joints);
+      if (hand_state_poll_enabled && hand_state_cb) hand_state_cb(hand_state);
+      if (tactile_poll_enabled && tactile_cb && has_tactile_data) {
+        tactile_cb(tactile_data);
+      }
     } catch (...) {
       GHAND_LOG_ERROR("CANFD poll loop error");
     }

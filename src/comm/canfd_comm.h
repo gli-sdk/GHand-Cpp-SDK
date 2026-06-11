@@ -106,6 +106,9 @@ class CANFDComm : public IComm {
   JointsCallback joints_cb_;
   HandStateCallback hand_state_cb_;
   TactileDataCallback tactile_cb_;
+  bool joints_poll_enabled_ = false;
+  bool hand_state_poll_enabled_ = false;
+  bool tactile_poll_enabled_ = false;
   std::mutex cb_mutex_;
 };
 

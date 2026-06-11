@@ -275,7 +275,9 @@ add_custom_command(TARGET ghand POST_BUILD
 add_subdirectory(examples)
 
 # ========== Tests ==========
-add_subdirectory(tests)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
+    add_subdirectory(tests)
+endif()
 
 # ========== Install rules ==========
 install(TARGETS ghand

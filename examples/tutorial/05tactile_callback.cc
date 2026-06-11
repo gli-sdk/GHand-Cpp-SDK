@@ -32,7 +32,7 @@ int main() {
   EnableAnsiColors();
 
   auto hand =
-      ghand::DexHand::Create(ghand::ProductType::G5, ghand::CommType::ETHERCAT);
+      ghand::DexHand::Create(ghand::ProductType::G5, ghand::CommType::CANFD);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     return -1;
@@ -84,8 +84,8 @@ int main() {
     std::cout << std::flush;  // ensure immediate output
   });
 
-  // Try to connect to the dexterous hand via EtherCAT
-  std::cout << "Connecting to dexterous hand via EtherCAT..." << '\n';
+  // Try to connect to the dexterous hand via CANFD
+  std::cout << "Connecting to dexterous hand via CANFD..." << '\n';
   bool success = hand->AutoConnect();
 
   if (success) {

@@ -271,10 +271,44 @@ class ZLGDriver : public CANFDDriver {
       std::string prefix = name.substr(0, 3);
       std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::toupper);
       if (prefix == "COM") {
+        std::string com_name = name;
+        size_t colon_pos = name.find(':');
+        if (colon_pos != std::string::npos) {
+          com_name = name.substr(0, colon_pos);
+          std::string suffix = name.substr(colon_pos + 1);
+          std::istringstream suffix_stream(suffix);
+          std::string item;
+          std::vector<std::string> suffix_parts;
+          while (std::getline(suffix_stream, item, ':')) {
+            suffix_parts.push_back(item);
+          }
+          if (!suffix_parts.empty()) {
+            try {
+              can_index = std::stoi(suffix_parts[0]);
+            } catch (...) {
+            }
+          }
+          if (suffix_parts.size() >= 2) {
+            try {
+              abit_sample_point = std::stoi(suffix_parts[1]);
+            } catch (...) {
+            }
+          }
+          if (suffix_parts.size() >= 3) {
+            try {
+              dbit_sample_point = std::stoi(suffix_parts[2]);
+            } catch (...) {
+            }
+          }
+        }
+
         int resolved_type = 0, resolved_index = 0;
-        if (ResolveComPortToZLGDevice(name, &resolved_type, &resolved_index)) {
+        if (ResolveComPortToZLGDevice(com_name, &resolved_type, &resolved_index)) {
           resolved_name = std::to_string(resolved_type) + ":" +
-                          std::to_string(resolved_index) + ":0";
+                          std::to_string(resolved_index) + ":" +
+                          std::to_string(can_index) + ":" +
+                          std::to_string(abit_sample_point) + ":" +
+                          std::to_string(dbit_sample_point);
           GHAND_LOG_INFO("Resolved " << name << " to ZLG device " << resolved_name);
         } else {
           GHAND_LOG_ERROR("Failed to resolve COM port: " << name);
@@ -377,11 +411,11 @@ class ZLGDriver : public CANFDDriver {
 
       // 4. Set terminal resistance (non-blocking, log only on failure)
       std::string res_path = ch_str + "/initenal_resistance";
-      if (1 != prop->SetValue(res_path.c_str(), "0")) {
+      if (1 != prop->SetValue(res_path.c_str(), "1")) {
         GHAND_LOG_WARNING("Failed to set initenal_resistance for channel "
                     << can_index << ", try internal_resistance");
         res_path = ch_str + "/internal_resistance";
-        if (1 != prop->SetValue(res_path.c_str(), "0")) {
+        if (1 != prop->SetValue(res_path.c_str(), "1")) {
           GHAND_LOG_WARNING("Failed to set internal_resistance for channel "
                       << can_index);
         }
@@ -499,7 +533,8 @@ class ZLGDriver : public CANFDDriver {
       if (!IsZLGVID(port.vid)) continue;
       std::string desc = "ZLG CANFD";
       desc += " (" + port.port_name + ")";
-      adapters[port.port_name] = desc;
+      adapters[port.port_name + ":0"] = desc + " Ch0";
+      adapters[port.port_name + ":1"] = desc + " Ch1";
     }
     if (!adapters.empty()) {
       return adapters;
