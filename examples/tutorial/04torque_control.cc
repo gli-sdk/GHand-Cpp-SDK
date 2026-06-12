@@ -1,60 +1,39 @@
 #include <chrono>
 #include <iostream>
+#include <memory>
 #include <thread>
 #include <vector>
 
 #include "ghand/ghand.h"
 
-/**
- * @brief Torque control demonstration
- *
- * This example shows how to control dexterous hand joint movements using
- * different torque percentages. Torque parameter range: 0-100%, higher
- * values produce higher output torque.
- *
- * Note:
- * - Torque control affects the gripping force of fingers
- * - Lower torque is suitable for gentle operations
- * - Higher torque is suitable for operations requiring more force
- */
-int main() {
+void PrintHeader() {
   std::cout << "========================================" << '\n';
   std::cout << "  GHand Dexterous Hand SDK - Torque Control Demo        "
             << '\n';
   std::cout << "========================================" << '\n';
+}
 
+std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
                                       ghand::CommType::CANFD);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
-    return -1;
+    return nullptr;
   }
 
-  // Connect device
   std::cout << "\nConnecting to dexterous hand via CANFD..." << '\n';
-  bool success = hand->AutoConnect();
-
-  if (!success) {
+  if (!hand->AutoConnect()) {
     std::cerr << "Error: Unable to connect to dexterous hand!" << '\n';
-    return 1;
+    return nullptr;
   }
 
-  std::cout << "✓ Successfully connected to dexterous hand!" << '\n';
-
-  // Set control mode to position mode
+  std::cout << "OK Successfully connected to dexterous hand!" << '\n';
   hand->SetControlMode(ghand::ControlMode::POSITION);
+  return hand;
+}
 
-  // ========== Demo 1: Fist movement with different torque levels ==========
-  std::cout << "\n========== Demo 1: Fist movement with different torque "
-               "levels =========="
-            << '\n';
-  std::cout << "Demonstrating fist movements at 20%, 40%, 60%, 80%, 100% torque"
-            << '\n';
-  std::cout << "Observe the force differences at different torque levels\n"
-            << '\n';
-
-  // Define fist gesture
-  std::vector<ghand::JointCommand> fist_joints = {
+std::vector<ghand::JointCommand> MakeFistJoints() {
+  return {
       {ghand::JointId::THUMB_PIP, 40.0f, 50, 0},
       {ghand::JointId::THUMB_MCP, 30.0f, 50, 0},
       {ghand::JointId::THUMB_SWING, 30.0f, 50, 0},
@@ -67,9 +46,10 @@ int main() {
       {ghand::JointId::RF_MCP, 55.0f, 50, 0},
       {ghand::JointId::LF_PIP, 65.0f, 50, 0},
       {ghand::JointId::LF_MCP, 55.0f, 50, 0}};
+}
 
-  // Define open hand gesture
-  std::vector<ghand::JointCommand> open_joints = {
+std::vector<ghand::JointCommand> MakeOpenJoints() {
+  return {
       {ghand::JointId::THUMB_PIP, 0.0f, 50, 0},
       {ghand::JointId::THUMB_MCP, 0.0f, 50, 0},
       {ghand::JointId::THUMB_SWING, 0.0f, 50, 0},
@@ -82,45 +62,45 @@ int main() {
       {ghand::JointId::RF_MCP, 0.0f, 50, 0},
       {ghand::JointId::LF_PIP, 0.0f, 50, 0},
       {ghand::JointId::LF_MCP, 0.0f, 50, 0}};
+}
 
-  // Test different torque values
+void SetTorque(std::vector<ghand::JointCommand>* joints, uint8_t torque) {
+  for (auto& joint : *joints) {
+    joint.torque = torque;
+  }
+}
+
+void RunTorqueLevelDemo(ghand::DexHand& hand) {
+  std::cout << "\n========== Demo 1: Fist movement with different torque "
+               "levels =========="
+            << '\n';
+  std::cout << "Demonstrating fist movements at 20%, 40%, 60%, "
+               "80%, 100% torque"
+            << '\n';
+  std::cout << "Observe the force differences at different torque levels\n"
+            << '\n';
+
+  std::vector<ghand::JointCommand> fist_joints = MakeFistJoints();
+  std::vector<ghand::JointCommand> open_joints = MakeOpenJoints();
   std::vector<uint8_t> torque_levels = {20, 40, 60, 80, 100};
-
   for (uint8_t torque : torque_levels) {
     std::cout << ">>> Executing fist, torque: " << static_cast<int>(torque)
               << "%" << '\n';
-
-    // Set torque and execute fist
-    for (auto& joint : fist_joints) {
-      joint.torque = torque;
-    }
-    hand->MoveJoints(fist_joints);
-
-    // Wait for movement completion
+    SetTorque(&fist_joints, torque);
+    hand.MoveJoints(fist_joints);
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-    std::cout << ">>> Opening hand, torque: " << static_cast<int>(torque) << "%"
-              << '\n';
-
-    // Set torque and open hand
-    for (auto& joint : open_joints) {
-      joint.torque = torque;
-    }
-    hand->MoveJoints(open_joints);
-
+    std::cout << ">>> Opening hand, torque: " << static_cast<int>(torque)
+              << "%" << '\n';
+    SetTorque(&open_joints, torque);
+    hand.MoveJoints(open_joints);
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     std::cout << '\n';
   }
+}
 
-  // ========== Demo 2: Torque control for OK gesture ==========
-  std::cout << "\n========== Demo 2: Torque control for OK gesture =========="
-            << '\n';
-  std::cout << "Executing OK gesture with different torque to simulate gentle "
-               "and firm pinching\n"
-            << '\n';
-
-  // Define OK gesture
-  std::vector<ghand::JointCommand> ok_joints = {
+std::vector<ghand::JointCommand> MakeOkJoints() {
+  return {
       {ghand::JointId::THUMB_PIP, 40.0f, 50, 0},
       {ghand::JointId::THUMB_MCP, 30.0f, 50, 0},
       {ghand::JointId::THUMB_SWING, 30.0f, 50, 0},
@@ -134,32 +114,51 @@ int main() {
       {ghand::JointId::RF_MCP, 0.0f, 50, 0},
       {ghand::JointId::LF_PIP, 0.0f, 50, 0},
       {ghand::JointId::LF_MCP, 0.0f, 50, 0}};
+}
 
-  // Gentle pinch
+void RunOkTorqueDemo(ghand::DexHand& hand) {
+  std::cout << "\n========== Demo 2: Torque control for OK gesture =========="
+            << '\n';
+  std::cout << "Executing OK gesture with different torque to simulate gentle "
+               "and firm pinching\n"
+            << '\n';
+
+  std::vector<ghand::JointCommand> ok_joints = MakeOkJoints();
   std::cout << ">>> Gentle pinch (30% torque)" << '\n';
-  for (auto& joint : ok_joints) {
-    joint.torque = 30;
-  }
-  hand->MoveJoints(ok_joints);
+  SetTorque(&ok_joints, 30);
+  hand.MoveJoints(ok_joints);
   std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-  // Open hand
-  hand->MoveJoints(open_joints);
+  hand.MoveJoints(MakeOpenJoints());
   std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
-  // Firm pinch
   std::cout << ">>> Firm pinch (80% torque)" << '\n';
-  for (auto& joint : ok_joints) {
-    joint.torque = 80;
-  }
-  hand->MoveJoints(ok_joints);
+  SetTorque(&ok_joints, 80);
+  hand.MoveJoints(ok_joints);
   std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-  // Open hand
-  hand->MoveJoints(open_joints);
+  hand.MoveJoints(MakeOpenJoints());
   std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+}
 
-  // ========== Demo 3: Different torque for different fingers ==========
+std::vector<ghand::JointCommand> MakePinchGrip() {
+  return {
+      {ghand::JointId::THUMB_PIP, 40.0f, 50, 90},
+      {ghand::JointId::THUMB_MCP, 30.0f, 50, 90},
+      {ghand::JointId::THUMB_SWING, 30.0f, 50, 90},
+      {ghand::JointId::THUMB_ROTATION, 4.0f, 50, 90},
+      {ghand::JointId::FF_PIP, 65.0f, 50, 90},
+      {ghand::JointId::FF_MCP, 55.0f, 50, 90},
+      {ghand::JointId::FF_SWING, 0.0f, 50, 90},
+      {ghand::JointId::MF_PIP, 65.0f, 50, 50},
+      {ghand::JointId::MF_MCP, 55.0f, 50, 50},
+      {ghand::JointId::RF_PIP, 65.0f, 50, 30},
+      {ghand::JointId::RF_MCP, 55.0f, 50, 30},
+      {ghand::JointId::LF_PIP, 65.0f, 50, 30},
+      {ghand::JointId::LF_MCP, 55.0f, 50, 30}};
+}
+
+void RunFingerTorqueDemo(ghand::DexHand& hand) {
   std::cout << "\n========== Demo 3: Different torque for different fingers "
                "=========="
             << '\n';
@@ -167,67 +166,40 @@ int main() {
                "grasping scenarios\n"
             << '\n';
 
-  // Simulate grasping object: thumb and index finger with high torque, other
-  // fingers relaxed
-  std::vector<ghand::JointCommand> pinch_grip = {
-      // Thumb - high torque (mainly for grasping)
-      {ghand::JointId::THUMB_PIP, 40.0f, 50, 90},
-      {ghand::JointId::THUMB_MCP, 30.0f, 50, 90},
-      {ghand::JointId::THUMB_SWING, 30.0f, 50, 90},
-      {ghand::JointId::THUMB_ROTATION, 4.0f, 50, 90},
-      // Index finger - high torque (mainly for grasping)
-      {ghand::JointId::FF_PIP, 65.0f, 50, 90},
-      {ghand::JointId::FF_MCP, 55.0f, 50, 90},
-      {ghand::JointId::FF_SWING, 0.0f, 50, 90},
-      // Middle finger - medium torque (auxiliary support)
-      {ghand::JointId::MF_PIP, 65.0f, 50, 50},
-      {ghand::JointId::MF_MCP, 55.0f, 50, 50},
-      // Ring and little fingers - low torque (relaxed)
-      {ghand::JointId::RF_PIP, 65.0f, 50, 30},
-      {ghand::JointId::RF_MCP, 55.0f, 50, 30},
-      {ghand::JointId::LF_PIP, 65.0f, 50, 30},
-      {ghand::JointId::LF_MCP, 55.0f, 50, 30}};
-
   std::cout << ">>> Executing two-finger pinch (thumb and index finger at 90% "
-               "torque, other "
-               "fingers at 30-50% torque)"
+               "torque, other fingers at 30-50% torque)"
             << '\n';
-  hand->MoveJoints(pinch_grip);
+  hand.MoveJoints(MakePinchGrip());
   std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
   std::cout << ">>> Opening hand" << '\n';
-  hand->MoveJoints(open_joints);
+  hand.MoveJoints(MakeOpenJoints());
   std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+}
 
-  // ========== Demo 4: Gradual torque control ==========
+void RunGradualTorqueDemo(ghand::DexHand& hand) {
   std::cout << "\n========== Demo 4: Gradual torque control =========="
             << '\n';
-  std::cout << "Gradually increasing from 10% to 100%, observe torque changes\n"
+  std::cout << "Gradually increasing from 10% to 100%, observe torque "
+               "changes\n"
             << '\n';
 
-  for (int i = 1; i <= 10; i++) {
-    uint8_t torque = i * 10;
+  std::vector<ghand::JointCommand> fist_joints = MakeFistJoints();
+  std::vector<ghand::JointCommand> open_joints = MakeOpenJoints();
+  for (int i = 1; i <= 10; ++i) {
+    uint8_t torque = static_cast<uint8_t>(i * 10);
     std::cout << ">>> Torque: " << static_cast<int>(torque) << "%" << '\n';
-
-    // Set torque
-    for (auto& joint : fist_joints) {
-      joint.torque = torque;
-    }
-    hand->MoveJoints(fist_joints);
-
-    // Wait
+    SetTorque(&fist_joints, torque);
+    hand.MoveJoints(fist_joints);
     std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
-    // Open hand
-    for (auto& joint : open_joints) {
-      joint.torque = torque;
-    }
-    hand->MoveJoints(open_joints);
-
+    SetTorque(&open_joints, torque);
+    hand.MoveJoints(open_joints);
     std::this_thread::sleep_for(std::chrono::milliseconds(800));
   }
+}
 
-  // ========== Demo completed ==========
+void PrintSummary() {
   std::cout << "\n========== Torque control demo completed =========="
             << '\n';
   std::cout << "Key points:" << '\n';
@@ -242,15 +214,25 @@ int main() {
                "more force"
             << '\n';
   std::cout << "5. Each joint can be set with individual torque" << '\n';
-  std::cout
-      << "6. Different torque combinations can simulate real grasping scenarios"
-      << '\n';
+  std::cout << "6. Different torque combinations can simulate real grasping "
+               "scenarios"
+            << '\n';
+}
 
-  // Disconnect
+int main() {
+  PrintHeader();
+  auto hand = CreateConnectedHand();
+  if (!hand) return 1;
+
+  RunTorqueLevelDemo(*hand);
+  RunOkTorqueDemo(*hand);
+  RunFingerTorqueDemo(*hand);
+  RunGradualTorqueDemo(*hand);
+  PrintSummary();
+
   std::cout << "\nDisconnecting..." << '\n';
   hand->Disconnect();
-  std::cout << "✓ Disconnected" << '\n';
-
+  std::cout << "OK Disconnected" << '\n';
   std::cout << "\nDemo completed. Thank you for using!" << '\n';
   return 0;
 }

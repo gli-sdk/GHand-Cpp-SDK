@@ -1,8 +1,11 @@
 #ifndef SRC_INTERNAL_MODBUS_CODEC_H_
 #define SRC_INTERNAL_MODBUS_CODEC_H_
 
+#include <cstddef>
 #include <cstdint>
+#include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ghand/types.h"

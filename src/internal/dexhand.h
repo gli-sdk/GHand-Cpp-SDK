@@ -20,13 +20,20 @@ class DexHandCallbackManager;
 /**
  * @brief DexHand internal implementation class
  *
- * This class contains all implementation details of DexHand, separated from the public API via the Pimpl idiom.
- * User code should not access this class directly; it is intended for SDK internal use only.
+ * This class contains all implementation details of DexHand, separated from
+ * the public API via the Pimpl idiom.
+ * User code should not access this class directly; it is intended for SDK
+ * internal use only.
  */
 class DexHand {
  public:
   explicit DexHand(ProductType product_type, CommType comm_type);
   ~DexHand();
+
+  DexHand(const DexHand&) = delete;
+  DexHand& operator=(const DexHand&) = delete;
+  DexHand(DexHand&&) = delete;
+  DexHand& operator=(DexHand&&) = delete;
 
   bool IsValid() const { return comm_ != nullptr; }
 

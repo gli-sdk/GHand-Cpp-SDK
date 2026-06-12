@@ -1,5 +1,6 @@
 #include <chrono>
 #include <iostream>
+#include <memory>
 #include <thread>
 #include <vector>
 
@@ -135,22 +136,22 @@ bool HandZero(ghand::DexHand& hand) {
   return hand.MoveJoints(joints);
 }
 
-int main() {
-  std::cout << "***** Xiaoyao Dexterous Hand SDK - Press Demo *****\n" << '\n';
+std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::ETHERCAT);
+                                      ghand::CommType::CANFD);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
-    return -1;
+    return nullptr;
   }
-  bool connected = hand->Connect("auto");
-  if (!connected) {
+  if (!hand->Connect("auto")) {
     std::cout << "\n[Scan complete] Failed to connect to dexterous hand."
               << '\n';
-    return 1;
+    return nullptr;
   }
-  std::cout << "\n--- Device ready, starting press demo ---\n" << '\n';
+  return hand;
+}
 
+void RunPressDemo(ghand::DexHand& hand) {
   int gesture_cycle = 0;
   const int max_cycles = 0;
 
@@ -161,15 +162,15 @@ int main() {
     std::cout << "\n--- Round " << gesture_cycle << " demo started ---"
               << '\n';
 
-    if (!Press(*hand)) {
-      std::cout << "Round " << gesture_cycle << " press action execution failed"
-                << '\n';
+    if (!Press(hand)) {
+      std::cout << "Round " << gesture_cycle
+                << " press action execution failed" << '\n';
       break;
     }
 
-    if (!HandZero(*hand)) {
-      std::cout << "Round " << gesture_cycle << " reset action execution failed"
-                << '\n';
+    if (!HandZero(hand)) {
+      std::cout << "Round " << gesture_cycle
+                << " reset action execution failed" << '\n';
       break;
     }
     std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -181,7 +182,15 @@ int main() {
       std::cout << "Press Ctrl+C to stop demo and exit\n" << '\n';
     }
   }
+}
 
+int main() {
+  std::cout << "***** Xiaoyao Dexterous Hand SDK - Press Demo *****\n" << '\n';
+  auto hand = CreateConnectedHand();
+  if (!hand) return 1;
+
+  std::cout << "\n--- Device ready, starting press demo ---\n" << '\n';
+  RunPressDemo(*hand);
   hand->Disconnect();
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   std::cout << "\n--- Demo finished, disconnecting ---" << '\n';

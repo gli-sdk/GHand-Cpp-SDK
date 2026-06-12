@@ -1,14 +1,4 @@
-#include <algorithm>
-#include <cstring>
-#include <iomanip>
-#include <map>
-#include <sstream>
-#include <string>
-#include <vector>
-
 #include "canfd_driver.h"
-#include "ghand/logging.h"
-#include "logging_macros.h"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -26,42 +16,71 @@
 #pragma comment(lib, "cfgmgr32.lib")
 #endif
 
+#include <algorithm>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
+#include <iomanip>
+#include <limits>
+#include <map>
+#include <sstream>
+#include <string>
+#include <vector>
+
 // ZLG CAN secondary development library header
 #include "zlgcan.h"
 
-// Use the compile-time generated zlgcan_device_types.inc to build a macro-name-to-value map,
-// eliminating the need to manually maintain mapping relationships in code.
+#include "ghand/logging.h"
+#include "logging_macros.h"
+
 static const std::map<std::string, int>& GetZLGDeviceTypeMap() {
-  static const std::map<std::string, int> kMap = [] {
-    std::map<std::string, int> m;
-#define GHAND_ZLG_MAP_ENTRY(name) m[#name] = name;
+  static const std::map<std::string, int> kMap = {
 #include "zlgcan_device_types.inc"
-#undef GHAND_ZLG_MAP_ENTRY
-    return m;
-  }();
+  };
   return kMap;
 }
 
 // Known ZLG CANFD device type list
 static const int kCommonZLGDeviceTypes[] = {
-    ZCAN_USBCANFD_100U,      ZCAN_USBCANFD_200U,        ZCAN_USBCANFD_400U,
-    ZCAN_USBCANFD_MINI,      ZCAN_USBCANFD_800U,        ZCAN_PCIE_CANFD_100U,
-    ZCAN_PCIE_CANFD_200U,    ZCAN_PCIE_CANFD_400U,      ZCAN_PCIE_CANFD_100U_EX,
-    ZCAN_PCIE_CANFD_400U_EX, ZCAN_PCIE_CANFD_200U_MINI, ZCAN_PCIE_CANFD_200U_M2,
+    ZCAN_USBCANFD_100U,
+    ZCAN_USBCANFD_200U,
+    ZCAN_USBCANFD_400U,
+    ZCAN_USBCANFD_MINI,
+    ZCAN_USBCANFD_800U,
+    ZCAN_PCIE_CANFD_100U,
+    ZCAN_PCIE_CANFD_200U,
+    ZCAN_PCIE_CANFD_400U,
+    ZCAN_PCIE_CANFD_100U_EX,
+    ZCAN_PCIE_CANFD_400U_EX,
+    ZCAN_PCIE_CANFD_200U_MINI,
+    ZCAN_PCIE_CANFD_200U_M2,
     ZCAN_CANFDCOM_100IE,
 };
 
 namespace ghand {
 namespace internal {
 
+namespace {
+
+std::string ByteArrayString(const BYTE* data, size_t size) {
+  std::string result;
+  for (size_t i = 0; i < size && data[i] != 0; ++i) {
+    result.push_back(static_cast<char>(data[i]));
+  }
+  return result;
+}
+
+}  // namespace
+
 /**
  * @brief ZLG CANFD driver implementation
  *
- * Wraps the ZLG zlgcan.dll C API to provide a cross-platform unified CANFD interface.
+ * Wraps the ZLG zlgcan.dll C API to provide a cross-platform unified CANFD
+ * interface.
  *
  * Open() name parameter format: "DeviceType:DeviceIndex:CanIndex"
- *  DeviceType is the numeric value of the macro defined in zlgcan.h (e.g., "42" for
- * ZCAN_USBCANFD_100U). Example: "42:0:0"
+ *  DeviceType is the numeric value of the macro defined in zlgcan.h
+ *  (e.g., "42" for ZCAN_USBCANFD_100U). Example: "42:0:0"
  */
 static std::string FrameTypeString(canfd::FrameType ft) {
   switch (ft) {
@@ -88,10 +107,77 @@ static std::string HexDump(const uint8_t* data, uint8_t len) {
   return oss.str();
 }
 
+static bool ParseInt(const std::string& text, int* value) {
+  if (value == nullptr) return false;
+
+  errno = 0;
+  char* end = nullptr;
+  long parsed = std::strtol(text.c_str(), &end, 10);
+  if (end == text.c_str() || *end != '\0' || errno == ERANGE ||
+      parsed < (std::numeric_limits<int>::min)() ||
+      parsed > (std::numeric_limits<int>::max)()) {
+    return false;
+  }
+
+  *value = static_cast<int>(parsed);
+  return true;
+}
+
+struct ZLGOpenParams {
+  int device_type = 48;
+  int device_index = 0;
+  int can_index = 0;
+  int abit_sample_point = 75;
+  int dbit_sample_point = 80;
+};
+
+static std::vector<std::string> SplitColon(const std::string& text) {
+  std::istringstream stream(text);
+  std::string part;
+  std::vector<std::string> parts;
+  while (std::getline(stream, part, ':')) {
+    parts.push_back(part);
+  }
+  return parts;
+}
+
+static bool ParseZLGOpenParams(const std::string& name,
+                               ZLGOpenParams* params) {
+  std::vector<std::string> parts = SplitColon(name);
+  if (parts.size() >= 1) {
+    const auto& type_map = GetZLGDeviceTypeMap();
+    auto it = type_map.find(parts[0]);
+    if (it != type_map.end()) {
+      params->device_type = it->second;
+    } else if (!ParseInt(parts[0], &params->device_type)) {
+      GHAND_LOG_ERROR("Invalid ZLG device type: "
+                      << parts[0]
+                      << ". Please use the macro name defined in zlgcan.h "
+                      << "(e.g., \"ZCAN_USBCANFD_100U:0:0\") "
+                      << "or the numeric value (e.g., \"42:0:0\").");
+      return false;
+    }
+  }
+  if (parts.size() >= 2) {
+    ParseInt(parts[1], &params->device_index);
+  }
+  if (parts.size() >= 3) {
+    ParseInt(parts[2], &params->can_index);
+  }
+  if (parts.size() >= 4) {
+    ParseInt(parts[3], &params->abit_sample_point);
+  }
+  if (parts.size() >= 5) {
+    ParseInt(parts[4], &params->dbit_sample_point);
+  }
+  return true;
+}
+
 #ifdef _WIN32
 struct ComPortEntry {
   std::string port_name;      // e.g., "COM3"
-  std::string friendly_name;  // friendly name, e.g., "ZLG USBCANFD-100U (COM3)"
+  // Friendly name, e.g., "ZLG USBCANFD-100U (COM3)".
+  std::string friendly_name;
   std::string device_desc;    // device description, usually contains model
   std::string serial_number;
   int vid = 0;
@@ -109,37 +195,38 @@ static std::vector<ComPortEntry> EnumerateComPorts() {
   devInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
 
   for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &devInfoData); ++i) {
-    char hwId[256] = {};
+    BYTE hwId[256] = {};
     DWORD dataType = 0, reqSize = 0;
     if (!SetupDiGetDeviceRegistryPropertyA(
-            hDevInfo, &devInfoData, SPDRP_HARDWAREID, &dataType,
-            reinterpret_cast<PBYTE>(hwId), sizeof(hwId), &reqSize)) {
+            hDevInfo, &devInfoData, SPDRP_HARDWAREID, &dataType, hwId,
+            sizeof(hwId), &reqSize)) {
       continue;
     }
 
+    std::string hardware_id = ByteArrayString(hwId, sizeof(hwId));
     int vid = 0, pid = 0;
-    char* vid_pos = strstr(hwId, "VID_");
-    char* pid_pos = strstr(hwId, "PID_");
+    const char* vid_pos = strstr(hardware_id.c_str(), "VID_");
+    const char* pid_pos = strstr(hardware_id.c_str(), "PID_");
     if (vid_pos && pid_pos) {
       vid = static_cast<int>(strtol(vid_pos + 4, nullptr, 16));
       pid = static_cast<int>(strtol(pid_pos + 4, nullptr, 16));
     }
     if (vid == 0) continue;
 
-    char friendly[256] = {};
+    BYTE friendly[256] = {};
     reqSize = 0;
     SetupDiGetDeviceRegistryPropertyA(
-        hDevInfo, &devInfoData, SPDRP_FRIENDLYNAME, &dataType,
-        reinterpret_cast<PBYTE>(friendly), sizeof(friendly), &reqSize);
+        hDevInfo, &devInfoData, SPDRP_FRIENDLYNAME, &dataType, friendly,
+        sizeof(friendly), &reqSize);
 
-    char device_desc[256] = {};
+    BYTE device_desc[256] = {};
     reqSize = 0;
     SetupDiGetDeviceRegistryPropertyA(
-        hDevInfo, &devInfoData, SPDRP_DEVICEDESC, &dataType,
-        reinterpret_cast<PBYTE>(device_desc), sizeof(device_desc), &reqSize);
+        hDevInfo, &devInfoData, SPDRP_DEVICEDESC, &dataType, device_desc,
+        sizeof(device_desc), &reqSize);
 
     std::string port_name;
-    std::string friendly_str(friendly);
+    std::string friendly_str = ByteArrayString(friendly, sizeof(friendly));
     size_t lp = friendly_str.find('(');
     size_t rp = friendly_str.find(')', lp);
     if (lp != std::string::npos && rp != std::string::npos && rp > lp + 1) {
@@ -155,7 +242,7 @@ static std::vector<ComPortEntry> EnumerateComPorts() {
         ComPortEntry entry;
         entry.port_name = port_name;
         entry.friendly_name = friendly_str;
-        entry.device_desc = device_desc;
+        entry.device_desc = ByteArrayString(device_desc, sizeof(device_desc));
         entry.serial_number = last_slash + 1;
         entry.vid = vid;
         entry.pid = pid;
@@ -174,7 +261,8 @@ static bool IsZLGVID(int vid) { return vid == 0x3562 || vid == 0x0483; }
  * @brief Determine ZLG device_type from USB VID/PID
  *
  * The mapping table can be extended based on actual connected ZLG devices.
- * Common USBCANFD series VID is 0x3562, different models correspond to different PIDs.
+ * Common USBCANFD series VID is 0x3562, different models correspond to
+ * different PIDs.
  */
 static int GetZLGDeviceTypeFromVIDPID(int vid, int pid) {
   static const std::map<std::pair<int, int>, int> kVIDPIDToType = {
@@ -215,11 +303,13 @@ static bool ResolveComPortToZLGDevice(const std::string& port_name,
     return false;
   }
   if (!IsZLGVID(target_vid)) {
-    GHAND_LOG_WARNING("COM port " << port_name << " VID=0x" << std::hex << target_vid
-                            << " does not look like a ZLG device");
+    GHAND_LOG_WARNING("COM port " << port_name << " VID=0x" << std::hex
+                                  << target_vid
+                                  << " does not look like a ZLG device");
   }
 
-  // Helper lambda: try device indices 0~7 for a given device_type, return on first success
+  // Helper lambda: try device indices 0~7 for a given device_type, return on
+  // first success.
   auto try_open = [&out_device_type, &out_device_index](int dev_type) -> bool {
     for (int dev_index = 0; dev_index < 8; ++dev_index) {
       long handle = ZCAN_OpenDevice(dev_type, dev_index, 0);
@@ -243,6 +333,54 @@ static bool ResolveComPortToZLGDevice(const std::string& port_name,
   GHAND_LOG_ERROR("Failed to find online ZLG device for " << port_name);
   return false;
 }
+
+static bool IsComPortName(const std::string& name) {
+  if (name.size() < 3) return false;
+  std::string prefix = name.substr(0, 3);
+  std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::toupper);
+  return prefix == "COM";
+}
+
+static void ParseComPortSuffix(const std::string& name,
+                               ZLGOpenParams* params,
+                               std::string* com_name) {
+  size_t colon_pos = name.find(':');
+  if (colon_pos == std::string::npos) return;
+
+  *com_name = name.substr(0, colon_pos);
+  std::vector<std::string> suffix_parts =
+      SplitColon(name.substr(colon_pos + 1));
+  if (!suffix_parts.empty()) {
+    ParseInt(suffix_parts[0], &params->can_index);
+  }
+  if (suffix_parts.size() >= 2) {
+    ParseInt(suffix_parts[1], &params->abit_sample_point);
+  }
+  if (suffix_parts.size() >= 3) {
+    ParseInt(suffix_parts[2], &params->dbit_sample_point);
+  }
+}
+
+static bool ResolveComPortOpenParams(const std::string& name,
+                                     ZLGOpenParams* params,
+                                     std::string* resolved_name) {
+  std::string com_name = name;
+  ParseComPortSuffix(name, params, &com_name);
+
+  int resolved_type = 0, resolved_index = 0;
+  if (!ResolveComPortToZLGDevice(com_name, &resolved_type, &resolved_index)) {
+    GHAND_LOG_ERROR("Failed to resolve COM port: " << name);
+    return false;
+  }
+
+  *resolved_name = std::to_string(resolved_type) + ":" +
+                   std::to_string(resolved_index) + ":" +
+                   std::to_string(params->can_index) + ":" +
+                   std::to_string(params->abit_sample_point) + ":" +
+                   std::to_string(params->dbit_sample_point);
+  GHAND_LOG_INFO("Resolved " << name << " to ZLG device " << *resolved_name);
+  return true;
+}
 #endif  // _WIN32
 
 class ZLGDriver : public CANFDDriver {
@@ -250,211 +388,47 @@ class ZLGDriver : public CANFDDriver {
   ZLGDriver() = default;
   ~ZLGDriver() override { Close(); }
 
+  ZLGDriver(const ZLGDriver&) = delete;
+  ZLGDriver& operator=(const ZLGDriver&) = delete;
+  ZLGDriver(ZLGDriver&&) = delete;
+  ZLGDriver& operator=(ZLGDriver&&) = delete;
+
   int Open(const std::string& name, uint32_t bitrate,
            uint32_t dbitrate) override {
     Close();
 
-    // Parse name:
-    // "DeviceType:DeviceIndex:CanIndex[:AbitSamplePoint:DbitSamplePoint]" or
-    // "COM3" etc. COM port name (Windows only, auto-resolved to ZLG device parameters)
-    int device_type = 48;  // default value
-    int device_index = 0;
-    int can_index = 0;
-    int abit_sample_point = 75;  // 0 means not set, use device default
-    int dbit_sample_point = 80;
-
+    ZLGOpenParams params;
     std::string resolved_name = name;
-
 #ifdef _WIN32
-    // Detect COM port name (e.g., "COM3" or "com3")
-    if (name.size() >= 3) {
-      std::string prefix = name.substr(0, 3);
-      std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::toupper);
-      if (prefix == "COM") {
-        std::string com_name = name;
-        size_t colon_pos = name.find(':');
-        if (colon_pos != std::string::npos) {
-          com_name = name.substr(0, colon_pos);
-          std::string suffix = name.substr(colon_pos + 1);
-          std::istringstream suffix_stream(suffix);
-          std::string item;
-          std::vector<std::string> suffix_parts;
-          while (std::getline(suffix_stream, item, ':')) {
-            suffix_parts.push_back(item);
-          }
-          if (!suffix_parts.empty()) {
-            try {
-              can_index = std::stoi(suffix_parts[0]);
-            } catch (...) {
-            }
-          }
-          if (suffix_parts.size() >= 2) {
-            try {
-              abit_sample_point = std::stoi(suffix_parts[1]);
-            } catch (...) {
-            }
-          }
-          if (suffix_parts.size() >= 3) {
-            try {
-              dbit_sample_point = std::stoi(suffix_parts[2]);
-            } catch (...) {
-            }
-          }
-        }
-
-        int resolved_type = 0, resolved_index = 0;
-        if (ResolveComPortToZLGDevice(com_name, &resolved_type, &resolved_index)) {
-          resolved_name = std::to_string(resolved_type) + ":" +
-                          std::to_string(resolved_index) + ":" +
-                          std::to_string(can_index) + ":" +
-                          std::to_string(abit_sample_point) + ":" +
-                          std::to_string(dbit_sample_point);
-          GHAND_LOG_INFO("Resolved " << name << " to ZLG device " << resolved_name);
-        } else {
-          GHAND_LOG_ERROR("Failed to resolve COM port: " << name);
-          return -1;
-        }
-      }
+    if (IsComPortName(name) &&
+        !ResolveComPortOpenParams(name, &params, &resolved_name)) {
+      return -1;
     }
 #endif
 
-    std::istringstream iss(resolved_name);
-    std::string part;
-    std::vector<std::string> parts;
-    while (std::getline(iss, part, ':')) {
-      parts.push_back(part);
-    }
+    if (!ParseZLGOpenParams(resolved_name, &params)) return -1;
+    can_index_ = params.can_index;
 
-    if (parts.size() >= 1) {
-      const auto& type_map = GetZLGDeviceTypeMap();
-      auto it = type_map.find(parts[0]);
-      if (it != type_map.end()) {
-        device_type = it->second;
-      } else {
-        try {
-          device_type = std::stoi(parts[0]);
-        } catch (...) {
-          GHAND_LOG_ERROR("Invalid ZLG device type: "
-                    << parts[0]
-                    << ". Please use the macro name defined in zlgcan.h (e.g., "
-                       "\"ZCAN_USBCANFD_100U:0:0\") "
-                    << "or the numeric value (e.g., \"42:0:0\").");
-          return -1;
-        }
-      }
-    }
-    if (parts.size() >= 2) {
-      try {
-        device_index = std::stoi(parts[1]);
-      } catch (...) {
-      }
-    }
-    if (parts.size() >= 3) {
-      try {
-        can_index = std::stoi(parts[2]);
-      } catch (...) {
-      }
-    }
-    if (parts.size() >= 4) {
-      try {
-        abit_sample_point = std::stoi(parts[3]);
-      } catch (...) {
-      }
-    }
-    if (parts.size() >= 5) {
-      try {
-        dbit_sample_point = std::stoi(parts[4]);
-      } catch (...) {
-      }
-    }
-    can_index_ = can_index;
-
-    // 1. Open device
-    device_handle_ = ZCAN_OpenDevice(device_type, device_index, 0);
+    device_handle_ =
+        ZCAN_OpenDevice(params.device_type, params.device_index, 0);
     if (device_handle_ == INVALID_DEVICE_HANDLE) {
-      GHAND_LOG_ERROR("ZCAN_OpenDevice failed: type=" << device_type
-                                                << " index=" << device_index
-                                                << " err=" << GetLastError());
+      GHAND_LOG_ERROR("ZCAN_OpenDevice failed: type="
+                      << params.device_type << " index=" << params.device_index
+                      << " err=" << GetLastError());
       return -1;
     }
 
-    // Use property table to set baud rate and sample point (some OEM devices must be configured via property table)
-    IProperty* prop = GetIProperty(device_handle_);
-    if (prop) {
-      // 2. Set CANFD standard
-      std::string abit = std::to_string(bitrate);
-      std::string dbit = std::to_string(dbitrate);
-      std::string ch_str = std::to_string(can_index);
+    int configure_result =
+        ConfigureChannelProperties(params, bitrate, dbitrate);
+    if (configure_result != 0) return configure_result;
 
-      // Path format: "<channel>/canfd_abit_baud_rate"
-      std::string abit_path = ch_str + "/canfd_abit_baud_rate";
-      std::string dbit_path = ch_str + "/canfd_dbit_baud_rate";
-
-      if (1 != prop->SetValue(abit_path.c_str(), abit.c_str())) {
-        return -3;
-      }
-      if (1 != prop->SetValue(dbit_path.c_str(), dbit.c_str())) {
-        return -4;
-      }
-
-      // 3. Set sample point
-      if (abit_sample_point > 0) {
-        std::string abit_sp_path = ch_str + "/canfd_abit_sample_point";
-        int c = prop->SetValue(abit_sp_path.c_str(),
-                               std::to_string(abit_sample_point).c_str());
-      }
-      if (dbit_sample_point > 0) {
-        std::string dbit_sp_path = ch_str + "/canfd_dbit_sample_point";
-        int d = prop->SetValue(dbit_sp_path.c_str(),
-                               std::to_string(dbit_sample_point).c_str());
-      }
-
-      // 4. Set terminal resistance (non-blocking, log only on failure)
-      std::string res_path = ch_str + "/initenal_resistance";
-      if (1 != prop->SetValue(res_path.c_str(), "1")) {
-        GHAND_LOG_WARNING("Failed to set initenal_resistance for channel "
-                    << can_index << ", try internal_resistance");
-        res_path = ch_str + "/internal_resistance";
-        if (1 != prop->SetValue(res_path.c_str(), "1")) {
-          GHAND_LOG_WARNING("Failed to set internal_resistance for channel "
-                      << can_index);
-        }
-      }
-    }
-
-    // 5. Initialize channel
-    ZCAN_CHANNEL_INIT_CONFIG config;
-    memset(&config, 0, sizeof(config));
-    config.can_type = TYPE_CANFD;
-    // abit_timing/dbit_timing already configured in property table, set 0 here to avoid conflict
-    config.canfd.abit_timing = 0;
-    config.canfd.dbit_timing = 0;
-    config.canfd.filter = 0;  // receive all frames
-    config.canfd.mode = 0;    // normal mode
-
-    channel_handle_ =
-        ZCAN_InitCAN(device_handle_, static_cast<UINT>(can_index), config);
-    if (channel_handle_ == nullptr) {
-      GHAND_LOG_ERROR("ZCAN_InitCAN failed for channel " << can_index);
-      ZCAN_CloseDevice(device_handle_);
-      device_handle_ = INVALID_DEVICE_HANDLE;
-      return -2;
-    }
-
-    // 6. Start channel
-    if (ZCAN_StartCAN(*channel_handle_) != STATUS_OK) {
-      GHAND_LOG_ERROR("ZCAN_StartCAN failed, error=" << GetLastError());
-      ZCAN_ResetCAN(*channel_handle_);
-      ZCAN_CloseDevice(device_handle_);
-      device_handle_ = INVALID_DEVICE_HANDLE;
-      channel_handle_ = nullptr;
-      return -3;
-    }
+    int init_result = InitializeChannel(params);
+    if (init_result != 0) return init_result;
 
     GHAND_LOG_INFO("ZLG CANFD opened: type="
-             << device_type << " index=" << device_index
-             << " channel=" << can_index << " bitrate=" << bitrate
-             << " dbitrate=" << dbitrate);
+                   << params.device_type << " index=" << params.device_index
+                   << " channel=" << params.can_index << " bitrate="
+                   << bitrate << " dbitrate=" << dbitrate);
     return 0;
   }
 
@@ -478,7 +452,8 @@ class ZLGDriver : public CANFDDriver {
     // Build CAN ID: extended frame + 29-bit ID
     canfd_data.frame.can_id = MAKE_CAN_ID(frame.id, 1, 0, 0);
     canfd_data.frame.len = frame.len;
-    canfd_data.frame.flags = CANFD_BRS;  // enable data phase baud rate switching
+    // Enable data phase baud rate switching.
+    canfd_data.frame.flags = CANFD_BRS;
     memcpy(canfd_data.frame.data, frame.data, frame.len);
     canfd_data.transmit_type = 0;  // normal transmission
 
@@ -499,7 +474,8 @@ class ZLGDriver : public CANFDDriver {
     ZCAN_ReceiveFD_Data rx;
     memset(&rx, 0, sizeof(rx));
 
-    // wait_time: -1 means blocking, 0 means non-blocking, >0 means timeout in milliseconds
+    // wait_time: -1 means blocking, 0 means non-blocking, >0 means timeout in
+    // milliseconds.
     int zlg_wait = timeout_ms;
     if (timeout_ms < 0) zlg_wait = -1;
 
@@ -555,8 +531,11 @@ class ZLGDriver : public CANFDDriver {
         ZCAN_DEVICE_INFO info;
         memset(&info, 0, sizeof(info));
         if (ZCAN_GetDeviceInf(handle, info) == STATUS_OK) {
-          std::string hw_type(reinterpret_cast<char*>(info.str_hw_Type));
-          std::string serial(reinterpret_cast<char*>(info.str_Serial_Num));
+          std::string hw_type =
+              ByteArrayString(info.str_hw_Type, sizeof(info.str_hw_Type));
+          std::string serial =
+              ByteArrayString(info.str_Serial_Num,
+                              sizeof(info.str_Serial_Num));
           for (int ch = 0; ch < info.can_Num; ++ch) {
             std::string key = std::to_string(dev_type) + ":" +
                               std::to_string(dev_index) + ":" +
@@ -579,6 +558,77 @@ class ZLGDriver : public CANFDDriver {
   }
 
  private:
+  int ConfigureChannelProperties(const ZLGOpenParams& params, uint32_t bitrate,
+                                 uint32_t dbitrate) {
+    IProperty* prop = GetIProperty(device_handle_);
+    if (prop == nullptr) return 0;
+
+    std::string abit = std::to_string(bitrate);
+    std::string dbit = std::to_string(dbitrate);
+    std::string ch_str = std::to_string(params.can_index);
+
+    std::string abit_path = ch_str + "/canfd_abit_baud_rate";
+    std::string dbit_path = ch_str + "/canfd_dbit_baud_rate";
+    if (1 != prop->SetValue(abit_path.c_str(), abit.c_str())) {
+      return -3;
+    }
+    if (1 != prop->SetValue(dbit_path.c_str(), dbit.c_str())) {
+      return -4;
+    }
+
+    if (params.abit_sample_point > 0) {
+      std::string abit_sp_path = ch_str + "/canfd_abit_sample_point";
+      prop->SetValue(abit_sp_path.c_str(),
+                     std::to_string(params.abit_sample_point).c_str());
+    }
+    if (params.dbit_sample_point > 0) {
+      std::string dbit_sp_path = ch_str + "/canfd_dbit_sample_point";
+      prop->SetValue(dbit_sp_path.c_str(),
+                     std::to_string(params.dbit_sample_point).c_str());
+    }
+
+    std::string res_path = ch_str + "/initenal_resistance";
+    if (1 != prop->SetValue(res_path.c_str(), "1")) {
+      GHAND_LOG_WARNING("Failed to set initenal_resistance for channel "
+                        << params.can_index << ", try internal_resistance");
+      res_path = ch_str + "/internal_resistance";
+      if (1 != prop->SetValue(res_path.c_str(), "1")) {
+        GHAND_LOG_WARNING("Failed to set internal_resistance for channel "
+                          << params.can_index);
+      }
+    }
+    return 0;
+  }
+
+  int InitializeChannel(const ZLGOpenParams& params) {
+    ZCAN_CHANNEL_INIT_CONFIG config;
+    memset(&config, 0, sizeof(config));
+    config.can_type = TYPE_CANFD;
+    config.canfd.abit_timing = 0;
+    config.canfd.dbit_timing = 0;
+    config.canfd.filter = 0;  // receive all frames
+    config.canfd.mode = 0;    // normal mode
+
+    channel_handle_ =
+        ZCAN_InitCAN(device_handle_, static_cast<UINT>(params.can_index),
+                     config);
+    if (channel_handle_ == nullptr) {
+      GHAND_LOG_ERROR("ZCAN_InitCAN failed for channel " << params.can_index);
+      ZCAN_CloseDevice(device_handle_);
+      device_handle_ = INVALID_DEVICE_HANDLE;
+      return -2;
+    }
+
+    if (ZCAN_StartCAN(*channel_handle_) != STATUS_OK) {
+      GHAND_LOG_ERROR("ZCAN_StartCAN failed, error=" << GetLastError());
+      ZCAN_ResetCAN(*channel_handle_);
+      ZCAN_CloseDevice(device_handle_);
+      device_handle_ = INVALID_DEVICE_HANDLE;
+      channel_handle_ = nullptr;
+      return -3;
+    }
+    return 0;
+  }
   long device_handle_ = INVALID_DEVICE_HANDLE;
   Handle_chl* channel_handle_ = nullptr;
   int can_index_ = 0;

@@ -54,9 +54,10 @@ bool HandZero(ghand::DexHand& hand) {
 }
 
 int main() {
-  std::cout << "***** Xiaoyao Dexterous Hand SDK - Grabbing Demo *****\n" << '\n';
+  std::cout << "***** Xiaoyao Dexterous Hand SDK - Grabbing Demo *****\n"
+            << '\n';
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::ETHERCAT);
+                                      ghand::CommType::CANFD);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     return -1;
@@ -87,8 +88,8 @@ int main() {
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
     if (!HandZero(*hand)) {
-      std::cout << "Round " << gesture_cycle << " reset action execution failed"
-                << '\n';
+      std::cout << "Round " << gesture_cycle
+                << " reset action execution failed" << '\n';
       break;
     }
     std::this_thread::sleep_for(std::chrono::seconds(5));

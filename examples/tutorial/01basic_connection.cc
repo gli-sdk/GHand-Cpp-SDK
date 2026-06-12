@@ -26,10 +26,14 @@ int main() {
     std::cout << "Device name: " << device_info.device_name << '\n';
     std::cout << "Hardware version: " << device_info.hardware_version << '\n';
     std::cout << "Software version: " << device_info.software_version << '\n';
-    std::cout << "Motor driver version: " << device_info.motor_driver_version << '\n';
-    std::cout << "Position sensor version: " << device_info.position_sensor_version << '\n';
-    std::cout << "Tactile sensor version: " << device_info.tactile_sensor_version << '\n';
-    std::cout << "Backup package version: " << device_info.backup_package_version << '\n';
+    std::cout << "Motor driver version: " << device_info.motor_driver_version
+              << '\n';
+    std::cout << "Position sensor version: "
+              << device_info.position_sensor_version << '\n';
+    std::cout << "Tactile sensor version: "
+              << device_info.tactile_sensor_version << '\n';
+    std::cout << "Firmware package version: "
+              << device_info.firmware_package_version << '\n';
     std::cout << "Serial number: " << device_info.serial_number << '\n';
 
     // Disconnect
@@ -37,6 +41,7 @@ int main() {
     std::cout << "Connection closed." << '\n';
   } else {
     std::cout << "Failed to connect to the dexterous hand!" << '\n';
+    return 1;
   }
 
   return 0;

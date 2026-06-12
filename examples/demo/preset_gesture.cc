@@ -1,6 +1,7 @@
 #include <chrono>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <thread>
@@ -9,7 +10,7 @@
 
 #include "ghand/ghand.h"
 
-// ========== Gesture Type Definitions ==========
+// Gesture type definitions.
 
 enum class GestureType {
   OPEN_HAND,
@@ -36,9 +37,10 @@ std::string GetGestureName(GestureType gesture) {
   }
 }
 
-// ========== Gesture Definitions ==========
+// Gesture definitions.
 
-const std::unordered_map<GestureType, std::unordered_map<ghand::JointId, float>>
+const std::unordered_map<GestureType,
+                         std::unordered_map<ghand::JointId, float>>
     GESTURE_DEFINITIONS = {
         {GestureType::OPEN_HAND,
          {
@@ -122,7 +124,7 @@ const std::unordered_map<GestureType, std::unordered_map<ghand::JointId, float>>
          }},
 };
 
-// ========== Global State for Error Handling ==========
+// Global state for error handling.
 
 ghand::HandState g_hand_state;
 std::vector<ghand::Joint> g_joints;
@@ -193,7 +195,7 @@ void PrintError() {
   }
 }
 
-// ========== Helper Functions ==========
+// Helper functions.
 
 std::vector<ghand::JointCommand> CreateJointsFromGesture(
     const std::unordered_map<ghand::JointId, float>& gesture_def) {
@@ -204,40 +206,77 @@ std::vector<ghand::JointCommand> CreateJointsFromGesture(
   return joints;
 }
 
-int main() {
-  std::cout << "========================================" << '\n';
-  std::cout << "  GHand Dexterous Hand SDK - Preset Gesture Demo" << '\n';
-  std::cout << "========================================" << '\n';
-
-  // Connect to device
-  auto hand =
-      ghand::DexHand::Create(ghand::ProductType::G5, ghand::CommType::ETHERCAT);
+std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
+  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                     ghand::CommType::CANFD);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
-    return -1;
+    return nullptr;
   }
+
   std::cout << "\nConnecting to dexterous hand..." << '\n';
   if (!hand->AutoConnect()) {
     std::cerr << "Failed to connect!" << '\n';
-    return 1;
+    return nullptr;
   }
+
   std::cout << "Connected successfully" << '\n';
-
-  // Set control mode
   hand->SetControlMode(ghand::ControlMode::POSITION);
-
-  // Register callbacks for error detection
   hand->SetJointsCallback(OnJointsUpdate);
   hand->SetHandStateCallback(OnHandStateUpdate);
+  return hand;
+}
 
-  // Gesture sequence
+bool WaitWithErrorCheck(int wait_ms, int check_interval_ms) {
+  int elapsed = 0;
+  while (elapsed < wait_ms) {
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(check_interval_ms));
+    elapsed += check_interval_ms;
+    if (HasError()) return true;
+  }
+  return false;
+}
+
+bool ExecuteGesture(ghand::DexHand& hand, GestureType gesture,
+                    int gesture_wait_ms, int check_interval_ms) {
+  if (HasError()) return true;
+
+  std::cout << "\nExecuting: " << GetGestureName(gesture) << '\n';
+  auto it = GESTURE_DEFINITIONS.find(gesture);
+  if (it != GESTURE_DEFINITIONS.end()) {
+    auto joints = CreateJointsFromGesture(it->second);
+    hand.MoveJoints(joints);
+  }
+  return WaitWithErrorCheck(gesture_wait_ms, check_interval_ms);
+}
+
+bool RunGestureCycle(ghand::DexHand& hand,
+                     const std::vector<GestureType>& gestures,
+                     int cycle,
+                     int gesture_wait_ms,
+                     int cycle_delay_ms,
+                     int check_interval_ms) {
+  std::cout << "\n========== Cycle " << cycle << " ==========" << '\n';
+
+  for (auto gesture : gestures) {
+    if (ExecuteGesture(hand, gesture, gesture_wait_ms, check_interval_ms)) {
+      return true;
+    }
+  }
+
+  std::cout << "\n========== Cycle " << cycle
+            << " completed ==========" << '\n';
+  std::cout << "Press Ctrl+C to stop, or continue to next cycle...\n"
+            << '\n';
+  return WaitWithErrorCheck(cycle_delay_ms, check_interval_ms);
+}
+
+bool RunGestureDemo(ghand::DexHand& hand) {
   const std::vector<GestureType> gestures = {
       GestureType::OPEN_HAND, GestureType::FIST,     GestureType::OK,
       GestureType::THUMBS_UP, GestureType::SIX_SIGN,
   };
-
-  // Run demo cycles
-  int cycle = 0;
   const int kGestureWaitMs = 1500;
   const int kCycleDelayMs = 500;
   const int kErrorCheckIntervalMs = 100;
@@ -245,75 +284,37 @@ int main() {
   std::cout << "\nStarting gesture demonstration..." << '\n';
   std::cout << "Press Ctrl+C to stop\n" << '\n';
 
-  bool has_error = false;
-  while (!has_error) {
+  int cycle = 0;
+  while (true) {
     cycle++;
-    std::cout << "\n========== Cycle " << cycle << " ==========" << '\n';
-
-    // Execute each gesture
-    for (auto gesture : gestures) {
-      // Check for errors before executing gesture
-      if (HasError()) {
-        has_error = true;
-        break;
-      }
-
-      std::cout << "\nExecuting: " << GetGestureName(gesture) << '\n';
-
-      // Get gesture definition and execute
-      auto it = GESTURE_DEFINITIONS.find(gesture);
-      if (it != GESTURE_DEFINITIONS.end()) {
-        auto joints = CreateJointsFromGesture(it->second);
-        hand->MoveJoints(joints);
-      }
-
-      // Wait for completion with error checking
-      int elapsed = 0;
-      while (elapsed < kGestureWaitMs && !has_error) {
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(kErrorCheckIntervalMs));
-        elapsed += kErrorCheckIntervalMs;
-
-        if (HasError()) {
-          has_error = true;
-          break;
-        }
-      }
-
-      if (has_error) break;
-    }
-
-    if (has_error) break;
-
-    std::cout << "\n========== Cycle " << cycle
-              << " completed ==========" << '\n';
-    std::cout << "Press Ctrl+C to stop, or continue to next cycle...\n"
-              << '\n';
-
-    // Wait between cycles with error checking
-    int elapsed = 0;
-    while (elapsed < kCycleDelayMs && !has_error) {
-      std::this_thread::sleep_for(
-          std::chrono::milliseconds(kErrorCheckIntervalMs));
-      elapsed += kErrorCheckIntervalMs;
-
-      if (HasError()) {
-        has_error = true;
-        break;
-      }
+    if (RunGestureCycle(hand, gestures, cycle, kGestureWaitMs,
+                        kCycleDelayMs, kErrorCheckIntervalMs)) {
+      return true;
     }
   }
+}
 
-  // Handle error if detected
+void HandleDetectedError(ghand::DexHand& hand) {
+  PrintError();
+  std::cerr << "\nStopping all motion and clearing fault..." << '\n';
+  hand.Stop();
+  hand.ClearFault();
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+}
+
+int main() {
+  std::cout << "========================================" << '\n';
+  std::cout << "  GHand Dexterous Hand SDK - Preset Gesture Demo" << '\n';
+  std::cout << "========================================" << '\n';
+
+  auto hand = CreateConnectedHand();
+  if (!hand) return 1;
+
+  bool has_error = RunGestureDemo(*hand);
   if (has_error) {
-    PrintError();
-    std::cerr << "\nStopping all motion and clearing fault..." << '\n';
-    hand->Stop();
-    hand->ClearFault();
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    HandleDetectedError(*hand);
   }
 
-  // Cleanup
   std::cout << "\nDisconnecting..." << '\n';
   hand->Disconnect();
   std::cout << "Disconnected. Thank you!" << '\n';

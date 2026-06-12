@@ -2,7 +2,6 @@
 #define GHAND_INTERNAL_DEXHAND_CALLBACK_MANAGER_H_
 
 #include <chrono>
-#include <cmath>
 #include <functional>
 #include <mutex>
 #include <vector>
@@ -31,6 +30,11 @@ class DexHandCallbackManager {
 
   DexHandCallbackManager();
   ~DexHandCallbackManager() = default;
+
+  DexHandCallbackManager(const DexHandCallbackManager&) = delete;
+  DexHandCallbackManager& operator=(const DexHandCallbackManager&) = delete;
+  DexHandCallbackManager(DexHandCallbackManager&&) = delete;
+  DexHandCallbackManager& operator=(DexHandCallbackManager&&) = delete;
 
   // Callback registration methods
   void SetJointsCallback(JointsCallback callback);
@@ -69,7 +73,8 @@ class DexHandCallbackManager {
   // Change detection threshold constants
   static constexpr float kJointAngleThreshold = 1.0f;   // 1 degree
   static constexpr float kTemperatureThreshold = 1.0f;  // 1 degree Celsius
-  static constexpr int kDataFreshnessMs = 100;          // 100 ms data freshness
+  // 100 ms data freshness.
+  static constexpr int kDataFreshnessMs = 100;
 };
 
 }  // namespace internal

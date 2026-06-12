@@ -1,21 +1,12 @@
 #ifndef GHAND_INTERNAL_ETHERCAT_COMM_H_
 #define GHAND_INTERNAL_ETHERCAT_COMM_H_
 
-#include <soem/soem.h>
-
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <pthread.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#endif
-
 #include <atomic>
-#include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -34,7 +25,12 @@ class EtherCATComm : public IComm {
   explicit EtherCATComm(const ProductConfig& config);
   ~EtherCATComm() override;
 
-  // ===== IComm interface implementation =====
+  EtherCATComm(const EtherCATComm&) = delete;
+  EtherCATComm& operator=(const EtherCATComm&) = delete;
+  EtherCATComm(EtherCATComm&&) = delete;
+  EtherCATComm& operator=(EtherCATComm&&) = delete;
+
+  // IComm interface implementation
   int Connect(const std::string& device_name) override;
   int Disconnect() override;
   bool IsConnected() const override { return is_connected_; }
@@ -59,13 +55,13 @@ class EtherCATComm : public IComm {
   void SetTactileDataCallback(TactileDataCallback cb) override;
 
   FirmwareUpdateError BootUpdate(
-                                 const std::string& filename,
-                                 std::function<void(int)> progress) override;
+      const std::string& filename,
+      std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(uint8_t* main_result, uint8_t* pos_result,
                                   uint8_t* tac_result,
                                   uint8_t* motor_result) override;
 
-  // ===== Low-level EtherCAT API (retained for internal use) =====
+  // Low-level EtherCAT API (retained for internal use)
   int SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,
               int* size, void* data, int timeout);
 
@@ -78,12 +74,10 @@ class EtherCATComm : public IComm {
   uint8_t* ReadTxPDO(uint16_t slave);
 
  private:
-  // === Instance State ===
-  ecx_contextt ctx_{};
-  uint8_t IOmap_[4096] = {0};
+  struct SoemState;
 
-  OSAL_THREAD_HANDLE threadrt_{};
-  OSAL_THREAD_HANDLE thread1_{};
+  // Instance state
+  std::unique_ptr<SoemState> soem_;
   bool threads_started_ = false;
 
   int expectedWKC_ = 0;
@@ -115,11 +109,11 @@ class EtherCATComm : public IComm {
 
   ProductConfig config_;
 
-  // === FOE firmware update shared state (only one firmware update operation allowed at a time) ===
+  // FOE firmware update shared state
   static std::function<void(int)> progress_callback_;
   static EtherCATComm* foe_instance_;
 
-  // === Methods ===
+  // Methods
   void ResetContext();
   bool InputBin(const char* fname, int* length);
 
@@ -131,19 +125,22 @@ class EtherCATComm : public IComm {
   void Ecatcheck();
 
   // Static thread entry points (required by OSAL to be C function pointers)
-  static OSAL_THREAD_FUNC_RT EcatthreadWrapper(void* arg);
-  static OSAL_THREAD_FUNC EcatcheckWrapper(void* arg);
+  static void EcatthreadWrapper(void* arg);
+  static void EcatcheckWrapper(void* arg);
 
   // Firmware version helper
   std::string ReadFirmwareVersion(uint8_t mcu_id);
 
   // Static helper methods
-  static void add_time_ns(ec_timet* ts, int64_t addtime);
-  static void ec_sync(int64_t reftime, int64_t cycletime, int64_t* offsettime);
   static void FoeProgressHook(uint16_t slave, int32_t packetnumber,
                               int32_t totalsize);
 
   // Parse PDO raw data and trigger structured callbacks
+  void ParseHandAndJoints(const uint8_t* data, size_t* offset,
+                          std::vector<Joint>* parsed_joints,
+                          HandState* parsed_temperature) const;
+  TactileData ParseTactileData(const uint8_t* data, size_t size,
+                               size_t* offset) const;
   void ParseAndNotify(const uint8_t* data, size_t size);
 };
 

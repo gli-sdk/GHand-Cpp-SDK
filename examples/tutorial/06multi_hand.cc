@@ -1,43 +1,47 @@
 #include <chrono>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <set>
 #include <thread>
 #include <vector>
 
 #include "ghand/ghand.h"
 
-int main() {
+void PrintHeader() {
   std::cout << "========================================\n";
   std::cout << "  GHand Dexterous Hand SDK - Multi-Hand Control Demo\n";
   std::cout << "========================================\n";
+}
 
-  // Search for CANFD adapters
+bool SearchAdapters(std::map<std::string, std::string>* adapters) {
   auto temp_hand = ghand::DexHand::Create(ghand::ProductType::G5,
                                            ghand::CommType::CANFD);
   if (!temp_hand) {
     std::cerr << "Failed to create DexHand" << '\n';
-    return -1;
+    return false;
   }
-  std::map<std::string, std::string> adapters = temp_hand->SearchAdapters();
 
-  if (adapters.empty()) {
+  *adapters = temp_hand->SearchAdapters();
+  if (adapters->empty()) {
     std::cerr << "No available CANFD adapters found\n";
-    return 1;
+    return false;
   }
 
-  std::cout << "\nFound " << adapters.size() << " available CANFD adapters:\n";
-  for (const auto& adapter : adapters) {
-    const std::string& name = adapter.first;
-    const std::string& desc = adapter.second;
-    std::cout << "  - " << name << ": " << desc << '\n';
+  std::cout << "\nFound " << adapters->size()
+            << " available CANFD adapters:\n";
+  for (const auto& adapter : *adapters) {
+    std::cout << "  - " << adapter.first << ": " << adapter.second << '\n';
   }
+  return true;
+}
 
-  // Create multiple hand instances
-  std::vector<std::unique_ptr<ghand::DexHand>> hands;
+void ConnectHands(
+    const std::map<std::string, std::string>& adapters,
+    std::vector<std::unique_ptr<ghand::DexHand>>* hands) {
   std::set<std::string> connected_adapter_bases;
-
   std::cout << "\nAttempting to connect devices...\n";
+
   for (const auto& adapter : adapters) {
     const std::string& name = adapter.first;
     std::string adapter_base = name.substr(0, name.find(':'));
@@ -45,25 +49,21 @@ int main() {
       std::cout << "Skipping alternate channel: " << name << '\n';
       continue;
     }
+
     auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
                                         ghand::CommType::CANFD);
     if (hand->Connect(name)) {
-      hands.push_back(std::move(hand));
+      hands->push_back(std::move(hand));
       connected_adapter_bases.insert(adapter_base);
       std::cout << "Connected device: " << name << '\n';
     } else {
       std::cout << "Connection failed: " << name << '\n';
     }
   }
+}
 
-  if (hands.empty()) {
-    std::cerr << "\nFailed to connect any device\n";
-    return 1;
-  }
-
-  std::cout << "\nSuccessfully connected " << hands.size() << " device(s)\n";
-
-  // Display all device information
+void DisplayDeviceInfo(
+    const std::vector<std::unique_ptr<ghand::DexHand>>& hands) {
   std::cout << "\nDevice Information:\n";
   for (size_t i = 0; i < hands.size(); ++i) {
     ghand::DeviceInfo info = hands[i]->GetDeviceInfo();
@@ -73,10 +73,11 @@ int main() {
     std::cout << "    Software Version: " << info.software_version << '\n';
     std::cout << "    Serial Number: " << info.serial_number << '\n';
   }
+}
 
-  // Demo 1: Control each hand individually
+void RunIndividualControl(
+    const std::vector<std::unique_ptr<ghand::DexHand>>& hands) {
   std::cout << "\n========== Demo 1: Individual Control ==========\n";
-
   std::vector<ghand::JointCommand> test_joints = {
       {ghand::JointId::FF_PIP, 45.0f, 100, 100},
       {ghand::JointId::FF_MCP, 30.0f, 100, 100},
@@ -84,24 +85,21 @@ int main() {
 
   for (size_t i = 0; i < hands.size(); ++i) {
     std::cout << "\nControlling hand " << i << "...\n";
-
     if (hands[i]->MoveJoints(test_joints)) {
       std::cout << "Command sent successfully\n";
     } else {
       std::cout << "Command send failed\n";
     }
-
-    // Wait for device to respond
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
 
-  // Hold position
   std::cout << "\nHolding position for 2 seconds...\n";
   std::this_thread::sleep_for(std::chrono::seconds(2));
+}
 
-  // Demo 2: Control all hands simultaneously
+void RunSimultaneousControl(
+    const std::vector<std::unique_ptr<ghand::DexHand>>& hands) {
   std::cout << "\n========== Demo 2: Simultaneous Control ==========\n";
-
   std::vector<ghand::JointCommand> reset_joints = {
       {ghand::JointId::THUMB_PIP, 0.0f, 100, 100},
       {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
@@ -123,18 +121,37 @@ int main() {
     hand->MoveJoints(reset_joints);
   }
   std::cout << "Commands sent to all hands\n";
-
-  // Wait for movement completion
   std::cout << "\nWaiting for movement completion...\n";
   std::this_thread::sleep_for(std::chrono::seconds(2));
+}
 
-  // Disconnect all
+void DisconnectHands(std::vector<std::unique_ptr<ghand::DexHand>>* hands) {
   std::cout << "\n========== Cleanup ==========\n";
   std::cout << "\nDisconnecting all connections...\n";
-  for (size_t i = 0; i < hands.size(); ++i) {
-    hands[i]->Disconnect();
+  for (size_t i = 0; i < hands->size(); ++i) {
+    (*hands)[i]->Disconnect();
     std::cout << "Closed hand " << i << '\n';
   }
+}
+
+int main() {
+  PrintHeader();
+
+  std::map<std::string, std::string> adapters;
+  if (!SearchAdapters(&adapters)) return 1;
+
+  std::vector<std::unique_ptr<ghand::DexHand>> hands;
+  ConnectHands(adapters, &hands);
+  if (hands.empty()) {
+    std::cerr << "\nFailed to connect any device\n";
+    return 1;
+  }
+
+  std::cout << "\nSuccessfully connected " << hands.size() << " device(s)\n";
+  DisplayDeviceInfo(hands);
+  RunIndividualControl(hands);
+  RunSimultaneousControl(hands);
+  DisconnectHands(&hands);
 
   std::cout << "\nDemo completed. Thank you for using!\n";
   return 0;

@@ -1,14 +1,5 @@
 #include "product_config_loader.h"
 
-#include <algorithm>
-#include <cstdlib>
-#include <fstream>
-#include <nlohmann/json.hpp>
-#include <sstream>
-
-#include "ghand/logging.h"
-#include "logging_macros.h"
-
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -17,6 +8,18 @@
 #include <limits.h>
 #include <sys/stat.h>
 #endif
+
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
+#include <vector>
+
+#include <nlohmann/json.hpp>
+
+#include "ghand/logging.h"
+#include "logging_macros.h"
 
 namespace ghand {
 namespace internal {
@@ -111,12 +114,29 @@ std::string GetSdkRootFromModule() {
   return "";
 }
 
+std::string GetEnvValue(const char* name) {
+#ifdef _WIN32
+  char* value = nullptr;
+  size_t value_size = 0;
+  errno_t err = _dupenv_s(&value, &value_size, name);
+  if (err != 0 || value == nullptr) {
+    return "";
+  }
+
+  std::string result(value);
+  std::free(value);
+  return result;
+#else
+  const char* value = std::getenv(name);
+  return value == nullptr ? "" : std::string(value);
+#endif
+}
+
 std::vector<std::string> GetConfigSearchPaths() {
   std::vector<std::string> paths;
 
-  const char* env_path = std::getenv("GHAND_SDK_CONFIG");
-  if (env_path) {
-    std::string path(env_path);
+  std::string path = GetEnvValue("GHAND_SDK_CONFIG");
+  if (!path.empty()) {
     if (!path.empty() && path.back() != '/' && path.back() != '\\') {
 #ifdef _WIN32
       path += '\\';
@@ -135,9 +155,9 @@ std::vector<std::string> GetConfigSearchPaths() {
   paths.emplace_back("./config/");
 
 #ifdef _WIN32
-  const char* program_data = std::getenv("PROGRAMDATA");
-  if (program_data) {
-    paths.emplace_back(std::string(program_data) + "\\ghand-sdk\\config\\");
+  std::string program_data = GetEnvValue("PROGRAMDATA");
+  if (!program_data.empty()) {
+    paths.emplace_back(program_data + "\\ghand-sdk\\config\\");
   }
 #else
   paths.emplace_back("/usr/share/ghand-sdk/config/");
@@ -170,6 +190,141 @@ JointId JointIdFromString(const std::string& name) {
   return JointId::NUM_JOINTS;
 }
 
+std::string FindConfigFilePath(
+    const std::string& file_name,
+    const std::vector<std::string>& search_paths) {
+  for (const auto& dir : search_paths) {
+    std::string full_path = dir + file_name;
+    std::ifstream test(full_path);
+    if (test.good()) {
+      return full_path;
+    }
+  }
+  return "";
+}
+
+std::string ReadTextFile(const std::string& path) {
+  std::ifstream ifs(path);
+  if (!ifs) {
+    return "";
+  }
+
+  std::string raw_content((std::istreambuf_iterator<char>(ifs)),
+                          std::istreambuf_iterator<char>());
+  return StripComments(raw_content);
+}
+
+bool ParseJsonContent(const std::string& content, nlohmann::json* json) {
+  if (json == nullptr) return false;
+  nlohmann::json parsed = nlohmann::json::parse(content, nullptr, false);
+  if (parsed.is_discarded()) return false;
+  *json = parsed;
+  return true;
+}
+
+std::string JsonStringOrEmpty(const nlohmann::json& j, const char* key) {
+  if (!j.contains(key) || !j[key].is_string()) return "";
+  return j[key].get<std::string>();
+}
+
+bool JsonBoolOrFalse(const nlohmann::json& j, const char* key) {
+  if (!j.contains(key) || !j[key].is_boolean()) return false;
+  return j[key].get<bool>();
+}
+
+void LoadJointConfig(const nlohmann::json& j, ProductConfig* config) {
+  if (!j.contains("joints") || !j["joints"].is_array()) return;
+
+  for (const auto& item : j["joints"]) {
+    if (!item.contains("id") || !item["id"].is_string()) continue;
+    JointId id = JointIdFromString(item["id"].get<std::string>());
+    if (id == JointId::NUM_JOINTS) continue;
+    config->valid_joints.push_back(id);
+    if (item.contains("min") && item.contains("max") &&
+        item["min"].is_number() && item["max"].is_number()) {
+      float min_val = item["min"].get<float>();
+      float max_val = item["max"].get<float>();
+      if (min_val > max_val) std::swap(min_val, max_val);
+      config->joint_limits[id] = {min_val, max_val};
+    }
+  }
+}
+
+void LoadTactileConfig(const nlohmann::json& j, ProductConfig* config) {
+  if (!j.contains("tactile_regions") ||
+      !j["tactile_regions"].is_array()) {
+    return;
+  }
+
+  for (const auto& item : j["tactile_regions"]) {
+    TactileRegionConfig region;
+    if (item.contains("name") && item["name"].is_string()) {
+      region.name = item["name"].get<std::string>();
+    }
+    if (item.contains("count") && item["count"].is_number_integer()) {
+      region.sensor_count = item["count"].get<int>();
+    }
+    if (!region.name.empty() && region.sensor_count > 0) {
+      config->tactile_regions.push_back(region);
+    }
+  }
+}
+
+ProductConfig ParseProductConfigJson(const nlohmann::json& j) {
+  ProductConfig config;
+  config.model = JsonStringOrEmpty(j, "model");
+  config.name = JsonStringOrEmpty(j, "name");
+  LoadJointConfig(j, &config);
+  config.has_tactile = JsonBoolOrFalse(j, "has_tactile");
+  LoadTactileConfig(j, &config);
+  return config;
+}
+
+std::vector<std::string> ListJsonFiles(const std::string& search_dir) {
+  std::vector<std::string> files;
+#ifdef _WIN32
+  std::string search_pattern = search_dir + "*.json";
+  WIN32_FIND_DATAA fd;
+  HANDLE hFind = FindFirstFileA(search_pattern.c_str(), &fd);
+  if (hFind == INVALID_HANDLE_VALUE) return files;
+  do {
+    files.push_back(search_dir + fd.cFileName);
+  } while (FindNextFileA(hFind, &fd));
+  FindClose(hFind);
+#else
+  DIR* dir = opendir(search_dir.c_str());
+  if (!dir) return files;
+  struct dirent* entry;
+  while ((entry = readdir(dir)) != nullptr) {
+    std::string name(entry->d_name);
+    if (name.size() < 6 || name.substr(name.size() - 5) != ".json") continue;
+    std::string file_path = search_dir + name;
+    struct stat st;
+    if (stat(file_path.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
+    files.push_back(file_path);
+  }
+  closedir(dir);
+#endif
+  return files;
+}
+
+bool NameMatches(const std::string& device_name,
+                 const std::string& config_name);
+
+bool TryLoadMatchingConfig(const std::string& file_path,
+                           const std::string& device_name,
+                           ProductConfig* config) {
+  std::string json_content = ReadTextFile(file_path);
+  if (json_content.empty()) return false;
+
+  nlohmann::json j;
+  if (!ParseJsonContent(json_content, &j)) return false;
+  std::string config_name = JsonStringOrEmpty(j, "name");
+  if (!NameMatches(device_name, config_name)) return false;
+  *config = ParseProductConfigJson(j);
+  return true;
+}
+
 ProductConfig LoadProductConfig(ProductType product) {
   ProductConfig config;
   std::string file_name = ProductTypeToFileName(product);
@@ -179,83 +334,37 @@ ProductConfig LoadProductConfig(ProductType product) {
   }
 
   std::vector<std::string> search_paths = GetConfigSearchPaths();
-  std::string found_path;
-  for (const auto& dir : search_paths) {
-    std::string full_path = dir + file_name;
-    std::ifstream test(full_path);
-    if (test.good()) {
-      found_path = full_path;
-      break;
-    }
-  }
-
+  std::string found_path = FindConfigFilePath(file_name, search_paths);
   if (found_path.empty()) {
     GHAND_LOG_ERROR("Product config file not found: " << file_name
-                                                << ". Searched in: ");
+                                                      << ". Searched in: ");
     for (const auto& dir : search_paths) {
       GHAND_LOG_ERROR("  " << dir);
     }
     return config;
   }
 
-  std::ifstream ifs(found_path);
-  if (!ifs) {
+  std::string json_content = ReadTextFile(found_path);
+  if (json_content.empty()) {
     GHAND_LOG_ERROR("Failed to open product config: " << found_path);
     return config;
   }
 
-  std::string raw_content((std::istreambuf_iterator<char>(ifs)),
-                          std::istreambuf_iterator<char>());
-  std::string json_content = StripComments(raw_content);
-
-  try {
-    nlohmann::json j = nlohmann::json::parse(json_content);
-
-    config.model = j.value("model", "");
-    config.name = j.value("name", "");
-
-    if (j.contains("joints") && j["joints"].is_array()) {
-      for (const auto& item : j["joints"]) {
-        if (!item.contains("id") || !item["id"].is_string()) continue;
-        JointId id = JointIdFromString(item["id"].get<std::string>());
-        if (id == JointId::NUM_JOINTS) continue;
-        config.valid_joints.push_back(id);
-        if (item.contains("min") && item.contains("max") &&
-            item["min"].is_number() && item["max"].is_number()) {
-          float min_val = item["min"].get<float>();
-          float max_val = item["max"].get<float>();
-          if (min_val > max_val) std::swap(min_val, max_val);
-          config.joint_limits[id] = {min_val, max_val};
-        }
-      }
-    }
-
-    config.has_tactile = j.value("has_tactile", false);
-
-    if (j.contains("tactile_regions") && j["tactile_regions"].is_array()) {
-      for (const auto& item : j["tactile_regions"]) {
-        TactileRegionConfig region;
-        region.name = item.value("name", "");
-        region.sensor_count = item.value("count", 0);
-        if (!region.name.empty() && region.sensor_count > 0) {
-          config.tactile_regions.push_back(region);
-        }
-      }
-    }
-
-    if (config.name.empty() || config.valid_joints.empty()) {
-      GHAND_LOG_ERROR("Product config missing required fields in " << found_path);
-      return ProductConfig();
-    }
-
-    GHAND_LOG_INFO("Loaded product config: " << config.name << " from "
-                                       << found_path);
-  } catch (const nlohmann::json::exception& e) {
-    GHAND_LOG_ERROR("Failed to parse product config " << found_path << ": "
-                                                << e.what());
-    config = ProductConfig();
+  nlohmann::json j;
+  if (!ParseJsonContent(json_content, &j)) {
+    GHAND_LOG_ERROR("Failed to parse product config " << found_path);
+    return ProductConfig();
   }
 
+  config = ParseProductConfigJson(j);
+  if (config.name.empty() || config.valid_joints.empty()) {
+    GHAND_LOG_ERROR("Product config missing required fields in "
+                    << found_path);
+    return ProductConfig();
+  }
+
+  GHAND_LOG_INFO("Loaded product config: " << config.name << " from "
+                                           << found_path);
   return config;
 }
 
@@ -266,103 +375,24 @@ bool NameMatches(const std::string& device_name,
   auto ci_equal = [](char a, char b) {
     return std::tolower(a) == std::tolower(b);
   };
-  return std::equal(config_name.begin(), config_name.end(), device_name.begin(),
-                    ci_equal);
+  return std::equal(config_name.begin(), config_name.end(),
+                    device_name.begin(), ci_equal);
 }
 
 ProductConfig FindConfigByName(const std::string& device_name) {
   if (device_name.empty()) return ProductConfig();
 
   std::vector<std::string> search_paths = GetConfigSearchPaths();
-  for (const auto& dir : search_paths) {
-    // Scan all .json files in directory
-    std::string pattern = dir + "*.json";
-    // Use FindFirstFile on Windows, glob on Linux
-    // Platform-independent approach below: try known product file name list
-    // Directory traversal can also be used; simplified here: try files one by one in search_paths
-  }
-
-  // Platform-independent traversal: try opening common file names in directory list
-  // Actual implementation: iterate through search paths and try listing .json files for each
-  // Since C++11 has no filesystem, use platform-specific directory traversal
   for (const auto& search_dir : search_paths) {
-#ifdef _WIN32
-    std::string search_pattern = search_dir + "*.json";
-    WIN32_FIND_DATAA fd;
-    HANDLE hFind = FindFirstFileA(search_pattern.c_str(), &fd);
-    if (hFind == INVALID_HANDLE_VALUE) continue;
-    do {
-      std::string file_path = search_dir + fd.cFileName;
-#else
-    DIR* dir = opendir(search_dir.c_str());
-    if (!dir) continue;
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
-      std::string name(entry->d_name);
-      if (name.size() < 6 || name.substr(name.size() - 5) != ".json") continue;
-      std::string file_path = search_dir + name;
-      struct stat st;
-      if (stat(file_path.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
-#endif
-      std::ifstream ifs(file_path);
-      if (!ifs) continue;
-      std::string raw_content((std::istreambuf_iterator<char>(ifs)),
-                              std::istreambuf_iterator<char>());
-      std::string json_content = StripComments(raw_content);
-      try {
-        nlohmann::json j = nlohmann::json::parse(json_content);
-        std::string config_name = j.value("name", "");
-        if (NameMatches(device_name, config_name)) {
-          // Match found, fully load this config
-          ProductConfig config;
-          config.model = j.value("model", "");
-          config.name = config_name;
-          if (j.contains("joints") && j["joints"].is_array()) {
-            for (const auto& item : j["joints"]) {
-              if (!item.contains("id") || !item["id"].is_string()) continue;
-              JointId id = JointIdFromString(item["id"].get<std::string>());
-              if (id == JointId::NUM_JOINTS) continue;
-              config.valid_joints.push_back(id);
-              if (item.contains("min") && item.contains("max") &&
-                  item["min"].is_number() && item["max"].is_number()) {
-                float min_val = item["min"].get<float>();
-                float max_val = item["max"].get<float>();
-                if (min_val > max_val) std::swap(min_val, max_val);
-                config.joint_limits[id] = {min_val, max_val};
-              }
-            }
-          }
-          config.has_tactile = j.value("has_tactile", false);
-          if (j.contains("tactile_regions") &&
-              j["tactile_regions"].is_array()) {
-            for (const auto& item : j["tactile_regions"]) {
-              TactileRegionConfig region;
-              region.name = item.value("name", "");
-              region.sensor_count = item.value("count", 0);
-              if (!region.name.empty() && region.sensor_count > 0) {
-                config.tactile_regions.push_back(region);
-              }
-            }
-          }
-#ifdef _WIN32
-          FindClose(hFind);
-#else
-          closedir(dir);
-#endif
-          GHAND_LOG_INFO("Auto-detected product config: " << config.name << " from "
-                                                    << file_path);
-          return config;
-        }
-      } catch (const nlohmann::json::exception&) {
-        // Skip unparseable JSON files
+    for (const auto& file_path : ListJsonFiles(search_dir)) {
+      ProductConfig config;
+      if (!TryLoadMatchingConfig(file_path, device_name, &config)) {
+        continue;
       }
-#ifdef _WIN32
-    } while (FindNextFileA(hFind, &fd));
-    FindClose(hFind);
-#else
+      GHAND_LOG_INFO("Auto-detected product config: "
+                     << config.name << " from " << file_path);
+      return config;
     }
-    closedir(dir);
-#endif
   }
 
   GHAND_LOG_ERROR(

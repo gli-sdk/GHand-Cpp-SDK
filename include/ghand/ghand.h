@@ -4,11 +4,12 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
-#include "export.h"
-#include "types.h"
-#include "version.h"
+#include "ghand/export.h"
+#include "ghand/types.h"
+#include "ghand/version.h"
 
 namespace ghand {
 
@@ -17,7 +18,7 @@ namespace internal {
 class DexHand;
 }  // namespace internal
 
-// ========== Callback Type Definitions ==========
+// Callback type definitions
 using JointsCallback = std::function<void(const std::vector<Joint>&)>;
 using HandStateCallback = std::function<void(const HandState&)>;
 using TactileDataCallback = std::function<void(const TactileData&)>;
@@ -25,7 +26,8 @@ using TactileDataCallback = std::function<void(const TactileData&)>;
 /**
  * @brief GHand DexHand robotic hand control interface
  *
- * This is the sole public API class, providing full control of the robotic hand.
+ * This is the sole public API class, providing full control of the robotic
+ * hand.
  */
 #ifdef _WIN32
 #pragma warning(push)
@@ -38,11 +40,13 @@ class GHAND_API DexHand {
       CommType comm_type = CommType::ETHERCAT);
   ~DexHand();
 
-  // Disable copy
+  // DexHand owns device state and is not copyable or movable.
   DexHand(const DexHand&) = delete;
   DexHand& operator=(const DexHand&) = delete;
+  DexHand(DexHand&&) = delete;
+  DexHand& operator=(DexHand&&) = delete;
 
-  // ========== Connection Management ==========
+  // Connection management
   /**
    * @brief Auto-connect to device
    * @return true on success
@@ -66,7 +70,7 @@ class GHAND_API DexHand {
    */
   bool IsConnected() const;
 
-  // ========== Device Info ==========
+  // Device info
   /**
    * @brief Search available communication adapters
    * @return Adapter name mapping table
@@ -83,7 +87,7 @@ class GHAND_API DexHand {
    */
   DeviceInfo GetDeviceInfo();
 
-  // ========== Motion Control ==========
+  // Motion control
   /**
    * @brief Set control mode
    */
@@ -111,7 +115,7 @@ class GHAND_API DexHand {
    */
   bool InitJoint();
 
-  // ========== Tactile Sensor ==========
+  // Tactile sensor
   /**
    * @brief Open tactile sensor
    */
@@ -127,7 +131,7 @@ class GHAND_API DexHand {
    */
   bool ZeroTactile();
 
-  // ========== Data Access ==========
+  // Data access
   /**
    * @brief Get hand state (latest cached data, no hardware read triggered)
    */
@@ -143,7 +147,7 @@ class GHAND_API DexHand {
    */
   TactileData GetTactileData();
 
-  // ========== Callback Registration ==========
+  // Callback registration
   /**
    * @brief Register joint data callback
    * @param cb Callback function

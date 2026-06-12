@@ -2,7 +2,10 @@
 #define SRC_INTERNAL_CANFD_COMM_H_
 
 #include <atomic>
+#include <cstdint>
+#include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -25,6 +28,11 @@ class CANFDComm : public IComm {
  public:
   explicit CANFDComm(const ProductConfig& config);
   ~CANFDComm() override;
+
+  CANFDComm(const CANFDComm&) = delete;
+  CANFDComm& operator=(const CANFDComm&) = delete;
+  CANFDComm(CANFDComm&&) = delete;
+  CANFDComm& operator=(CANFDComm&&) = delete;
 
   // IComm interface implementation
   int Connect(const std::string& device_name) override;
@@ -59,16 +67,17 @@ class CANFDComm : public IComm {
 
  private:
   // CANFD arbitration helpers (Python SDK compatible)
-  static uint32_t PackArbitration(int src_id, int dst_id, int ack, int func_code,
-                                  int start = 1, int end = 1, int toggle = 0,
-                                  int seg_num = 0);
+  static uint32_t PackArbitration(int src_id, int dst_id, int ack,
+                                  int func_code, int start = 1, int end = 1,
+                                  int toggle = 0, int seg_num = 0);
   static void UnpackArbitration(uint32_t can_id, int* src_id, int* dst_id,
                                 int* ack, int* func_code, int* start, int* end,
                                 int* toggle, int* seg_num);
 
   // Modbus-over-CANFD transport
   bool SendFrame(uint32_t can_id, const uint8_t* data, uint8_t len);
-  bool RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len, int timeout_ms);
+  bool RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len,
+                 int timeout_ms);
 
   bool ReadRegisters(int addr, int count, std::vector<uint8_t>* out_bytes,
                      int func_code = 0x04, int timeout_ms = 500);
@@ -81,7 +90,7 @@ class CANFDComm : public IComm {
   bool EstablishConnection(int timeout_ms = 500);
   void DeleteConnection();
 
-  std::vector<uint8_t> ReadInputBytes(int addr, int count);
+  bool ReadInputBytes(int addr, int count, std::vector<uint8_t>* bytes);
   std::vector<Joint> GetJoints();
   HandState GetHandInfo();
   TactileData GetTactileData();
