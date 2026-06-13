@@ -17,6 +17,7 @@
 #include "ghand/logging.h"
 #include "logging_macros.h"
 #include "product_config_loader.h"
+#include "rs485_comm.h"
 
 namespace {
 
@@ -74,6 +75,8 @@ DexHand::DexHand(ProductType product_type, CommType comm_type)
       comm_ = std::unique_ptr<CANFDComm>(new CANFDComm(config_));
       break;
     case CommType::RS485:
+      comm_ = std::unique_ptr<RS485Comm>(new RS485Comm(config_));
+      break;
     default:
       GHAND_LOG_WARNING("Unsupported communication type");
       break;
@@ -124,6 +127,9 @@ bool DexHand::ConnectToDevice(const std::string& device_name) {
             break;
           case CommType::CANFD:
             comm_.reset(new CANFDComm(config_));
+            break;
+          case CommType::RS485:
+            comm_.reset(new RS485Comm(config_));
             break;
           default:
             break;
@@ -386,20 +392,16 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
                   << static_cast<int>(original)
                   << " exceeds limit in POSITION mode, clamped to 100");
     }
-  } else if (control_mode_ == ControlMode::SPEED) {
-    // Speed mode: velocity range -100 to 100
-    if (joint.velocity < -100) {
-      int8_t original = joint.velocity;
-      joint.velocity = -100;
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
-                             << static_cast<int>(original)
-                             << " below limit in SPEED mode, clamped to -100");
-    } else if (joint.velocity > 100) {
-      int8_t original = joint.velocity;
-      joint.velocity = 100;
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
-                             << static_cast<int>(original)
-                             << " exceeds limit in SPEED mode, clamped to 100");
+
+  } else if (control_mode_ == ControlMode::TORQUE) {
+    // TORQUE:
+    // >100 -> 100, <-100 -> 100, -100~100 take absolute value.
+    if (velocity > 100) {
+      velocity = 100;
+    } else if (velocity < -100) {
+      velocity = 100;
+    } else if (velocity < 0) {
+      velocity = -velocity;
     }
   } else if (control_mode_ == ControlMode::TORQUE) {
     if (joint.velocity < -100) {
@@ -419,6 +421,9 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
 }
 
 void DexHand::ClampJointTorque(JointCommand& joint) {
+  int original = static_cast<int>(joint.torque);
+  int torque = original;
+
   if (control_mode_ == ControlMode::POSITION ||
       control_mode_ == ControlMode::SPEED) {
     // Position mode and speed mode: torque range 0-100, negative values take absolute value, absolute value > 100 clamped to 100
@@ -445,22 +450,29 @@ void DexHand::ClampJointTorque(JointCommand& joint) {
                              << " exceeds limit in " << mode_name
                              << " mode, clamped to 100");
     }
-  } else if (control_mode_ == ControlMode::TORQUE) {
-    // Torque mode: torque range -100 to 100
-    if (joint.torque < -100) {
-      int8_t original = joint.torque;
-      joint.torque = -100;
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " torque "
-                             << static_cast<int>(original)
-                             << " below limit in TORQUE mode, clamped to -100");
-    } else if (joint.torque > 100) {
-      int8_t original = joint.torque;
-      joint.torque = 100;
-      GHAND_LOG_WARNING("[Joint] "
-                  << ToString(joint.id) << " torque "
-                  << static_cast<int>(original)
-                  << " exceeds limit in TORQUE mode, clamped to 100");
+
+  } else if (control_mode_ == ControlMode::SPEED) {
+    // SPEED:
+    // >100 -> 100, <-100 -> 100, -100~100 directly pass through.
+    if (torque > 100) {
+      torque = 100;
+    } else if (torque < -100) {
+      torque = 100;
     }
+  }
+
+  if (torque != original) {
+    joint.torque = static_cast<int8_t>(torque);
+
+    const char* mode_name =
+        (control_mode_ == ControlMode::POSITION)
+            ? "POSITION"
+            : (control_mode_ == ControlMode::SPEED ? "SPEED" : "TORQUE");
+
+    GHAND_LOG_WARNING("[Joint] "
+                      << ToString(joint.id) << " torque " << original
+                      << " adjusted to " << torque << " in " << mode_name
+                      << " mode");
   }
 }
 

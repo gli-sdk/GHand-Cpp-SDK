@@ -21,7 +21,7 @@ C++ SDK for GHand dexterous hands, supporting EtherCAT, CANFD, and RS485 communi
 
 ## 📖 Official Documentation
 
-For detailed technical specifications and API references, visit: [C++ SDK Developer Documentation](https://fcnzogxju7xr.feishu.cn/docx/PlY7dUod5o3tZYxzXiUc0BN1nyd)
+For detailed technical specifications and API references, visit: [C++ SDK Developer Documentation](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)
 
 ## 📑 Table of Contents
 
@@ -73,10 +73,12 @@ The following libraries are included in `third_party/` and built automatically:
 | [nlohmann/json](https://github.com/nlohmann/json) | JSON parsing | MIT |
 | [ZLG CAN](https://www.zlg.cn/) | CANFD driver (Windows) | Proprietary |
 | WinPcap | Packet capture (Windows) | BSD |
+| [libmodbus](https://github.com/stephane/libmodbus) | Modbus RTU/RS485 support | LGPL-2.1 |
 
 ### System Libraries (Linux only)
 - libpcap-dev
 - libssl-dev
+- libmodbus-dev
 - pthreads
 
 ## 📦 Installation
@@ -152,6 +154,19 @@ int main() {
 }
 ```
 
+### RS485 Example
+
+```cpp
+auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                   ghand::CommType::RS485);
+auto adapters = hand->SearchAdapters();
+if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
+    auto info = hand->GetDeviceInfo();
+    printf("Device: %s\n", info.device_name.c_str());
+    hand->Disconnect();
+}
+```
+
 ## 🔨 Build from Source
 
 ### Windows
@@ -165,11 +180,13 @@ cmake --build . --config Release
 .\examples\Release\basic_connection.exe
 ```
 
+> **RS485 on Windows:** If you use RS485 communication, place `libmodbus.dll` in the same directory as `ghand.dll` (or in a directory on your `PATH`). The build system auto-copies it when found in `third_party/lib/windows/`.
+
 ### Linux
 
 ```bash
 # Install dependencies
-sudo apt install -y cmake build-essential pkg-config libpcap-dev libssl-dev
+sudo apt install -y cmake build-essential pkg-config libpcap-dev libssl-dev libmodbus-dev
 
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
