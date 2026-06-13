@@ -403,20 +403,10 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
                                    << "clamped to 100");
     }
 
-  } else if (control_mode_ == ControlMode::TORQUE) {
-    // TORQUE:
-    // >100 -> 100, <-100 -> 100, -100~100 take absolute value.
-    if (velocity > 100) {
-      velocity = 100;
-    } else if (velocity < -100) {
-      velocity = 100;
-    } else if (velocity < 0) {
-      velocity = -velocity;
-    }
-  } else if (control_mode_ == ControlMode::TORQUE) {
+  } else if (control_mode_ == ControlMode::SPEED) {
     if (joint.velocity < -100) {
       int8_t original = joint.velocity;
-      joint.velocity = 100;
+      joint.velocity = -100;
       GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
                                    << static_cast<int>(original)
                                    << " below limit in SPEED mode, "
