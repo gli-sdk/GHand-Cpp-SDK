@@ -540,10 +540,14 @@ DeviceInfo GetDeviceInfo() const;
 **DeviceInfo 结构：**
 ```cpp
 struct DeviceInfo {
-    std::string device_name;       // 设备名称
-    std::string hardware_version;  // 硬件版本
-    std::string software_version;  // 软件版本（固件版本）
-    std::string serial_number;     // 序列号
+    std::string device_name;              // 设备名称
+    std::string hardware_version;         // 硬件版本
+    std::string software_version;         // 主控固件版本
+    std::string position_sensor_version;  // 位置传感器固件版本
+    std::string tactile_sensor_version;   // 触觉传感器固件版本
+    std::string motor_driver_version;     // 电机驱动固件版本
+    std::string backup_package_version;   // 固件备份包版本
+    unsigned int serial_number;           // 序列号
 };
 ```
 
@@ -552,7 +556,11 @@ struct DeviceInfo {
 DeviceInfo info = hand.GetDeviceInfo();
 std::cout << "设备名称: " << info.device_name << std::endl;
 std::cout << "硬件版本: " << info.hardware_version << std::endl;
-std::cout << "软件版本: " << info.software_version << std::endl;
+std::cout << "主控版本: " << info.software_version << std::endl;
+std::cout << "位置传感器版本: " << info.position_sensor_version << std::endl;
+std::cout << "触觉传感器版本: " << info.tactile_sensor_version << std::endl;
+std::cout << "电机驱动版本: " << info.motor_driver_version << std::endl;
+std::cout << "备份包版本: " << info.backup_package_version << std::endl;
 std::cout << "序列号: " << info.serial_number << std::endl;
 ```
 

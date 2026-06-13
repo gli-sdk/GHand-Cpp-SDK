@@ -455,10 +455,9 @@ bool EtherCATComm::InputBin(const char* fname, int* length) {
   return true;
 }
 
-int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
-                             const std::string& file_path,
-                             std::function<void(int)> progress_callback) {
-  (void)ifname;
+FirmwareUpdateError EtherCATComm::BootUpdate(
+    const std::string& file_path,
+    std::function<void(int)> progress_callback) {
 
   // Pre-check: write 0x5A to 0x2005:0x01
   std::uint8_t command = 0x5A;
@@ -473,13 +472,11 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
     }
   }
   if (result != 1) {
-    return 0;
+    return FirmwareUpdateError::PREPARE_COMMAND_FAILED;
   }
 
-  if (slave <= 0 || slave > ctx_.slavecount) {
-    return -1;
-  }
   int filesize = 0;
+  int slave = 1;
   inOP_ = 0;
   dorun_ = 0;
   StopThreads();
@@ -509,27 +506,29 @@ int EtherCATComm::BootUpdate(const std::string& ifname, uint16_t slave,
     if (InputBin(file_path.c_str(), &filesize)) {
       char file_name[] = "ECATFW__firmware";
       int update_result = ecx_FOEwrite(&ctx_, slave, file_name, 0, filesize,
-                                       &file_buffer_, EC_TIMEOUTSTATE);
+                                       &file_buffer_, EC_TIMEOUTSTATE*10);
 
       GHAND_LOG_DEBUG("Releasing device lock after firmware update (result: "
                 << update_result << ")");
       device_lock_.Release();
 
       foe_instance_ = nullptr;
-      return update_result;
+      if (update_result > 0) {
+        return FirmwareUpdateError::SUCCESS;
+      }
+      return FirmwareUpdateError::FOE_TRANSFER_FAILED;
     } else {
       GHAND_LOG_DEBUG("Releasing device lock after firmware file read failure");
       device_lock_.Release();
       foe_instance_ = nullptr;
-      return -2;
+      return FirmwareUpdateError::FOE_TRANSFER_FAILED;
     }
   } else {
     GHAND_LOG_DEBUG("Releasing device lock after BOOT state transition failure");
     device_lock_.Release();
     foe_instance_ = nullptr;
-    return -1;
+    return FirmwareUpdateError::ENTER_BOOT_MODE_FAILED;
   }
-  return 0;
 }
 
 void EtherCATComm::FoeProgressHook(uint16 slave, int32 packetnumber,
@@ -615,22 +614,11 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
     info.serial_number = serial_num;
   }
 
-  std::uint8_t motor_ver[3] = {0};
-  int motor_size = sizeof(std::uint8_t);
-  int motor_result[3] = {0};
-  motor_result[0] =
-      SDORead(1, 0x2007, 0x01, &motor_size, &motor_ver[0], EC_TIMEOUTRXM);
-  motor_size = sizeof(std::uint8_t);
-  motor_result[1] =
-      SDORead(1, 0x2007, 0x02, &motor_size, &motor_ver[1], EC_TIMEOUTRXM);
-  motor_size = sizeof(std::uint8_t);
-  motor_result[2] =
-      SDORead(1, 0x2007, 0x03, &motor_size, &motor_ver[2], EC_TIMEOUTRXM);
-  if (motor_result[0] == 1 && motor_result[1] == 1 && motor_result[2] == 1) {
-    info.motor_driver_version = std::to_string(motor_ver[0]) + "." +
-                                std::to_string(motor_ver[1]) + "." +
-                                std::to_string(motor_ver[2]);
-  }
+  info.software_version = ReadFirmwareVersion(0x01);
+  info.position_sensor_version = ReadFirmwareVersion(0x02);
+  info.tactile_sensor_version = ReadFirmwareVersion(0x03);
+  info.motor_driver_version = ReadFirmwareVersion(0x04);
+  info.backup_package_version = ReadFirmwareVersion(0x05);
 
   return info;
 }
@@ -929,6 +917,67 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
       tactile_callback_(tactile_data);
     }
   }
+}
+
+std::string EtherCATComm::ReadFirmwareVersion(uint8_t mcu_id) {
+  std::uint8_t cmd = mcu_id;
+  int size = sizeof(std::uint8_t);
+  if (SDOWrite(1, 0x2007, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
+    return "";
+  }
+
+  std::uint8_t version_high = 0;
+  size = sizeof(std::uint8_t);
+  if (SDORead(1, 0x2007, 0x02, &size, &version_high, EC_TIMEOUTRXM) <= 0) {
+    return "";
+  }
+
+  std::uint8_t version_low = 0;
+  size = sizeof(std::uint8_t);
+  if (SDORead(1, 0x2007, 0x03, &size, &version_low, EC_TIMEOUTRXM) <= 0) {
+    return "";
+  }
+
+  uint8_t major = (version_high >> 5) & 0x07;
+  uint8_t minor = version_high & 0x1F;
+  uint8_t patch = (version_low >> 4) & 0x0F;
+
+  return std::to_string(major) + "." + std::to_string(minor) + "." +
+         std::to_string(patch);
+}
+
+bool EtherCATComm::QueryFirmwareUpdateResults(uint8_t* main_result,
+                                               uint8_t* pos_result,
+                                               uint8_t* tac_result,
+                                               uint8_t* motor_result) {
+  auto read_result = [this](uint8_t cmd, uint8_t* out) -> bool {
+    int size = sizeof(std::uint8_t);
+    if (SDOWrite(1, 0x2005, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
+      return false;
+    }
+    std::uint8_t state = 0xFF;
+    size = sizeof(std::uint8_t);
+    if (SDORead(1, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM) <= 0) {
+      return false;
+    }
+    std::uint8_t result = 0xFF;
+    size = sizeof(std::uint8_t);
+    if (SDORead(1, 0x2005, 0x03, &size, &result, EC_TIMEOUTRXM) <= 0) {
+      return false;
+    }
+    if (state == 0) {
+      return false;
+    }
+    *out = result;
+    return true;
+  };
+
+  bool ok = true;
+  ok = read_result(0xA1, main_result) && ok;
+  ok = read_result(0xA2, pos_result) && ok;
+  ok = read_result(0xA3, tac_result) && ok;
+  ok = read_result(0xA4, motor_result) && ok;
+  return ok;
 }
 
 }  // namespace internal

@@ -56,9 +56,13 @@ class IComm {
   virtual void SetTactileDataCallback(TactileDataCallback cb) = 0;
 
   // ===== Firmware Update =====
-  virtual int BootUpdate(const std::string& device_name, uint16_t slave,
-                         const std::string& filename,
-                         std::function<void(int)> progress) = 0;
+  virtual FirmwareUpdateError BootUpdate(
+      const std::string& filename,
+      std::function<void(int)> progress) = 0;
+  virtual bool QueryFirmwareUpdateResults(uint8_t* main_result,
+                                          uint8_t* pos_result,
+                                          uint8_t* tac_result,
+                                          uint8_t* motor_result) = 0;
 };
 
 }  // namespace internal

@@ -73,9 +73,9 @@ std::vector<Joint> DexHand::GetJointsData() { return impl_->GetJointsData(); }
 
 TactileData DexHand::GetTactileData() { return impl_->GetTactileData(); }
 
-int DexHand::BootUpdate(const std::string& ifname, uint16_t slave,
-                        const std::string& filename,
-                        std::function<void(int)> progress_callback) {
-  return impl_->BootUpdate(ifname, slave, filename, progress_callback);
+FirmwareUpdateError DexHand::BootUpdate(
+    const std::string& filename,
+    std::function<void(int)> progress_callback) {
+  return impl_->BootUpdate(filename, progress_callback);
 }
 }  // namespace ghand

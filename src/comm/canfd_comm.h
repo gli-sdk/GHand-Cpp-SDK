@@ -2,7 +2,6 @@
 #define SRC_INTERNAL_CANFD_COMM_H_
 
 #include <atomic>
-#include <condition_variable>
 #include <map>
 #include <mutex>
 #include <string>
@@ -10,7 +9,6 @@
 #include <vector>
 
 #include "canfd_driver.h"
-#include "canfd_protocol.h"
 #include "icomm.h"
 #include "product_config.h"
 
@@ -18,9 +16,10 @@ namespace ghand {
 namespace internal {
 
 /**
- * @brief CANFD communication implementation class
+ * @brief CANFD communication implementation using Modbus-over-CANFD
  *
- * Implements the IComm interface, communicating with devices using a custom CANFD protocol.
+ * Implements the IComm interface, communicating with devices using Modbus
+ * register access over CANFD frames (aligned with Python SDK behavior).
  */
 class CANFDComm : public IComm {
  public:
@@ -51,56 +50,57 @@ class CANFDComm : public IComm {
   void SetHandStateCallback(HandStateCallback cb) override;
   void SetTactileDataCallback(TactileDataCallback cb) override;
 
-  int BootUpdate(const std::string& device_name, uint16_t slave,
-                 const std::string& filename,
-                 std::function<void(int)> progress) override;
+  FirmwareUpdateError BootUpdate(
+      const std::string& filename,
+      std::function<void(int)> progress) override;
+  bool QueryFirmwareUpdateResults(uint8_t* main_result, uint8_t* pos_result,
+                                  uint8_t* tac_result,
+                                  uint8_t* motor_result) override;
 
  private:
-  bool SendRecvCmd(canfd::FunctionCode fc, const uint8_t* param,
-                   uint8_t param_len, std::vector<uint8_t>* response,
-                   int timeout_ms = 500);
-  bool SendCmdOnly(canfd::FunctionCode fc, const uint8_t* param,
-                   uint8_t param_len);
-  bool SendSingleFrame(const uint8_t* data, uint8_t total_len);
-  bool SendMultiFrame(const uint8_t* data, uint8_t total_len);
+  // CANFD arbitration helpers (Python SDK compatible)
+  static uint32_t PackArbitration(int src_id, int dst_id, int ack, int func_code,
+                                  int start = 1, int end = 1, int toggle = 0,
+                                  int seg_num = 0);
+  static void UnpackArbitration(uint32_t can_id, int* src_id, int* dst_id,
+                                int* ack, int* func_code, int* start, int* end,
+                                int* toggle, int* seg_num);
 
-  void ReceiveThread();
-  void ProcessActiveReport(const std::vector<uint8_t>& payload,
-                           canfd::FunctionCode fc);
+  // Modbus-over-CANFD transport
+  bool SendFrame(uint32_t can_id, const uint8_t* data, uint8_t len);
+  bool RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len, int timeout_ms);
 
-  bool SubscribeActiveReport(canfd::FunctionCode fc, uint8_t period_ms);
-  bool UnsubscribeActiveReport(canfd::FunctionCode fc);
+  bool ReadRegisters(int addr, int count, std::vector<uint8_t>* out_bytes,
+                     int func_code = 0x04, int timeout_ms = 500);
+  bool WriteRegisters(int addr, const std::vector<uint8_t>& data,
+                      int timeout_ms = 5000);
 
-  void ParseJointStates(const uint8_t* data, size_t len);
-  void ParseTactileForce(const uint8_t* data, size_t len);
-  void ParseHandError(const uint8_t* data, size_t len);
+  bool WriteSingleRegister(int addr, uint16_t value, int timeout_ms = 500);
 
-  float RawToAngle(uint16_t raw, JointId id);
-  uint16_t AngleToRaw(float angle_deg, JointId id);
+  bool NodeIdDetection(int timeout_ms = 500);
+  bool EstablishConnection(int timeout_ms = 500);
+  void DeleteConnection();
 
- private:
+  std::vector<uint8_t> ReadInputBytes(int addr, int count);
+  std::vector<Joint> GetJoints();
+  HandState GetHandInfo();
+  TactileData GetTactileData();
+
+  bool WriteTactileControl(uint16_t command);
+  void EnsurePollStarted();
+  void StopPoll();
+  void PollLoop();
+
   std::unique_ptr<CANFDDriver> driver_;
-  uint8_t device_id_ = 0x00;
+  uint8_t src_id_ = 0x0A;
+  uint8_t dst_id_ = 0x31;
   std::atomic<bool> connected_{false};
 
-  std::thread rx_thread_;
-  std::atomic<bool> rx_running_{false};
+  std::thread poll_thread_;
+  std::atomic<bool> poll_running_{false};
+  std::atomic<bool> poll_stop_{false};
 
   ProductConfig config_;
-
-  // Request-response matching (slotted by function code, supports concurrent requests)
-  struct ResponseSlot {
-    std::vector<uint8_t> payload;
-    bool ready = false;
-  };
-  std::mutex response_mutex_;
-  std::condition_variable response_cv_;
-  std::map<uint8_t, ResponseSlot> response_slots_;
-
-  // Packet assembler (isolated by device_id + FrameType for RESPONSE / ACTIVE_REPORT)
-  std::mutex asm_mutex_;
-  std::map<std::pair<uint8_t, canfd::FrameType>, canfd::PacketAssembler>
-      assemblers_;
 
   // Callbacks
   JointsCallback joints_cb_;

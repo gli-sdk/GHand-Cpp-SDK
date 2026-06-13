@@ -21,18 +21,16 @@ int main() {
     ghand::HandType type = hand->GetHandType();
     std::cout << "Hand type: " << ghand::ToString(type) << '\n';
 
-    // Get firmware version
+    // Get device info
     ghand::DeviceInfo device_info = hand->GetDeviceInfo();
-    std::string version = device_info.software_version;
-    if (!version.empty()) {
-      std::cout << "Firmware version: " << version << '\n';
-    }
-
-    // Get motor driver version
-    std::string motor_version = device_info.motor_driver_version;
-    if (!motor_version.empty()) {
-      std::cout << "Motor driver version: " << motor_version << '\n';
-    }
+    std::cout << "Device name: " << device_info.device_name << '\n';
+    std::cout << "Hardware version: " << device_info.hardware_version << '\n';
+    std::cout << "Software version: " << device_info.software_version << '\n';
+    std::cout << "Motor driver version: " << device_info.motor_driver_version << '\n';
+    std::cout << "Position sensor version: " << device_info.position_sensor_version << '\n';
+    std::cout << "Tactile sensor version: " << device_info.tactile_sensor_version << '\n';
+    std::cout << "Backup package version: " << device_info.backup_package_version << '\n';
+    std::cout << "Serial number: " << device_info.serial_number << '\n';
 
     // Disconnect
     hand->Disconnect();

@@ -58,9 +58,12 @@ class EtherCATComm : public IComm {
   void SetHandStateCallback(HandStateCallback cb) override;
   void SetTactileDataCallback(TactileDataCallback cb) override;
 
-  int BootUpdate(const std::string& device_name, uint16_t slave,
-                 const std::string& filename,
-                 std::function<void(int)> progress) override;
+  FirmwareUpdateError BootUpdate(
+                                 const std::string& filename,
+                                 std::function<void(int)> progress) override;
+  bool QueryFirmwareUpdateResults(uint8_t* main_result, uint8_t* pos_result,
+                                  uint8_t* tac_result,
+                                  uint8_t* motor_result) override;
 
   // ===== Low-level EtherCAT API (retained for internal use) =====
   int SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,
@@ -130,6 +133,9 @@ class EtherCATComm : public IComm {
   // Static thread entry points (required by OSAL to be C function pointers)
   static OSAL_THREAD_FUNC_RT EcatthreadWrapper(void* arg);
   static OSAL_THREAD_FUNC EcatcheckWrapper(void* arg);
+
+  // Firmware version helper
+  std::string ReadFirmwareVersion(uint8_t mcu_id);
 
   // Static helper methods
   static void add_time_ns(ec_timet* ts, int64_t addtime);

@@ -139,12 +139,30 @@ enum class CommType : uint8_t { ETHERCAT, CANFD, RS485 };
 // ===== Control Mode Definitions =====
 enum class ControlMode : uint8_t { POSITION = 0, TORQUE = 1, SPEED = 2 };
 
+// ===== Firmware Update Error Codes =====
+enum class FirmwareUpdateError : int {
+  SUCCESS = 0,
+  PREPARE_COMMAND_FAILED,   // Write 0x5A pre-check failed
+  ENTER_BOOT_MODE_FAILED,   // Enter BOOT state failed
+  FOE_TRANSFER_FAILED,      // FOE transfer failed
+  MAIN_CONTROLLER_FAILED,   // Main controller MCU upgrade failed
+  POSITION_SENSOR_FAILED,   // Position sensor MCU upgrade failed
+  TACTILE_SENSOR_FAILED,    // Tactile sensor MCU upgrade failed
+  MOTOR_DRIVER_FAILED,      // Motor driver MCU upgrade failed
+  RECONNECT_FAILED,         // Reconnect after update failed
+  NOT_SUPPORTED,            // Communication protocol does not support firmware update
+  QUERY_FAILED,             // Failed to query upgrade results
+};
+
 // ===== Device Info Structure =====
 struct DeviceInfo {
   std::string device_name;
   std::string hardware_version;
-  std::string software_version;
+  std::string software_version;       // Main controller firmware version
+  std::string position_sensor_version;
+  std::string tactile_sensor_version;
   std::string motor_driver_version;
+  std::string backup_package_version;
   unsigned int serial_number;
 };
 
