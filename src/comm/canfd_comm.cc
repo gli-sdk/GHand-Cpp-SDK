@@ -412,24 +412,11 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
   uint16_t mode_value = (static_cast<uint16_t>(mode) << 8) & 0xFF00;
   if (!WriteSingleRegister(0x0010, mode_value)) return false;
 
-    // Find if this joint has a command (input list only contains user-specified joints).
-    // For missing joints, use the minimum valid angle from joint_limits instead of 0.
-    float angle = 0.0f;
-    auto limit_it = config_.joint_limits.find(id);
-    if (limit_it != config_.joint_limits.end()) {
-      angle = limit_it->second.first;
-    }
+  // Write each joint
+  for (const auto& joint : joints) {
+    auto it = kHoldingRegMap.find(joint.id);
+    if (it == kHoldingRegMap.end()) continue;
 
-    uint8_t velocity = 0;
-    uint8_t torque = 0;
-    for (const auto& joint : joints) {
-      if (joint.id == id) {
-        angle = joint.angle;
-        velocity = joint.velocity;
-        torque = joint.torque;
-        break;
-      }
-    }
     auto regs = EncodeJointCommand(joint);
     std::vector<uint8_t> data = {
         static_cast<uint8_t>((regs.first >> 8) & 0xFF),
