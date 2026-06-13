@@ -3,19 +3,14 @@
 
 #include <string>
 
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
-
 namespace ghand {
 namespace internal {
 
 /**
  * @brief Cross-platform file lock internal implementation class
  *
- * Provides inter-process mutual exclusion to prevent multiple processes from using the same device simultaneously.
+ * Provides inter-process mutual exclusion to prevent multiple processes from
+ * using the same device simultaneously.
  * Uses RAII to manage the lock lifecycle, ensuring exception safety.
  *
  * Platform support:
@@ -31,6 +26,11 @@ class FileLock {
  public:
   FileLock();
   ~FileLock();
+
+  FileLock(const FileLock&) = delete;
+  FileLock& operator=(const FileLock&) = delete;
+  FileLock(FileLock&&) = delete;
+  FileLock& operator=(FileLock&&) = delete;
 
   bool Acquire(const std::string& lock_file);
   void Release();

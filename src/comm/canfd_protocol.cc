@@ -20,12 +20,14 @@ bool PacketAssembler::Feed(const Frame& frame,
 
   auto now = std::chrono::steady_clock::now();
 
-  // Timeout detection: if assembly is in progress and not completed within 500ms, auto-reset
+  // Timeout detection: if assembly is in progress and not completed within
+  // 500 ms, auto-reset.
   if (expected_total_ != 0 && (now - first_frame_time_) > kAssemblyTimeout) {
     Reset();
   }
 
-  // Single-frame packet (compatible with total=0 or total=1, consistent with sender)
+  // Single-frame packet (compatible with total=0 or total=1, consistent with
+  // sender).
   if (total <= 1) {
     out_payload->assign(frame.data, frame.data + frame.len);
     return true;

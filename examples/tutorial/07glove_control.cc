@@ -1,6 +1,9 @@
-// Define these macros before including Windows headers to avoid winsock.h/winsock2.h conflicts
+// Define these macros before including Windows headers to avoid
+// winsock.h/winsock2.h conflicts.
 #ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
@@ -15,20 +18,19 @@ const int INVALID_SOCKET = -1;
 const int SOCKET_ERROR = -1;
 #endif
 
+#include <cerrno>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "ghand/ghand.h"
 
-// ========== Data Structures ==========
-
-/**
- * @brief Thumb finger data (9 sensors)
- */
 struct ThumbFinger {
   float mcp_bend, mcp_sway, mcp_roll;
   float pip_bend, pip_sway, pip_roll;
@@ -46,9 +48,6 @@ struct ThumbFinger {
         dip_roll(0) {}
 };
 
-/**
- * @brief Other finger data (4 sensors)
- */
 struct Finger {
   float mcp_bend, mcp_sway;
   float pip_bend, pip_sway;
@@ -56,9 +55,6 @@ struct Finger {
   Finger() : mcp_bend(0), mcp_sway(0), pip_bend(0), pip_sway(0) {}
 };
 
-/**
- * @brief Hand data
- */
 struct HandData {
   ThumbFinger thumb;
   Finger index;
@@ -67,21 +63,16 @@ struct HandData {
   Finger pinky;
 };
 
-// ========== Configuration Parameters ==========
-
 constexpr char kUdpIp[] = "192.168.1.19";
 constexpr int kUdpPort = 8080;
-constexpr double kProcessInterval = 0.02;  // 20ms processing interval
+constexpr double kProcessInterval = 0.02;
 
-// ========== Helper Functions ==========
+enum class ReceiveStatus {
+  DATA,
+  TIMEOUT,
+  FAILURE
+};
 
-/**
- * @brief Angle clipping function (clips angle to specified range)
- * @param value Input angle value (degrees)
- * @param min_angle Minimum angle value (degrees)
- * @param max_angle Maximum angle value (degrees)
- * @return Angle value clipped within range (degrees)
- */
 float ClipAngle(float value, float min_angle, float max_angle) {
   float clamped = value;
   if (clamped < min_angle) clamped = min_angle;
@@ -89,228 +80,129 @@ float ClipAngle(float value, float min_angle, float max_angle) {
   return clamped;
 }
 
-/**
- * @brief Process glove data, parse left and right hand finger data
- * @param data Raw data string
- * @param left_hand Output: left hand data
- * @param right_hand Output: right hand data
- * @return Returns true on success
- */
-bool ProcessGloveData(const char* data, HandData& left_hand,
-                      HandData& right_hand) {
-  // Copy data to avoid modifying original string
+bool ParseFloat(const std::string& text, float* value) {
+  if (value == nullptr) return false;
+  errno = 0;
+  char* end = nullptr;
+  float parsed = std::strtof(text.c_str(), &end);
+  if (end == text.c_str() || errno == ERANGE) return false;
+  *value = parsed;
+  return true;
+}
+
+std::vector<float> ParseNumericData(const char* data) {
   std::string data_str(data);
   std::vector<float> numeric_data;
 
-  // Manually parse comma-separated data
   size_t start = 0;
   size_t end = data_str.find(',');
   bool first_item = true;
-
   while (end != std::string::npos) {
     std::string item = data_str.substr(start, end - start);
-
     if (!first_item) {
-      try {
-        float value = std::stof(item);
-        numeric_data.push_back(value);
-      } catch (const std::exception&) {
-        // Conversion failed, skip
-      }
+      float value = 0.0f;
+      if (ParseFloat(item, &value)) numeric_data.push_back(value);
     } else {
       first_item = false;
     }
-
     start = end + 1;
     end = data_str.find(',', start);
   }
 
-  // Process last item
   if (start < data_str.length() && !first_item) {
-    try {
-      float value = std::stof(data_str.substr(start));
+    float value = 0.0f;
+    if (ParseFloat(data_str.substr(start), &value)) {
       numeric_data.push_back(value);
-    } catch (const std::exception&) {
-      // Conversion failed, skip
     }
   }
+  return numeric_data;
+}
 
-  // Need at least 192 data points
-  if (numeric_data.size() < 192) {
-    return false;
+std::vector<float> ExtractHandValues(const std::vector<float>& numeric_data,
+                                     const size_t* indices,
+                                     size_t count) {
+  std::vector<float> values;
+  values.reserve(count);
+  for (size_t i = 0; i < count; ++i) {
+    values.push_back(numeric_data[indices[i]]);
   }
+  return values;
+}
 
-  // Extract right hand data
-  std::vector<float> right_hand_data;
-  // Right hand thumb (groups 1, 2, 3)
-  right_hand_data.push_back(numeric_data[10]);
-  right_hand_data.push_back(numeric_data[9]);
-  right_hand_data.push_back(numeric_data[11]);  // mcp bend, sway, roll
-  right_hand_data.push_back(numeric_data[16]);
-  right_hand_data.push_back(numeric_data[15]);
-  right_hand_data.push_back(numeric_data[17]);  // pip bend, sway, roll
-  right_hand_data.push_back(numeric_data[22]);
-  right_hand_data.push_back(numeric_data[21]);
-  right_hand_data.push_back(numeric_data[23]);  // dip bend, sway, roll
+void FillHandData(const std::vector<float>& values, HandData* hand) {
+  if (values.size() < 25) return;
 
-  // Right hand index finger (groups 4, 5)
-  right_hand_data.push_back(numeric_data[28]);
-  right_hand_data.push_back(numeric_data[27]);  // mcp
-  right_hand_data.push_back(numeric_data[34]);
-  right_hand_data.push_back(numeric_data[33]);  // pip
+  hand->thumb.mcp_bend = values[0];
+  hand->thumb.mcp_sway = values[1];
+  hand->thumb.mcp_roll = values[2];
+  hand->thumb.pip_bend = values[3];
+  hand->thumb.pip_sway = values[4];
+  hand->thumb.pip_roll = values[5];
+  hand->thumb.dip_bend = values[6];
+  hand->thumb.dip_sway = values[7];
+  hand->thumb.dip_roll = values[8];
 
-  // Right hand middle finger (groups 7, 8)
-  right_hand_data.push_back(numeric_data[46]);
-  right_hand_data.push_back(numeric_data[45]);  // mcp
-  right_hand_data.push_back(numeric_data[52]);
-  right_hand_data.push_back(numeric_data[51]);  // pip
+  hand->index.mcp_bend = values[9];
+  hand->index.mcp_sway = values[10];
+  hand->index.pip_bend = values[11];
+  hand->index.pip_sway = values[12];
+  hand->middle.mcp_bend = values[13];
+  hand->middle.mcp_sway = values[14];
+  hand->middle.pip_bend = values[15];
+  hand->middle.pip_sway = values[16];
+  hand->ring.mcp_bend = values[17];
+  hand->ring.mcp_sway = values[18];
+  hand->ring.pip_bend = values[19];
+  hand->ring.pip_sway = values[20];
+  hand->pinky.mcp_bend = values[21];
+  hand->pinky.mcp_sway = values[22];
+  hand->pinky.pip_bend = values[23];
+  hand->pinky.pip_sway = values[24];
+}
 
-  // Right hand ring finger (groups 10, 11)
-  right_hand_data.push_back(numeric_data[64]);
-  right_hand_data.push_back(numeric_data[63]);  // mcp
-  right_hand_data.push_back(numeric_data[70]);
-  right_hand_data.push_back(numeric_data[69]);  // pip
+bool ProcessGloveData(const char* data, HandData& left_hand,
+                      HandData& right_hand) {
+  const size_t kRightIndices[] = {
+      10, 9,  11, 16, 15, 17, 22, 21, 23, 28, 27, 34, 33,
+      46, 45, 52, 51, 64, 63, 70, 69, 82, 81, 88, 87};
+  const size_t kLeftIndices[] = {
+      106, 105, 107, 112, 111, 113, 118, 117, 119,
+      124, 123, 130, 129, 142, 141, 148, 147,
+      160, 159, 166, 165, 178, 177, 184, 183};
 
-  // Right hand little finger (groups 13, 14)
-  right_hand_data.push_back(numeric_data[82]);
-  right_hand_data.push_back(numeric_data[81]);  // mcp
-  right_hand_data.push_back(numeric_data[88]);
-  right_hand_data.push_back(numeric_data[87]);  // pip
-
-  // Extract left hand data
-  std::vector<float> left_hand_data;
-  // Left hand thumb (groups 17, 18, 19)
-  left_hand_data.push_back(numeric_data[106]);
-  left_hand_data.push_back(numeric_data[105]);
-  left_hand_data.push_back(numeric_data[107]);  // mcp bend, sway, roll
-  left_hand_data.push_back(numeric_data[112]);
-  left_hand_data.push_back(numeric_data[111]);
-  left_hand_data.push_back(numeric_data[113]);  // pip bend, sway, roll
-  left_hand_data.push_back(numeric_data[118]);
-  left_hand_data.push_back(numeric_data[117]);
-  left_hand_data.push_back(numeric_data[119]);  // dip bend, sway, roll
-
-  // Left hand index finger (groups 20, 21)
-  left_hand_data.push_back(numeric_data[124]);
-  left_hand_data.push_back(numeric_data[123]);  // mcp
-  left_hand_data.push_back(numeric_data[130]);
-  left_hand_data.push_back(numeric_data[129]);  // pip
-
-  // Left hand middle finger (groups 23, 24)
-  left_hand_data.push_back(numeric_data[142]);
-  left_hand_data.push_back(numeric_data[141]);  // mcp
-  left_hand_data.push_back(numeric_data[148]);
-  left_hand_data.push_back(numeric_data[147]);  // pip
-
-  // Left hand ring finger (groups 26, 27)
-  left_hand_data.push_back(numeric_data[160]);
-  left_hand_data.push_back(numeric_data[159]);  // mcp
-  left_hand_data.push_back(numeric_data[166]);
-  left_hand_data.push_back(numeric_data[165]);  // pip
-
-  // Left hand little finger (groups 29, 30)
-  left_hand_data.push_back(numeric_data[178]);
-  left_hand_data.push_back(numeric_data[177]);  // mcp
-  left_hand_data.push_back(numeric_data[184]);
-  left_hand_data.push_back(numeric_data[183]);  // pip
-
-  // Build right hand data object
-  if (right_hand_data.size() >= 25) {
-    right_hand.thumb.mcp_bend = right_hand_data[0];
-    right_hand.thumb.mcp_sway = right_hand_data[1];
-    right_hand.thumb.mcp_roll = right_hand_data[2];
-    right_hand.thumb.pip_bend = right_hand_data[3];
-    right_hand.thumb.pip_sway = right_hand_data[4];
-    right_hand.thumb.pip_roll = right_hand_data[5];
-    right_hand.thumb.dip_bend = right_hand_data[6];
-    right_hand.thumb.dip_sway = right_hand_data[7];
-    right_hand.thumb.dip_roll = right_hand_data[8];
-
-    right_hand.index.mcp_bend = right_hand_data[9];
-    right_hand.index.mcp_sway = right_hand_data[10];
-    right_hand.index.pip_bend = right_hand_data[11];
-    right_hand.index.pip_sway = right_hand_data[12];
-
-    right_hand.middle.mcp_bend = right_hand_data[13];
-    right_hand.middle.mcp_sway = right_hand_data[14];
-    right_hand.middle.pip_bend = right_hand_data[15];
-    right_hand.middle.pip_sway = right_hand_data[16];
-
-    right_hand.ring.mcp_bend = right_hand_data[17];
-    right_hand.ring.mcp_sway = right_hand_data[18];
-    right_hand.ring.pip_bend = right_hand_data[19];
-    right_hand.ring.pip_sway = right_hand_data[20];
-
-    right_hand.pinky.mcp_bend = right_hand_data[21];
-    right_hand.pinky.mcp_sway = right_hand_data[22];
-    right_hand.pinky.pip_bend = right_hand_data[23];
-    right_hand.pinky.pip_sway = right_hand_data[24];
-  }
-
-  // Build left hand data object
-  if (left_hand_data.size() >= 25) {
-    left_hand.thumb.mcp_bend = left_hand_data[0];
-    left_hand.thumb.mcp_sway = left_hand_data[1];
-    left_hand.thumb.mcp_roll = left_hand_data[2];
-    left_hand.thumb.pip_bend = left_hand_data[3];
-    left_hand.thumb.pip_sway = left_hand_data[4];
-    left_hand.thumb.pip_roll = left_hand_data[5];
-    left_hand.thumb.dip_bend = left_hand_data[6];
-    left_hand.thumb.dip_sway = left_hand_data[7];
-    left_hand.thumb.dip_roll = left_hand_data[8];
-
-    left_hand.index.mcp_bend = left_hand_data[9];
-    left_hand.index.mcp_sway = left_hand_data[10];
-    left_hand.index.pip_bend = left_hand_data[11];
-    left_hand.index.pip_sway = left_hand_data[12];
-
-    left_hand.middle.mcp_bend = left_hand_data[13];
-    left_hand.middle.mcp_sway = left_hand_data[14];
-    left_hand.middle.pip_bend = left_hand_data[15];
-    left_hand.middle.pip_sway = left_hand_data[16];
-
-    left_hand.ring.mcp_bend = left_hand_data[17];
-    left_hand.ring.mcp_sway = left_hand_data[18];
-    left_hand.ring.pip_bend = left_hand_data[19];
-    left_hand.ring.pip_sway = left_hand_data[20];
-
-    left_hand.pinky.mcp_bend = left_hand_data[21];
-    left_hand.pinky.mcp_sway = left_hand_data[22];
-    left_hand.pinky.pip_bend = left_hand_data[23];
-    left_hand.pinky.pip_sway = left_hand_data[24];
-  }
-
+  std::vector<float> numeric_data = ParseNumericData(data);
+  if (numeric_data.size() < 192) return false;
+  FillHandData(ExtractHandValues(numeric_data, kLeftIndices, 25), &left_hand);
+  FillHandData(ExtractHandValues(numeric_data, kRightIndices, 25), &right_hand);
   return true;
 }
 
-// ========== Main Program ==========
-
-int main() {
-  std::cout << "========================================" << '\n';
-  std::cout << "  GHand Dexterous Hand SDK - Glove Control        "
-            << '\n';
-  std::cout << "========================================" << '\n';
-
+bool InitializeSocketApi() {
 #ifdef _WIN32
-  // Initialize Winsock
   WSADATA wsa_data;
   if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
     std::cerr << "Error: WSAStartup failed" << '\n';
-    return 1;
+    return false;
   }
 #endif
+  return true;
+}
 
-  // Create UDP socket
+void CleanupSocketApi() {
+#ifdef _WIN32
+  WSACleanup();
+#endif
+}
+
+SOCKET CreateUdpSocket() {
   SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (sock == INVALID_SOCKET) {
     std::cerr << "Error: Unable to create socket" << '\n';
-#ifdef _WIN32
-    WSACleanup();
-#endif
-    return 1;
   }
+  return sock;
+}
 
-  // Bind socket
+bool BindUdpSocket(SOCKET sock) {
   sockaddr_in server_addr;
   std::memset(&server_addr, 0, sizeof(server_addr));
   server_addr.sin_family = AF_INET;
@@ -321,47 +213,17 @@ int main() {
       SOCKET_ERROR) {
     std::cerr << "Error: Unable to bind to " << kUdpIp << ":" << kUdpPort
               << '\n';
-    closesocket(sock);
-#ifdef _WIN32
-    WSACleanup();
-#endif
-    return 1;
+    return false;
   }
 
-  std::cout << "\n✓ Listening for data on " << kUdpIp << ":" << kUdpPort
+  std::cout << "\nOK Listening for data on " << kUdpIp << ":" << kUdpPort
             << "..." << '\n';
+  return true;
+}
 
-  // Connect dexterous hand
-  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::ETHERCAT);
-  if (!hand) {
-    std::cerr << "Failed to create DexHand" << '\n';
-    closesocket(sock);
+void ConfigureReceiveTimeout(SOCKET sock) {
 #ifdef _WIN32
-    WSACleanup();
-#endif
-    return 1;
-  }
-  std::cout << "\nConnecting to dexterous hand via EtherCAT..." << '\n';
-  bool success = hand->AutoConnect();
-
-  if (!success) {
-    std::cerr << "Error: Unable to connect to dexterous hand!" << '\n';
-    closesocket(sock);
-#ifdef _WIN32
-    WSACleanup();
-#endif
-    return 1;
-  }
-
-  std::cout << "✓ Successfully connected to dexterous hand!" << '\n';
-  std::cout << "\nStarting to receive glove data and control dexterous hand..."
-            << '\n';
-  std::cout << "Press Ctrl+C to exit program\n" << '\n';
-
-  // Set receive timeout to avoid permanent blocking
-#ifdef _WIN32
-  DWORD timeout = 1000;  // 1 second timeout
+  DWORD timeout = 1000;
   setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout,
              sizeof(timeout));
 #else
@@ -370,149 +232,173 @@ int main() {
   tv.tv_usec = 0;
   setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #endif
+}
 
-  // Register joint data callback (for displaying feedback)
+std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
+  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                      ghand::CommType::CANFD);
+  if (!hand) {
+    std::cerr << "Failed to create DexHand" << '\n';
+    return nullptr;
+  }
+  std::cout << "\nConnecting to dexterous hand via CANFD..." << '\n';
+  if (!hand->AutoConnect()) {
+    std::cerr << "Error: Unable to connect to dexterous hand!" << '\n';
+    return nullptr;
+  }
+
+  std::cout << "OK Successfully connected to dexterous hand!" << '\n';
+  return hand;
+}
+
+std::vector<ghand::JointCommand> BuildJointCommands(const HandData& hand) {
+  const int speed = 100;
+  const int torque = 100;
+  return {
+      {ghand::JointId::THUMB_PIP,
+       ClipAngle(hand.thumb.pip_bend, 0, 75), speed, torque},
+      {ghand::JointId::THUMB_MCP,
+       ClipAngle(hand.thumb.mcp_bend - 40, 0, 55), speed, torque},
+      {ghand::JointId::THUMB_SWING,
+       ClipAngle(-(hand.thumb.mcp_roll + hand.thumb.pip_roll +
+                   hand.thumb.dip_roll) -
+                     85,
+                 0, 90),
+       speed, torque},
+      {ghand::JointId::THUMB_ROTATION,
+       ClipAngle(-hand.thumb.dip_sway, -30, 60), speed, torque},
+      {ghand::JointId::FF_PIP,
+       ClipAngle(hand.index.pip_bend, 0, 75), speed, torque},
+      {ghand::JointId::FF_MCP,
+       ClipAngle(hand.index.mcp_bend, 0, 70), speed, torque},
+      {ghand::JointId::FF_SWING,
+       ClipAngle(hand.index.mcp_sway + hand.index.pip_sway, -15, 15),
+       speed, torque},
+      {ghand::JointId::MF_PIP,
+       ClipAngle(hand.middle.pip_bend, 0, 75), speed, torque},
+      {ghand::JointId::MF_MCP,
+       ClipAngle(hand.middle.mcp_bend, 0, 70), speed, torque},
+      {ghand::JointId::RF_PIP,
+       ClipAngle(hand.ring.pip_bend, 0, 75), speed, torque},
+      {ghand::JointId::RF_MCP,
+       ClipAngle(hand.ring.mcp_bend, 0, 70), speed, torque},
+      {ghand::JointId::LF_PIP,
+       ClipAngle(hand.pinky.pip_bend, 0, 75), speed, torque},
+      {ghand::JointId::LF_MCP,
+       ClipAngle(hand.pinky.mcp_bend, 0, 70), speed, torque},
+  };
+}
+
+ReceiveStatus ReceivePacket(SOCKET sock, char* buffer, int buffer_size,
+                            int* recv_len) {
+  sockaddr_in client_addr;
+  socklen_t client_len = sizeof(client_addr);
+  *recv_len = recvfrom(sock, buffer, buffer_size - 1, 0,
+                       (sockaddr*)&client_addr, &client_len);
+  if (*recv_len != SOCKET_ERROR) return ReceiveStatus::DATA;
+
+#ifdef _WIN32
+  int error = WSAGetLastError();
+  if (error == WSAETIMEDOUT) return ReceiveStatus::TIMEOUT;
+#endif
+  return ReceiveStatus::FAILURE;
+}
+
+void ProcessPacket(char* buffer, int recv_len, ghand::DexHand& hand,
+                   int* data_count, bool joints_received,
+                   const std::vector<ghand::Joint>& last_joints) {
+  buffer[recv_len] = '\0';
+  HandData left_hand, right_hand;
+  if (!ProcessGloveData(buffer, left_hand, right_hand)) return;
+
+  ++(*data_count);
+  if (*data_count % 50 == 0) {
+    std::cout << "[Glove Data] Left hand thumb MCP: bend="
+              << left_hand.thumb.mcp_bend
+              << ", sway=" << left_hand.thumb.mcp_sway
+              << ", roll=" << left_hand.thumb.mcp_roll << '\n';
+  }
+
+  std::vector<ghand::JointCommand> joints = BuildJointCommands(left_hand);
+  hand.MoveJoints(joints);
+  if (*data_count % 100 == 0 && joints_received && !last_joints.empty()) {
+    std::cout << "[Dexterous Hand Status] Processed " << *data_count
+              << " frames" << '\n';
+  }
+}
+
+void ReceiveLoop(SOCKET sock, ghand::DexHand& hand) {
+  std::cout << "\nStarting to receive glove data and control dexterous hand..."
+            << '\n';
+  std::cout << "Press Ctrl+C to exit program\n" << '\n';
+
   std::vector<ghand::Joint> last_joints;
   bool joints_received = false;
-  hand->SetJointsCallback([&](const std::vector<ghand::Joint>& joints) {
+  hand.SetJointsCallback([&](const std::vector<ghand::Joint>& joints) {
     last_joints = joints;
     joints_received = true;
   });
 
   auto last_process_time = std::chrono::steady_clock::now();
   int data_count = 0;
-
-  try {
-    while (true) {
-      // Receive UDP data
-      char buffer[32 * 1024];
-      sockaddr_in client_addr;
-      socklen_t client_len = sizeof(client_addr);
-
-      int recv_len = recvfrom(sock, buffer, sizeof(buffer) - 1, 0,
-                              (sockaddr*)&client_addr, &client_len);
-
-      if (recv_len == SOCKET_ERROR) {
-#ifdef _WIN32
-        int error = WSAGetLastError();
-        if (error == WSAETIMEDOUT) {
-          // Timeout, continue loop
-          continue;
-        }
-#endif
-        std::cerr << "Error: Failed to receive data" << '\n';
-        break;
-      }
-
-      buffer[recv_len] = '\0';
-
-      // Check if data needs to be processed
-      auto current_time = std::chrono::steady_clock::now();
-      double elapsed =
-          std::chrono::duration<double>(current_time - last_process_time)
-              .count();
-
-      if (elapsed >= kProcessInterval) {
-        HandData left_hand, right_hand;
-
-        if (ProcessGloveData(buffer, left_hand, right_hand)) {
-          data_count++;
-
-          // Display glove data every 50 frames
-          if (data_count % 50 == 0) {
-            std::cout << "[Glove Data] Left hand thumb MCP: bend="
-                      << left_hand.thumb.mcp_bend
-                      << ", sway=" << left_hand.thumb.mcp_sway
-                      << ", roll=" << left_hand.thumb.mcp_roll << '\n';
-          }
-
-          // Use left hand data to control dexterous hand
-          std::vector<ghand::JointCommand> joints;
-          const int speed = 100;
-          const int torque = 100;
-
-          // Thumb joints
-          joints.push_back({ghand::JointId::THUMB_PIP,
-                            ClipAngle(left_hand.thumb.pip_bend, 0, 75), speed,
-                            torque});
-          joints.push_back({ghand::JointId::THUMB_MCP,
-                            ClipAngle(left_hand.thumb.mcp_bend - 40, 0, 55),
-                            speed, torque});
-          joints.push_back(
-              {ghand::JointId::THUMB_SWING,
-               ClipAngle(-(left_hand.thumb.mcp_roll + left_hand.thumb.pip_roll +
-                           left_hand.thumb.dip_roll) -
-                             85,
-                         0, 90),
-               speed, torque});
-          joints.push_back({ghand::JointId::THUMB_ROTATION,
-                            ClipAngle(-left_hand.thumb.dip_sway, -30, 60),
-                            speed, torque});
-
-          // Index finger joints
-          joints.push_back({ghand::JointId::FF_PIP,
-                            ClipAngle(left_hand.index.pip_bend, 0, 75), speed,
-                            torque});
-          joints.push_back({ghand::JointId::FF_MCP,
-                            ClipAngle(left_hand.index.mcp_bend, 0, 70), speed,
-                            torque});
-          joints.push_back(
-              {ghand::JointId::FF_SWING,
-               ClipAngle(left_hand.index.mcp_sway + left_hand.index.pip_sway,
-                         -15, 15),
-               speed, torque});
-
-          // Middle finger joints
-          joints.push_back({ghand::JointId::MF_PIP,
-                            ClipAngle(left_hand.middle.pip_bend, 0, 75), speed,
-                            torque});
-          joints.push_back({ghand::JointId::MF_MCP,
-                            ClipAngle(left_hand.middle.mcp_bend, 0, 70), speed,
-                            torque});
-
-          // Ring finger joints
-          joints.push_back({ghand::JointId::RF_PIP,
-                            ClipAngle(left_hand.ring.pip_bend, 0, 75), speed,
-                            torque});
-          joints.push_back({ghand::JointId::RF_MCP,
-                            ClipAngle(left_hand.ring.mcp_bend, 0, 70), speed,
-                            torque});
-
-          // Little finger joints
-          joints.push_back({ghand::JointId::LF_PIP,
-                            ClipAngle(left_hand.pinky.pip_bend, 0, 75), speed,
-                            torque});
-          joints.push_back({ghand::JointId::LF_MCP,
-                            ClipAngle(left_hand.pinky.mcp_bend, 0, 70), speed,
-                            torque});
-
-          // Send joint commands
-          hand->MoveJoints(joints);
-
-          // Display joint status every 100 frames
-          if (data_count % 100 == 0 && joints_received &&
-              !last_joints.empty()) {
-            std::cout << "[Dexterous Hand Status] Processed " << data_count
-                      << " frames" << '\n';
-          }
-        }
-
-        last_process_time = current_time;
-      }
+  while (true) {
+    char buffer[32 * 1024];
+    int recv_len = 0;
+    ReceiveStatus status =
+        ReceivePacket(sock, buffer, sizeof(buffer), &recv_len);
+    if (status == ReceiveStatus::TIMEOUT) continue;
+    if (status == ReceiveStatus::FAILURE) {
+      std::cerr << "Error: Failed to receive data" << '\n';
+      break;
     }
 
-  } catch (const std::exception& e) {
-    std::cout << "\nProgram exception: " << e.what() << '\n';
+    auto current_time = std::chrono::steady_clock::now();
+    double elapsed =
+        std::chrono::duration<double>(current_time - last_process_time)
+            .count();
+    if (elapsed >= kProcessInterval) {
+      ProcessPacket(buffer, recv_len, hand, &data_count, joints_received,
+                    last_joints);
+      last_process_time = current_time;
+    }
+  }
+}
+
+int main() {
+  std::cout << "========================================" << '\n';
+  std::cout << "  GHand Dexterous Hand SDK - Glove Control        "
+            << '\n';
+  std::cout << "========================================" << '\n';
+
+  if (!InitializeSocketApi()) return 1;
+
+  SOCKET sock = CreateUdpSocket();
+  if (sock == INVALID_SOCKET) {
+    CleanupSocketApi();
+    return 1;
   }
 
-  // Cleanup
+  if (!BindUdpSocket(sock)) {
+    closesocket(sock);
+    CleanupSocketApi();
+    return 1;
+  }
+
+  ConfigureReceiveTimeout(sock);
+  auto hand = CreateConnectedHand();
+  if (!hand) {
+    closesocket(sock);
+    CleanupSocketApi();
+    return 1;
+  }
+
+  ReceiveLoop(sock, *hand);
+
   std::cout << "\nCleaning up resources..." << '\n';
   hand->Disconnect();
   closesocket(sock);
-#ifdef _WIN32
-  WSACleanup();
-#endif
+  CleanupSocketApi();
 
-  std::cout << "✓ Program exited" << '\n';
+  std::cout << "OK Program exited" << '\n';
   return 0;
 }

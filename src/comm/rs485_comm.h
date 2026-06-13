@@ -2,6 +2,8 @@
 #define SRC_INTERNAL_RS485_COMM_H_
 
 #include <atomic>
+#include <cstdint>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <string>
@@ -15,9 +17,8 @@
 // Stub modbus context when libmodbus is not available
 struct modbus_t;
 #else
-// Forward declare libmodbus context
-struct modbus;
-typedef struct modbus modbus_t;
+struct _modbus;
+using modbus_t = _modbus;
 #endif
 
 namespace ghand {
@@ -33,6 +34,11 @@ class RS485Comm : public IComm {
  public:
   explicit RS485Comm(const ProductConfig& config);
   ~RS485Comm() override;
+
+  RS485Comm(const RS485Comm&) = delete;
+  RS485Comm& operator=(const RS485Comm&) = delete;
+  RS485Comm(RS485Comm&&) = delete;
+  RS485Comm& operator=(RS485Comm&&) = delete;
 
   // IComm interface implementation
   int Connect(const std::string& device_name) override;
@@ -66,12 +72,16 @@ class RS485Comm : public IComm {
                                   uint8_t* motor_result) override;
 
  private:
+  bool ProbeSlave(int sid, int attempt, const std::string& device_name);
+  void CloseContext();
   bool WriteTactileControl(uint16_t command);
+  bool HasCallbacks();
   void EnsurePollStarted();
   void StopPoll();
   void PollLoop();
 
-  std::vector<uint8_t> ReadInputRegistersBytes(int addr, int count);
+  bool ReadInputRegistersBytes(int addr, int count,
+                               std::vector<uint8_t>* bytes);
   std::vector<Joint> GetJoints();
   HandState GetHandInfo();
   TactileData GetTactileData();
@@ -90,7 +100,10 @@ class RS485Comm : public IComm {
   JointsCallback joints_cb_;
   HandStateCallback hand_state_cb_;
   TactileDataCallback tactile_cb_;
+  bool tactile_open_ = false;
+  bool tactile_poll_enabled_ = false;
   std::mutex cb_mutex_;
+  std::mutex io_mutex_;
 };
 
 }  // namespace internal

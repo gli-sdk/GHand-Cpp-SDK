@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project(GHandSDK VERSION 1.0.0 LANGUAGES C CXX)
 
 # Set C++ standard
@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Windows-specific compile options
 if(WIN32)
     add_compile_definitions(_WIN32)
-    add_compile_definitions(_WINSOCKAPI_)
+    add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX)
     # Set UTF-8 encoding to support Chinese strings
     if(MSVC)
         add_compile_options("/utf-8")
@@ -142,7 +142,7 @@ set(DEVICE_TYPE_INC "")
 foreach(line ${ZLGCAN_LINES})
     string(REGEX MATCH "ZCAN_[A-Za-z0-9_]+" MACRO_NAME ${line})
     if(MACRO_NAME)
-        set(DEVICE_TYPE_INC "${DEVICE_TYPE_INC}GHAND_ZLG_MAP_ENTRY(${MACRO_NAME})\n")
+        set(DEVICE_TYPE_INC "${DEVICE_TYPE_INC}{\"${MACRO_NAME}\", ${MACRO_NAME}},\n")
     endif()
 endforeach()
 
@@ -275,7 +275,9 @@ add_custom_command(TARGET ghand POST_BUILD
 add_subdirectory(examples)
 
 # ========== Tests ==========
-add_subdirectory(tests)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
+    add_subdirectory(tests)
+endif()
 
 # ========== Install rules ==========
 install(TARGETS ghand

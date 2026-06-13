@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 
 # Helper function: add post-build commands to copy DLLs and config files for examples
 function(copy_runtime_for_target target_name)
@@ -30,7 +30,7 @@ add_executable(basic_connection tutorial/01basic_connection.cc)
 target_link_libraries(basic_connection ghand)
 copy_runtime_for_target(basic_connection)
 
-# 02. EtherCAT joint movement example
+# 02. Joint movement example
 add_executable(move_joints tutorial/02move_joints.cc)
 target_link_libraries(move_joints ghand)
 copy_runtime_for_target(move_joints)
