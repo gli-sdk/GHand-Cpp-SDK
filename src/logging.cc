@@ -27,6 +27,8 @@ class Logger {
   ~Logger();
   Logger(const Logger&) = delete;
   Logger& operator=(const Logger&) = delete;
+  Logger(Logger&&) = delete;
+  Logger& operator=(Logger&&) = delete;
 
   std::string FormatTime(bool iso_format = false) const;
   std::string LevelToString(LogLevel level) const;
@@ -43,9 +45,7 @@ class Logger {
   int current_line_;
 };
 
-// ============================================================================
 // Logger class implementation
-// ============================================================================
 
 Logger::Logger()
     : console_level_(LogLevel::WARNING),
@@ -72,7 +72,8 @@ void Logger::SetConsoleLevel(LogLevel level) {
   // Only INFO and DEBUG levels are allowed
   if (level != LogLevel::INFO && level != LogLevel::DEBUG) {
     std::cerr
-        << "[ERROR] Invalid console log level. Only INFO and DEBUG are allowed."
+        << "[ERROR] Invalid console log level. Only INFO and DEBUG are "
+           "allowed."
         << '\n';
     return;
   }

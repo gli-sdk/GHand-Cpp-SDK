@@ -1,6 +1,8 @@
 #ifndef SRC_INTERNAL_PRODUCT_CONFIG_LOADER_H_
 #define SRC_INTERNAL_PRODUCT_CONFIG_LOADER_H_
 
+#include <string>
+
 #include "ghand/types.h"
 #include "product_config.h"
 
@@ -15,10 +17,11 @@ namespace internal {
 ProductConfig LoadProductConfig(ProductType product);
 
 /**
- * @brief Automatically scan and load the configuration file based on device name
+ * @brief Automatically scan and load the configuration file by device name.
  *
- * Traverses all .json files under the configuration search paths, finds the one
- * whose name field exactly matches (case-insensitive) device_name, and loads it.
+ * Traverses all .json files under the configuration search paths, finds a file
+ * whose name field exactly matches (case-insensitive) device_name, and loads
+ * it.
  *
  * @param device_name Device-reported device name (e.g., "XIAOYAO-Hand")
  * @return ProductConfig on match, empty config (name empty) on failure

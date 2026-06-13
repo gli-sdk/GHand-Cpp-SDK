@@ -68,7 +68,7 @@ void DexHandCallbackManager::UpdateTactileData(const TactileData& data) {
   }
 }
 
-// ===== Polling access =====
+// Polling access
 
 HandState DexHandCallbackManager::GetHandData() const {
   std::lock_guard<std::mutex> lock(data_mutex_);

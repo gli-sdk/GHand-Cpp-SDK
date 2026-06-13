@@ -4,7 +4,7 @@
 
 namespace ghand {
 
-// ===== ProductType =====
+// ProductType
 std::string ToString(ProductType type) {
   switch (type) {
     case ProductType::G5:
@@ -16,7 +16,7 @@ std::string ToString(ProductType type) {
   }
 }
 
-// ===== HandType =====
+// HandType
 std::string ToString(HandType type) {
   switch (type) {
     case HandType::NONE:
@@ -30,7 +30,7 @@ std::string ToString(HandType type) {
   }
 }
 
-// ===== FingerType =====
+// FingerType
 std::string ToString(FingerType finger) {
   switch (finger) {
     case FingerType::THUMB:
@@ -48,7 +48,7 @@ std::string ToString(FingerType finger) {
   }
 }
 
-// ===== State =====
+// State
 std::string ToString(State state) {
   switch (state) {
     case State::STOPPED:
@@ -64,7 +64,7 @@ std::string ToString(State state) {
   }
 }
 
-// ===== ErrorCode =====
+// ErrorCode
 std::string ToString(ErrorCode error) {
   switch (error) {
     case ErrorCode::NORMAL:
@@ -108,7 +108,7 @@ std::string ToString(ErrorCode error) {
   }
 }
 
-// ===== JointId =====
+// JointId
 std::string ToString(JointId id) {
   switch (id) {
     case JointId::THUMB_DIP:
@@ -152,7 +152,7 @@ std::string ToString(JointId id) {
   }
 }
 
-// ===== HandState =====
+// HandState
 std::string ToString(const HandState& hs) {
   std::ostringstream oss;
   oss << "HandState{state=" << ghand::ToString(hs.state)
@@ -161,12 +161,13 @@ std::string ToString(const HandState& hs) {
   return oss.str();
 }
 
-// ===== Joint =====
+// Joint
 std::string ToString(const Joint& joint) {
   std::ostringstream oss;
   oss << "Joint[" << ghand::ToString(joint.id)
       << "]{state=" << ghand::ToString(joint.state)
-      << ", error=" << ghand::ToString(joint.error) << ", angle=" << joint.angle
+      << ", error=" << ghand::ToString(joint.error)
+      << ", angle=" << joint.angle
       << ", velocity=" << static_cast<int>(joint.velocity)
       << ", torque=" << static_cast<int>(joint.torque) << "}";
   return oss.str();

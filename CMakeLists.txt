@@ -142,7 +142,7 @@ set(DEVICE_TYPE_INC "")
 foreach(line ${ZLGCAN_LINES})
     string(REGEX MATCH "ZCAN_[A-Za-z0-9_]+" MACRO_NAME ${line})
     if(MACRO_NAME)
-        set(DEVICE_TYPE_INC "${DEVICE_TYPE_INC}GHAND_ZLG_MAP_ENTRY(${MACRO_NAME})\n")
+        set(DEVICE_TYPE_INC "${DEVICE_TYPE_INC}{\"${MACRO_NAME}\", ${MACRO_NAME}},\n")
     endif()
 endforeach()
 

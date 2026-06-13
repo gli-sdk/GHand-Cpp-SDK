@@ -59,11 +59,15 @@ struct ArbitrationId {
    *   bit[28:25]  FrameType  (4bit)
    * Frame type: COMMAND/RESPONSE/ACTIVE_REPORT/BROADCAST
    *   bit[24:17]  device_id  (8bit)  Target slave address (e.g. 0x71)
-   *   bit[16:13]  seq        (4bit)  Frame index in multi-frame assembly (0 for single frame)
-   *   bit[12:9 ]  total      (4bit)  Total number of fragments (1 for single frame, >1 for multi-frame)
+   *   bit[16:13]  seq        (4bit)  Frame index in multi-frame assembly
+   *                                      (0 for single frame)
+   *   bit[12:9 ]  total      (4bit)  Total number of fragments
+   *                                      (1 for single frame,
+   *                                      >1 for multi-frame)
    *   bit[8:0  ]            (9bit)  Reserved/unused
    *
-   * Embedding metadata in the ID allows using CAN hardware filters and reduces data field overhead.
+   * Embedding metadata in the ID allows using CAN hardware filters and
+   * reduces data field overhead.
    */
   ArbitrationId(FrameType ft, uint8_t dev_id, uint8_t seq, uint8_t total) {
     raw = 0;
@@ -76,19 +80,25 @@ struct ArbitrationId {
   FrameType frame_type() const {
     return static_cast<FrameType>((raw >> 25) & 0xF);
   }
-  uint8_t device_id() const { return static_cast<uint8_t>((raw >> 17) & 0xFF); }
+  uint8_t device_id() const {
+    return static_cast<uint8_t>((raw >> 17) & 0xFF);
+  }
   uint8_t seq() const { return static_cast<uint8_t>((raw >> 13) & 0xF); }
   uint8_t total() const { return static_cast<uint8_t>((raw >> 9) & 0xF); }
 };
 
 // CANFD single frame data
 struct Frame {
-  uint32_t id = 0;  // 29-bit extended frame arbitration field (CAN ID), packed with frame type/device ID/sequence by ArbitrationId
+  // 29-bit extended frame arbitration field (CAN ID), packed with frame
+  // type/device ID/sequence by ArbitrationId.
+  uint32_t id = 0;
   uint8_t data[64] = {0};  // Data field, CANFD max 64 bytes
-  uint8_t len = 0;         // Actual data length, must be one of the CANFD valid lengths (0,1,2,3,4,5,6,7,8,12,16,20,24,32,48,64)
+  // Actual data length, must be one of the CANFD valid lengths:
+  // 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64.
+  uint8_t len = 0;
   bool is_fd = true;  // true=CANFD format, false=standard CAN format
-  bool is_extended =
-      true;  // true=extended frame (29-bit ID), false=standard frame (11-bit ID)
+  // true=extended frame (29-bit ID), false=standard frame (11-bit ID)
+  bool is_extended = true;
 };
 
 // Multi-frame packet assembler

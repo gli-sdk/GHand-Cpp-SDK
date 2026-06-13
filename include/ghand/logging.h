@@ -1,10 +1,9 @@
 #ifndef GHAND_LOGGING_H_
 #define GHAND_LOGGING_H_
 
-#include <sstream>
 #include <string>
 
-#include "export.h"
+#include "ghand/export.h"
 
 namespace ghand {
 

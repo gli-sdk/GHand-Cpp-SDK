@@ -2,11 +2,9 @@
 #define SRC_INTERNAL_CANFD_DRIVER_H_
 
 #include <cstdint>
-#include <functional>
 #include <map>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "canfd_protocol.h"
 
@@ -16,11 +14,18 @@ namespace internal {
 /**
  * @brief Platform-independent CANFD driver interface
  *
- * Implemented by the ZLG driver (unified for Windows/Linux) or platform-specific implementations.
+ * Implemented by the ZLG driver (unified for Windows/Linux) or
+ * platform-specific implementations.
  */
 class CANFDDriver {
  public:
+  CANFDDriver() = default;
   virtual ~CANFDDriver() = default;
+
+  CANFDDriver(const CANFDDriver&) = delete;
+  CANFDDriver& operator=(const CANFDDriver&) = delete;
+  CANFDDriver(CANFDDriver&&) = delete;
+  CANFDDriver& operator=(CANFDDriver&&) = delete;
 
   /**
    * @brief Open CANFD channel

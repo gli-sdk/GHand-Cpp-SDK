@@ -1,7 +1,11 @@
+#include <algorithm>
+#include <cerrno>
 #include <chrono>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -20,13 +24,37 @@ struct JointParams {
   JointParams() : angle(0), speed(0), torque(0) {}
 };
 
+bool ParseFloat(const std::string& input, float* value) {
+  if (value == nullptr) return false;
+  errno = 0;
+  char* end = nullptr;
+  float parsed = std::strtof(input.c_str(), &end);
+  if (end == input.c_str() || errno == ERANGE) return false;
+  *value = parsed;
+  return true;
+}
+
+bool ParseInt(const std::string& input, int* value) {
+  if (value == nullptr) return false;
+  errno = 0;
+  char* end = nullptr;
+  long parsed = std::strtol(input.c_str(), &end, 10);
+  if (end == input.c_str() || errno == ERANGE ||
+      parsed < (std::numeric_limits<int>::min)() ||
+      parsed > (std::numeric_limits<int>::max)()) {
+    return false;
+  }
+  *value = static_cast<int>(parsed);
+  return true;
+}
+
 /**
  * @brief Display joint ID list
  */
 void DisplayJointIdList() {
   std::cout << "\nJoint ID List:" << '\n';
-  std::cout << "  1: THUMB_PIP,      2: THUMB_MCP,      3: THUMB_SWING,     4: "
-               "THUMB_ROTATION"
+  std::cout << "  1: THUMB_PIP,      2: THUMB_MCP,      "
+               "3: THUMB_SWING,     4: THUMB_ROTATION"
             << '\n';
   std::cout << "  6: FF_PIP,         7: FF_MCP,         8: FF_SWING"
             << '\n';
@@ -60,8 +88,8 @@ void DisplaySetJoints(
 
     std::cout << std::left << std::setw(20) << joint_name << std::fixed
               << std::setprecision(1) << std::setw(10) << params.angle
-              << std::setw(10) << params.speed << std::setw(10) << params.torque
-              << '\n';
+              << std::setw(10) << params.speed << std::setw(10)
+              << params.torque << '\n';
   }
 }
 
@@ -80,13 +108,13 @@ float ReadFloatWithDefault(const std::string& prompt, float default_value) {
     return default_value;
   }
 
-  try {
-    return std::stof(input);
-  } catch (const std::exception&) {
+  float value = default_value;
+  if (!ParseFloat(input, &value)) {
     std::cout << "  Invalid input, using default value: " << default_value
               << '\n';
     return default_value;
   }
+  return value;
 }
 
 /**
@@ -101,13 +129,13 @@ int ReadIntWithDefault(const std::string& prompt, int default_value) {
     return default_value;
   }
 
-  try {
-    return std::stoi(input);
-  } catch (const std::exception&) {
+  int value = default_value;
+  if (!ParseInt(input, &value)) {
     std::cout << "  Invalid input, using default value: " << default_value
               << '\n';
     return default_value;
   }
+  return value;
 }
 
 /**
@@ -131,44 +159,176 @@ bool IsValidJointId(int id) {
   return false;
 }
 
-int main() {
-  std::cout << "========================================" << '\n';
-  std::cout << "  GHand Dexterous Hand SDK - Interactive Joint Control    "
-            << '\n';
-  std::cout << "========================================" << '\n';
-
+std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::ETHERCAT);
+                                      ghand::CommType::CANFD);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
-    return -1;
+    return nullptr;
   }
 
-  // Connect device
-  std::cout << "\nConnecting to dexterous hand via EtherCAT..." << '\n';
-  bool success = hand->AutoConnect();
-
-  if (!success) {
+  std::cout << "\nConnecting to dexterous hand via CANFD..." << '\n';
+  if (!hand->AutoConnect()) {
     std::cerr << "Error: Unable to connect to dexterous hand!" << '\n';
-    return 1;
+    return nullptr;
   }
 
-  std::cout << "✓ Successfully connected to dexterous hand!" << '\n';
+  std::cout << "OK Successfully connected to dexterous hand!" << '\n';
+  return hand;
+}
 
-  // Display device information
-  ghand::DeviceInfo info = hand->GetDeviceInfo();
-  ghand::HandType hand_type = hand->GetHandType();
+void DisplayDeviceInfo(ghand::DexHand& hand) {
+  ghand::DeviceInfo info = hand.GetDeviceInfo();
+  ghand::HandType hand_type = hand.GetHandType();
   std::cout << "\nDevice Information:" << '\n';
   std::cout << "  Device Name: " << info.device_name << '\n';
   std::cout << "  Hardware Version: " << info.hardware_version << '\n';
   std::cout << "  Software Version: " << info.software_version << '\n';
   std::cout << "  Serial Number: " << info.serial_number << '\n';
   std::cout << "  Hand Type: " << ghand::ToString(hand_type) << '\n';
+}
 
-  // Set control mode to position mode
+bool ReadJointIdInput(int* joint_id, bool* done) {
+  std::cout << "\nEnter joint ID (or press Enter to finish input): ";
+  std::string joint_input;
+  std::getline(std::cin, joint_input);
+
+  if (joint_input.empty()) {
+    *done = true;
+    return false;
+  }
+
+  if (!ParseInt(joint_input, joint_id)) {
+    std::cout << "  Input format error, please re-enter" << '\n';
+    return false;
+  }
+
+  if (!IsValidJointId(*joint_id)) {
+    std::cout << "  Invalid joint ID, please re-enter" << '\n';
+    return false;
+  }
+  return true;
+}
+
+std::unordered_map<int, JointParams> ReadJointParams() {
+  std::unordered_map<int, JointParams> joint_params;
+
+  while (true) {
+    DisplaySetJoints(joint_params);
+
+    int joint_id = 0;
+    bool done = false;
+    if (!ReadJointIdInput(&joint_id, &done)) {
+      if (done) break;
+      continue;
+    }
+
+    JointParams& params = joint_params[joint_id];
+    std::string joint_name =
+        ghand::ToString(static_cast<ghand::JointId>(joint_id));
+    std::cout << "\nSetting parameters for joint " << joint_name << ":"
+              << '\n';
+    params.angle =
+        ReadFloatWithDefault("Angle value (degrees)", params.angle);
+    params.speed = ReadIntWithDefault("Speed value (0-100)", params.speed);
+    params.torque =
+        ReadIntWithDefault("Torque value (0-100)", params.torque);
+    std::cout << "  OK Set successfully" << '\n';
+  }
+
+  return joint_params;
+}
+
+std::vector<ghand::JointCommand> BuildJointCommands(
+    const std::unordered_map<int, JointParams>& joint_params) {
+  std::vector<ghand::JointCommand> joints;
+  for (const auto& pair : joint_params) {
+    int joint_id = pair.first;
+    const JointParams& params = pair.second;
+    joints.push_back({static_cast<ghand::JointId>(joint_id),
+                      params.angle,
+                      static_cast<int8_t>(params.speed),
+                      static_cast<int8_t>(params.torque)});
+  }
+  return joints;
+}
+
+void DisplayJointFeedback(const std::vector<ghand::Joint>& last_joints) {
+  std::cout << "\nCurrent Joint Status (partial display):" << '\n';
+  std::cout << std::left << std::setw(20) << "Joint" << std::setw(12)
+            << "Angle(deg)"
+            << "State" << '\n';
+  std::cout << std::string(40, '-') << '\n';
+
+  for (size_t i = 0; i < std::min(size_t(5), last_joints.size()); ++i) {
+    const ghand::Joint& joint = last_joints[i];
+    std::cout << std::left << std::setw(20) << ghand::ToString(joint.id)
+              << std::fixed << std::setprecision(1) << std::setw(12)
+              << joint.angle << ghand::ToString(joint.state) << '\n';
+  }
+  if (last_joints.size() > 5) {
+    std::cout << "... (and " << (last_joints.size() - 5)
+              << " more joints)" << '\n';
+  }
+}
+
+void SendAndDisplayFeedback(ghand::DexHand& hand,
+                            const std::vector<ghand::JointCommand>& joints,
+                            bool joints_received,
+                            const std::vector<ghand::Joint>& last_joints) {
+  bool move_success = hand.MoveJoints(joints);
+  if (!move_success) {
+    std::cerr << "ERROR Command send failed" << '\n';
+    return;
+  }
+
+  std::cout << "OK Command sent successfully" << '\n';
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  if (joints_received && !last_joints.empty()) {
+    DisplayJointFeedback(last_joints);
+  }
+}
+
+void RunControlLoop(ghand::DexHand& hand,
+                    const std::vector<ghand::Joint>& last_joints,
+                    bool& joints_received) {
+  while (true) {
+    DisplayJointIdList();
+    std::cout
+        << "\nPlease set joint parameters (press Enter to finish input):\n"
+        << '\n';
+
+    auto joint_params = ReadJointParams();
+    if (joint_params.empty()) {
+      std::cout
+          << "\nNo joints set, all joints will maintain current position"
+          << '\n';
+    } else {
+      std::cout << "\nSending joint commands..." << '\n';
+    }
+
+    std::vector<ghand::JointCommand> joints =
+        BuildJointCommands(joint_params);
+    SendAndDisplayFeedback(hand, joints, joints_received, last_joints);
+
+    std::cout << "\n" << std::string(50, '=') << '\n';
+    std::cout << "Press Enter to start next control cycle..." << '\n';
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+  }
+}
+
+int main() {
+  std::cout << "========================================" << '\n';
+  std::cout << "  GHand Dexterous Hand SDK - Interactive Joint Control    "
+            << '\n';
+  std::cout << "========================================" << '\n';
+
+  auto hand = CreateConnectedHand();
+  if (!hand) return 1;
+
+  DisplayDeviceInfo(*hand);
   hand->SetControlMode(ghand::ControlMode::POSITION);
 
-  // Register joint data callback (for reading feedback)
   std::vector<ghand::Joint> last_joints;
   bool joints_received = false;
   hand->SetJointsCallback([&](const std::vector<ghand::Joint>& joints) {
@@ -178,134 +338,11 @@ int main() {
 
   std::cout << "\nInteractive control mode started" << '\n';
   std::cout << "Press Ctrl+C to exit program at any time\n" << '\n';
+  RunControlLoop(*hand, last_joints, joints_received);
 
-  try {
-    while (true) {
-      // Reset joint parameters for each control loop
-      std::unordered_map<int, JointParams> joint_params;
-
-      DisplayJointIdList();
-      std::cout
-          << "\nPlease set joint parameters (press Enter to finish input):\n"
-          << '\n';
-
-      // Interactive joint parameter input
-      while (true) {
-        // Display set joints
-        DisplaySetJoints(joint_params);
-
-        std::cout << "\nEnter joint ID (or press Enter to finish input): ";
-        std::string joint_input;
-        std::getline(std::cin, joint_input);
-
-        // User pressed Enter directly, finish input
-        if (joint_input.empty()) {
-          break;
-        }
-
-        // Parse joint ID
-        try {
-          int joint_id = std::stoi(joint_input);
-
-          if (!IsValidJointId(joint_id)) {
-            std::cout << "  Invalid joint ID, please re-enter" << '\n';
-            continue;
-          }
-
-          // Get current parameters (if any)
-          JointParams& params = joint_params[joint_id];
-          std::string joint_name =
-              ghand::ToString(static_cast<ghand::JointId>(joint_id));
-
-          std::cout << "\nSetting parameters for joint " << joint_name << ":"
-                    << '\n';
-
-          // Read angle, speed, torque
-          params.angle =
-              ReadFloatWithDefault("Angle value (degrees)", params.angle);
-          params.speed =
-              ReadIntWithDefault("Speed value (0-100)", params.speed);
-          params.torque =
-              ReadIntWithDefault("Torque value (0-100)", params.torque);
-
-          std::cout << "  ✓ Set successfully" << '\n';
-
-        } catch (const std::exception& e) {
-          std::cout << "  Input format error: " << e.what() << '\n';
-        }
-      }
-
-      // Build joint command list
-      std::vector<ghand::JointCommand> joints;
-
-      if (joint_params.empty()) {
-        std::cout
-            << "\nNo joints set, all joints will maintain current position"
-            << '\n';
-      } else {
-        for (const auto& pair : joint_params) {
-          int joint_id = pair.first;
-          const JointParams& params = pair.second;
-
-          // Use angle directly (degrees)
-          joints.push_back({static_cast<ghand::JointId>(joint_id),
-                            params.angle,
-                            static_cast<int8_t>(params.speed),
-                            static_cast<int8_t>(params.torque)});
-        }
-
-        std::cout << "\nSending joint commands..." << '\n';
-      }
-
-      // Send joint commands
-      bool move_success = hand->MoveJoints(joints);
-
-      if (move_success) {
-        std::cout << "✓ Command sent successfully" << '\n';
-
-        // Wait for device to respond and get joint data
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-        // Display current joint status (if callback data available)
-        if (joints_received && !last_joints.empty()) {
-          std::cout << "\nCurrent Joint Status (partial display):" << '\n';
-          std::cout << std::left << std::setw(20) << "Joint" << std::setw(12)
-                    << "Angle(deg)"
-                    << "State" << '\n';
-          std::cout << std::string(40, '-') << '\n';
-
-          // Only display first 5 joints as example
-          for (size_t i = 0; i < std::min(size_t(5), last_joints.size()); ++i) {
-            const ghand::Joint& joint = last_joints[i];
-            // GetJoints() returns angles in degrees, no conversion needed
-            std::cout << std::left << std::setw(20)
-                      << ghand::ToString(joint.id) << std::fixed
-                      << std::setprecision(1) << std::setw(12)
-                      << joint.angle << ghand::ToString(joint.state)
-                      << '\n';
-          }
-          if (last_joints.size() > 5) {
-            std::cout << "... (and " << (last_joints.size() - 5)
-                      << " more joints)" << '\n';
-          }
-        }
-      } else {
-        std::cerr << "✗ Command send failed" << '\n';
-      }
-
-      std::cout << "\n" << std::string(50, '=') << '\n';
-      std::cout << "Press Enter to start next control cycle..." << '\n';
-      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    }
-
-  } catch (const std::exception& e) {
-    std::cout << "\nProgram exception: " << e.what() << '\n';
-  }
-
-  // Disconnect
   std::cout << "\nDisconnecting..." << '\n';
   hand->Disconnect();
-  std::cout << "✓ Disconnected" << '\n';
+  std::cout << "OK Disconnected" << '\n';
 
   std::cout << "\nProgram ended. Thank you for using!" << '\n';
   return 0;

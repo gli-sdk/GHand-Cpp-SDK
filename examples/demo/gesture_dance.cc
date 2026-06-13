@@ -5,7 +5,7 @@
 
 #include "ghand/ghand.h"
 
-// ========== Gesture Pose Definitions ==========
+// Gesture pose definitions.
 
 // Thumb touches little finger
 std::vector<ghand::JointCommand> MakeThumbTouchLittle() {
@@ -178,7 +178,7 @@ std::vector<ghand::JointCommand> MakeOK() {
   };
 }
 
-// ========== Action Execution Functions ==========
+// Action execution functions.
 
 bool HandZero(ghand::DexHand& hand) {
   auto joints = MakeOpenHand();
@@ -218,7 +218,7 @@ bool MakeOKGesture(ghand::DexHand& hand) {
   return HandZero(hand);
 }
 
-// ========== First Action Group ==========
+// First action group.
 bool FirstAction(ghand::DexHand& hand) {
   if (!ThumbTouch(hand)) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -229,7 +229,7 @@ bool FirstAction(ghand::DexHand& hand) {
   return true;
 }
 
-// ========== Second Action Group ==========
+// Second action group.
 bool SecondAction(ghand::DexHand& hand) {
   if (!SeqOpenFinger(hand)) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -237,11 +237,12 @@ bool SecondAction(ghand::DexHand& hand) {
   return true;
 }
 
-// ========== Main Function ==========
+// Main function.
 int main() {
-  std::cout << "***** Xiaoyao Dexterous Hand SDK - Gesture Dance Demo *****\n" << '\n';
+  std::cout << "***** Xiaoyao Dexterous Hand SDK - Gesture Dance Demo *****\n"
+            << '\n';
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::ETHERCAT);
+                                      ghand::CommType::CANFD);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     return -1;
@@ -266,19 +267,19 @@ int main() {
               << '\n';
 
     if (!FirstAction(*hand)) {
-      std::cout << "Round " << gesture_cycle << " first action group execution failed"
-                << '\n';
+      std::cout << "Round " << gesture_cycle
+                << " first action group execution failed" << '\n';
       break;
     }
 
     if (!SecondAction(*hand)) {
-      std::cout << "Round " << gesture_cycle << " second action group execution failed"
-                << '\n';
+      std::cout << "Round " << gesture_cycle
+                << " second action group execution failed" << '\n';
       break;
     }
 
-    std::cout << "--- Round " << gesture_cycle << " gesture demo finished ---\n"
-              << '\n';
+    std::cout << "--- Round " << gesture_cycle
+              << " gesture demo finished ---\n" << '\n';
 
     if (max_cycles == 0) {
       std::cout << "Press Ctrl+C to stop demo and exit\n" << '\n';

@@ -1,22 +1,12 @@
 #include "file_lock.h"
 
-#include <algorithm>
-#include <chrono>
-#include <ctime>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
-
-#include "ghand/logging.h"
-#include "logging_macros.h"
-
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
 #include <share.h>
 #include <sys/stat.h>
-#include <wincrypt.h>
 #include <windows.h>
+#include <wincrypt.h>
 
 // MinGW may not define these constants; define them manually
 #ifndef _LK_NBLCK
@@ -28,18 +18,29 @@
 
 #else
 #include <fcntl.h>
-#include <openssl/md5.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
 
+#include <algorithm>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+
+#ifndef _WIN32
+#include <openssl/md5.h>
+#endif
+
+#include "ghand/logging.h"
+#include "logging_macros.h"
+
 namespace ghand {
 namespace internal {
 
-// =============================================================================
-// MD5 hash function implementation (Task 1.3)
-// =============================================================================
+// MD5 hash function implementation.
 
 namespace {
 
@@ -77,7 +78,7 @@ std::string MD5Hash(const std::string& input) {
 
   // Compute hash value
   if (!CryptHashData(hHash,
-                     reinterpret_cast<BYTE*>(const_cast<char*>(input.c_str())),
+                     reinterpret_cast<const BYTE*>(input.data()),
                      static_cast<DWORD>(input.length()), 0)) {
     CryptDestroyHash(hHash);
     CryptReleaseContext(hProv, 0);
@@ -108,7 +109,8 @@ std::string MD5Hash(const std::string& input) {
   // Linux implementation: uses OpenSSL
   unsigned char digest[16];
 
-  MD5((unsigned char*)input.c_str(), input.length(), digest);
+  MD5(reinterpret_cast<const unsigned char*>(input.data()), input.length(),
+      digest);
 
   // Convert to hexadecimal string
   std::stringstream ss;
@@ -122,19 +124,11 @@ std::string MD5Hash(const std::string& input) {
 
 }  // anonymous namespace
 
-// =============================================================================
-// FileLock class implementation (Task 1.2)
-// =============================================================================
+// FileLock class implementation.
 
 FileLock::FileLock() : fd_(-1), is_locked_(false) {}
 
-FileLock::~FileLock() {
-  try {
-    Release();
-  } catch (...) {
-    // Ignore all exceptions during destruction to ensure safe cleanup
-  }
-}
+FileLock::~FileLock() { Release(); }
 
 bool FileLock::Acquire(const std::string& lock_file) {
   if (is_locked_) {
@@ -236,9 +230,7 @@ void FileLock::Release() {
 
 bool FileLock::IsLocked() const { return is_locked_; }
 
-// =============================================================================
-// GetAdapterLockPath function implementation (Task 1.4)
-// =============================================================================
+// Adapter lock path helper.
 
 std::string GetAdapterLockPath(const std::string& adapter_name) {
   // Generate MD5 hash of adapter name
