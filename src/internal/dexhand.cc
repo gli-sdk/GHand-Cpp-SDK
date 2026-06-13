@@ -238,16 +238,9 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
     for (const auto& joint : joints) {
       if (joint.id == joint_id) {
         JointCommand limited = joint;
-        if (control_mode_ == ControlMode::POSITION) {
-          ClampJointAngle(limited);
-          ClampJointVelocity(limited);
-          ClampJointTorque(limited);
-        } else if (control_mode_ == ControlMode::SPEED) {
-          ClampJointVelocity(limited);
-          ClampJointTorque(limited);
-        } else if (control_mode_ == ControlMode::TORQUE) {
-          ClampJointTorque(limited);
-        }
+        ClampJointAngle(limited);
+        ClampJointVelocity(limited);
+        ClampJointTorque(limited);
         ordered_joints.push_back(limited);
         break;
       }
@@ -409,11 +402,21 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
                                    << " exceeds limit in POSITION mode, "
                                    << "clamped to 100");
     }
-  } else if (control_mode_ == ControlMode::SPEED) {
-    // Speed mode: velocity range -100 to 100
+
+  } else if (control_mode_ == ControlMode::TORQUE) {
+    // TORQUE:
+    // >100 -> 100, <-100 -> 100, -100~100 take absolute value.
+    if (velocity > 100) {
+      velocity = 100;
+    } else if (velocity < -100) {
+      velocity = 100;
+    } else if (velocity < 0) {
+      velocity = -velocity;
+    }
+  } else if (control_mode_ == ControlMode::TORQUE) {
     if (joint.velocity < -100) {
       int8_t original = joint.velocity;
-      joint.velocity = -100;
+      joint.velocity = 100;
       GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
                                    << static_cast<int>(original)
                                    << " below limit in SPEED mode, "
@@ -427,17 +430,21 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
                                    << "clamped to 100");
     }
   }
-  // Torque mode: velocity not applicable, no check performed
 }
 
 void DexHand::ClampJointTorque(JointCommand& joint) {
+  int original = static_cast<int>(joint.torque);
+  int torque = original;
+
   if (control_mode_ == ControlMode::POSITION ||
       control_mode_ == ControlMode::SPEED) {
     // Position mode and speed mode: torque range 0-100, negative values take
     // absolute value, absolute value > 100 clamped to 100.
     if (joint.torque < 0) {
       int8_t original = joint.torque;
-      joint.torque = std::abs(joint.torque);
+      int torque_abs = std::abs(static_cast<int>(joint.torque));
+      if (torque_abs > 100) torque_abs = 100;
+      joint.torque = static_cast<int8_t>(torque_abs);
       const char* mode_name =
           (control_mode_ == ControlMode::POSITION) ? "POSITION" : "SPEED";
       GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " torque "
@@ -473,6 +480,20 @@ void DexHand::ClampJointTorque(JointCommand& joint) {
                                    << " exceeds limit in TORQUE mode, "
                                    << "clamped to 100");
     }
+  }
+
+  if (torque != original) {
+    joint.torque = static_cast<int8_t>(torque);
+
+    const char* mode_name =
+        (control_mode_ == ControlMode::POSITION)
+            ? "POSITION"
+            : (control_mode_ == ControlMode::SPEED ? "SPEED" : "TORQUE");
+
+    GHAND_LOG_WARNING("[Joint] "
+                      << ToString(joint.id) << " torque " << original
+                      << " adjusted to " << torque << " in " << mode_name
+                      << " mode");
   }
 }
 

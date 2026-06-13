@@ -675,15 +675,21 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
 
   for (const auto& kv : config_.joint_limits) {
     auto joint_id = kv.first;
-    float angle = 0.0f;
+
+    // EtherCAT uses radians. For missing joints, use the minimum valid angle
+    // from joint_limits instead of 0 degrees.
+    float angle = kv.second.first * (static_cast<float>(kPi) / 180.0f);
+
     uint8_t velocity = 0;
     uint8_t torque = 0;
     auto it = joint_map.find(joint_id);
+
     if (it != joint_map.end()) {
       angle = it->second.angle * (static_cast<float>(kPi) / 180.0f);
       velocity = it->second.velocity;
       torque = it->second.torque;
     }
+
     memcpy(buffer.data() + offset, &angle, sizeof(angle));
     offset += sizeof(angle);
     buffer[offset++] = velocity;
