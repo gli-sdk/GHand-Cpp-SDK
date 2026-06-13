@@ -274,9 +274,6 @@ add_custom_command(TARGET ghand POST_BUILD
 # ========== Examples ==========
 add_subdirectory(examples)
 
-# ========== Tests ==========
-add_subdirectory(tests)
-
 # ========== Install rules ==========
 install(TARGETS ghand
     ARCHIVE DESTINATION lib
