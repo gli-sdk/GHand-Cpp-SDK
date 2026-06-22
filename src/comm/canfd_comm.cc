@@ -22,6 +22,28 @@ static uint8_t NearestCanfdLength(uint8_t len) {
   return 64;
 }
 
+static bool IsIndexFingerControlJoint(JointId id) {
+  return id == JointId::FF_PIP || id == JointId::FF_MCP ||
+         id == JointId::FF_SWING;
+}
+
+static void AppendEncodedJoint(const JointCommand& joint,
+                               std::vector<uint16_t>* registers) {
+  auto regs = EncodeJointCommand(joint);
+  registers->push_back(regs.first);
+  registers->push_back(regs.second);
+}
+
+static std::vector<uint8_t> EncodeJointBlock(
+    const std::vector<JointCommand>& joints) {
+  std::vector<uint16_t> registers;
+  registers.reserve(joints.size() * 2);
+  for (const auto& joint : joints) {
+    AppendEncodedJoint(joint, &registers);
+  }
+  return RegistersToBytes(registers);
+}
+
 CANFDComm::CANFDComm(const ProductConfig& config)
     : driver_(CreateZLGDriver()), config_(config) {}
 
@@ -412,8 +434,43 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
   uint16_t mode_value = (static_cast<uint16_t>(mode) << 8) & 0xFF00;
   if (!WriteSingleRegister(0x0010, mode_value)) return false;
 
+  const JointCommand* ff_swing = nullptr;
+  for (const auto& joint : joints) {
+    command_cache_[joint.id] = joint;
+    if (joint.id == JointId::FF_SWING) {
+      ff_swing = &joint;
+    }
+  }
+
+  if (ff_swing != nullptr) {
+    auto get_cached_or_default =
+        [this, ff_swing](JointId id) -> JointCommand {
+      auto it = command_cache_.find(id);
+      if (it != command_cache_.end()) return it->second;
+      JointCommand joint;
+      joint.id = id;
+      joint.angle = 0.0f;
+      joint.velocity = ff_swing->velocity;
+      joint.torque = ff_swing->torque;
+      return joint;
+    };
+
+    std::vector<JointCommand> index_group;
+    index_group.push_back(get_cached_or_default(JointId::FF_PIP));
+    index_group.push_back(get_cached_or_default(JointId::FF_MCP));
+    index_group.push_back(get_cached_or_default(JointId::FF_SWING));
+
+    auto it = kHoldingRegMap.find(JointId::FF_PIP);
+    if (it == kHoldingRegMap.end()) return false;
+    if (!WriteRegisters(it->second, EncodeJointBlock(index_group))) {
+      return false;
+    }
+  }
+
   // Write each joint
   for (const auto& joint : joints) {
+    if (ff_swing != nullptr && IsIndexFingerControlJoint(joint.id)) continue;
+
     auto it = kHoldingRegMap.find(joint.id);
     if (it == kHoldingRegMap.end()) continue;
 

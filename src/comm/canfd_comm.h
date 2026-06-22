@@ -119,6 +119,7 @@ class CANFDComm : public IComm {
   bool hand_state_poll_enabled_ = false;
   bool tactile_poll_enabled_ = false;
   std::mutex cb_mutex_;
+  std::map<JointId, JointCommand> command_cache_;
 };
 
 }  // namespace internal
