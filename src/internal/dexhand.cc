@@ -403,6 +403,32 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
                                    << "clamped to 100");
     }
 
+  } else if (control_mode_ == ControlMode::TORQUE) {
+    if (joint.velocity > 100) {
+      int8_t original = joint.velocity;
+      joint.velocity = 100;
+      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
+                                   << static_cast<int>(original)
+                                   << " exceeds limit in TORQUE mode, "
+                                   << "clamped to 100");
+    } else if (joint.velocity < -100) {
+      int8_t original = joint.velocity;
+      joint.velocity = 100;
+      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
+                                   << static_cast<int>(original)
+                                   << " below limit in TORQUE mode, "
+                                   << "clamped to 100");
+    } else if (joint.velocity < 0) {
+      int8_t original = joint.velocity;
+      joint.velocity = static_cast<int8_t>(
+          std::abs(static_cast<int>(joint.velocity)));
+      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
+                                   << static_cast<int>(original)
+                                   << " is negative in TORQUE mode, "
+                                   << "converted to absolute value "
+                                   << static_cast<int>(joint.velocity));
+    }
+
   } else if (control_mode_ == ControlMode::SPEED) {
     if (joint.velocity < -100) {
       int8_t original = joint.velocity;
