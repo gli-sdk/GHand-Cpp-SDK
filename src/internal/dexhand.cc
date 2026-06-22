@@ -150,13 +150,22 @@ bool DexHand::ConnectToDevice(const std::string& device_name) {
         }
         GHAND_LOG_INFO("Auto-detected product: " << config_.name);
       } else if (!config_.name.empty()) {
-        std::string dev_lower = dev_name;
-        std::string cfg_lower = config_.name;
-        std::transform(dev_lower.begin(), dev_lower.end(), dev_lower.begin(),
-                       ::tolower);
-        std::transform(cfg_lower.begin(), cfg_lower.end(), cfg_lower.begin(),
-                       ::tolower);
-        if (dev_lower != cfg_lower) {
+        std::vector<std::string> config_names = config_.aliases;
+        config_names.push_back(config_.name);
+        bool name_matched = false;
+        for (const auto& name : config_names) {
+          std::string dev_lower = dev_name;
+          std::string cfg_lower = name;
+          std::transform(dev_lower.begin(), dev_lower.end(), dev_lower.begin(),
+                         ::tolower);
+          std::transform(cfg_lower.begin(), cfg_lower.end(), cfg_lower.begin(),
+                         ::tolower);
+          if (dev_lower == cfg_lower) {
+            name_matched = true;
+            break;
+          }
+        }
+        if (!name_matched) {
           GHAND_LOG_WARNING("Device name mismatch: device reports \""
                       << dev_name << "\", config expects \"" << config_.name
                       << "\"");
@@ -406,6 +415,7 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
   } else if (control_mode_ == ControlMode::TORQUE) {
     // TORQUE:
     // >100 -> 100, <-100 -> 100, -100~100 take absolute value.
+    int velocity = static_cast<int>(joint.velocity);
     if (velocity > 100) {
       velocity = 100;
     } else if (velocity < -100) {
@@ -413,7 +423,8 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
     } else if (velocity < 0) {
       velocity = -velocity;
     }
-  } else if (control_mode_ == ControlMode::TORQUE) {
+    joint.velocity = static_cast<int8_t>(velocity);
+  } else if (control_mode_ == ControlMode::SPEED) {
     if (joint.velocity < -100) {
       int8_t original = joint.velocity;
       joint.velocity = 100;

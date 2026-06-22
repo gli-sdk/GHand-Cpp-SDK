@@ -20,6 +20,10 @@ extern const std::map<JointId, uint16_t> kHoldingRegMap;
 // Convert a list of big-endian uint16 registers to bytes.
 std::vector<uint8_t> RegistersToBytes(const std::vector<uint16_t>& registers);
 
+// Get the smallest contiguous input-register span covering valid joints.
+bool GetJointInputSpan(const ProductConfig& config, uint16_t* start_addr,
+                       int* count);
+
 // Parse device name from 16 bytes (8 registers).
 std::string ParseDeviceName(const uint8_t* raw_bytes, size_t len = 16);
 
@@ -47,6 +51,10 @@ Joint ParseJointData(const uint16_t* raw, JointId joint_id);
 // (max_joint_id + 1) * 3 registers.
 std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
                                const std::vector<JointId>& valid_joints);
+
+std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
+                               const ProductConfig& config,
+                               uint16_t start_addr);
 
 // Parse tactile state and error from the first register (0x1080).
 // Returns (state_byte, error_byte).
