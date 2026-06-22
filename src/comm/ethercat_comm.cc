@@ -47,6 +47,31 @@ std::string ByteArrayString(const std::uint8_t* data, size_t size) {
   return result;
 }
 
+std::vector<JointId> ControlledJoints(const ProductConfig& config) {
+  std::vector<JointId> joints;
+  for (JointId joint_id : config.valid_joints) {
+    if (config.joint_limits.find(joint_id) != config.joint_limits.end()) {
+      joints.push_back(joint_id);
+    }
+  }
+  return joints;
+}
+
+size_t EthercatRxpdoSize(const ProductConfig& config) {
+  if (config.ethercat_output_size > 0) {
+    return static_cast<size_t>(config.ethercat_output_size);
+  }
+  return config.joint_limits.size() * kEthercatJointDataSize + 2;
+}
+
+bool IsL1EthercatRpdo(const ProductConfig& config) {
+  return config.ethercat_rpdo_layout == "per_joint_mode_3reg";
+}
+
+bool IsL1EthercatTpdo(const ProductConfig& config) {
+  return config.ethercat_tpdo_layout == "l1_extended";
+}
+
 }  // namespace
 
 struct EtherCATComm::SoemState {
@@ -62,7 +87,9 @@ EtherCATComm* EtherCATComm::foe_instance_ = nullptr;
 static std::atomic<bool> print_debug_info{false};
 
 EtherCATComm::EtherCATComm(const ProductConfig& config)
-    : soem_(std::make_unique<SoemState>()), config_(config) {}
+    : soem_(std::make_unique<SoemState>()), config_(config) {
+  rxpdo_size_ = EthercatRxpdoSize(config_);
+}
 
 EtherCATComm::~EtherCATComm() {
   StopThreads();
@@ -137,7 +164,10 @@ int EtherCATComm::Connect(const std::string& device_name) {
   }
 
   memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
-  rxpdo_buffer_[1] = {0x01};
+  rxpdo_size_ = EthercatRxpdoSize(config_);
+  if (!IsL1EthercatRpdo(config_)) {
+    rxpdo_buffer_[1] = {0x01};
+  }
 
   ResetContext();
   if (ecx_init(&soem_->ctx, device_name.c_str()) <= 0) {
@@ -207,7 +237,10 @@ int EtherCATComm::Disconnect() {
   dorun_ = 0;
 
   memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
-  rxpdo_buffer_[1] = {0x01};
+  rxpdo_size_ = EthercatRxpdoSize(config_);
+  if (!IsL1EthercatRpdo(config_)) {
+    rxpdo_buffer_[1] = {0x01};
+  }
   if (soem_->ctx.slavecount > 0) {
     soem_->ctx.slavelist[0].state = EC_STATE_INIT;
     ecx_writestate(&soem_->ctx, 0);
@@ -292,6 +325,7 @@ int EtherCATComm::SendRxPDO(uint16 slave, uint16 pdo_index, uint32 data_size,
   }
 
   memcpy(rxpdo_buffer_, data, data_size);
+  rxpdo_size_ = data_size;
 
   return 1;
 }
@@ -318,8 +352,10 @@ void EtherCATComm::Ecatthread() {
 
   {
     std::lock_guard<std::mutex> lock(rt_context_mutex_);
-    memcpy(soem_->ctx.slavelist[1].outputs, rxpdo_buffer_,
-           sizeof(rxpdo_buffer_));
+    size_t copy_size =
+        (std::min)(rxpdo_size_,
+                   static_cast<size_t>(soem_->ctx.slavelist[1].Obytes));
+    memcpy(soem_->ctx.slavelist[1].outputs, rxpdo_buffer_, copy_size);
     ecx_send_processdata(&soem_->ctx);
   }
 
@@ -359,8 +395,9 @@ void EtherCATComm::Ecatthread() {
 
       {
         std::lock_guard<std::mutex> lock(rt_context_mutex_);
-        memcpy(soem_->ctx.slavelist[1].outputs, rxpdo_buffer_,
-               sizeof(rxpdo_buffer_));
+        size_t copy_size = (std::min)(
+            rxpdo_size_, static_cast<size_t>(soem_->ctx.slavelist[1].Obytes));
+        memcpy(soem_->ctx.slavelist[1].outputs, rxpdo_buffer_, copy_size);
         ecx_send_processdata(&soem_->ctx);
       }
     }
@@ -661,13 +698,42 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
     return false;
   }
 
-  // EtherCAT PDO requires fixed length; fill missing joints in joint_limits
-  // order.
   std::map<JointId, JointCommand> joint_map;
   for (const auto& joint : joints) {
     joint_map[joint.id] = joint;
   }
 
+  if (IsL1EthercatRpdo(config_)) {
+    std::vector<JointId> controlled_joints = ControlledJoints(config_);
+    std::vector<uint8_t> buffer;
+    buffer.reserve(controlled_joints.size() * 6);
+    for (JointId joint_id : controlled_joints) {
+      uint16_t position = 0;
+      int8_t velocity = 0;
+      int8_t torque = 0;
+      auto it = joint_map.find(joint_id);
+      if (it != joint_map.end()) {
+        position = static_cast<uint16_t>(
+            static_cast<int16_t>(it->second.angle * 10.0f));
+        velocity = it->second.velocity;
+        torque = it->second.torque;
+      }
+      buffer.push_back(static_cast<uint8_t>(mode));
+      buffer.push_back(0);
+      buffer.push_back(static_cast<uint8_t>(position & 0xFF));
+      buffer.push_back(static_cast<uint8_t>((position >> 8) & 0xFF));
+      buffer.push_back(static_cast<uint8_t>(velocity));
+      buffer.push_back(static_cast<uint8_t>(torque));
+    }
+
+    GHAND_LOG_INFO("Sending PDO data");
+    SendRxPDO(1, ECT_SDO_RXPDOASSIGN, static_cast<uint32_t>(buffer.size()),
+              buffer.data());
+    return true;
+  }
+
+  // EtherCAT PDO requires fixed length; fill missing joints in joint_limits
+  // order.
   std::vector<uint8_t> buffer(
       config_.joint_limits.size() * kEthercatJointDataSize + 2, 0);
   size_t offset = 0;
@@ -706,6 +772,23 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
 
 void EtherCATComm::Stop() {
   GHAND_LOG_INFO("Sending stop command");
+  if (IsL1EthercatRpdo(config_)) {
+    std::vector<JointId> controlled_joints = ControlledJoints(config_);
+    std::vector<uint8_t> buffer;
+    buffer.reserve(controlled_joints.size() * 6);
+    for (size_t i = 0; i < controlled_joints.size(); ++i) {
+      buffer.push_back(static_cast<uint8_t>(ControlMode::POSITION));
+      buffer.push_back(1);
+      buffer.push_back(0);
+      buffer.push_back(0);
+      buffer.push_back(0);
+      buffer.push_back(0);
+    }
+    SendRxPDO(1, ECT_SDO_RXPDOASSIGN, static_cast<uint32_t>(buffer.size()),
+              buffer.data());
+    return;
+  }
+
   std::vector<uint8_t> buffer(
       config_.joint_limits.size() * kEthercatJointDataSize + 2, 0);
   if (buffer.size() > 1) {
@@ -831,9 +914,12 @@ std::vector<Force> ParseSampleForces(const uint8_t* data, int sensor_count) {
 }  // anonymous namespace
 
 void EtherCATComm::ParseHandAndJoints(
-    const uint8_t* data, size_t* offset,
+    const uint8_t* data, size_t size, size_t* offset,
     std::vector<Joint>* parsed_joints,
     HandState* parsed_temperature) const {
+  *parsed_temperature = HandState{};
+  if (*offset + 4 > size) return;
+
   uint8_t hand_state, hand_error;
   int16_t temperature;
 
@@ -851,7 +937,27 @@ void EtherCATComm::ParseHandAndJoints(
   parsed_temperature->temperature = temperature;
 
   parsed_joints->reserve(config_.valid_joints.size());
+  if (IsL1EthercatTpdo(config_)) {
+    for (const auto& joint_id : config_.valid_joints) {
+      if (*offset + 6 > size) break;
+      Joint joint;
+      joint.id = joint_id;
+      joint.state = static_cast<State>(data[*offset]);
+      joint.error = static_cast<ErrorCode>(data[*offset + 1]);
+      uint16_t angle_raw =
+          static_cast<uint16_t>(data[*offset + 2] |
+                                (data[*offset + 3] << 8));
+      joint.angle = angle_raw / 10.0f;
+      joint.velocity = static_cast<int8_t>(data[*offset + 4]);
+      joint.torque = static_cast<int8_t>(data[*offset + 5]);
+      *offset += 6;
+      parsed_joints->push_back(joint);
+    }
+    return;
+  }
+
   for (const auto& joint_id : config_.valid_joints) {
+    if (*offset + 8 > size) break;
     uint8_t joint_state, joint_error;
     float joint_angle;
     uint8_t joint_velocity, joint_torque;
@@ -926,7 +1032,8 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
   size_t offset = 0;
   std::vector<Joint> parsed_joints;
   HandState parsed_temperature;
-  ParseHandAndJoints(data, &offset, &parsed_joints, &parsed_temperature);
+  ParseHandAndJoints(data, size, &offset, &parsed_joints,
+                     &parsed_temperature);
 
   std::lock_guard<std::mutex> lock(callback_mutex_);
   if (joints_callback_) {

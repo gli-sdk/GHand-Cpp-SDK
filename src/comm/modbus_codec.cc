@@ -51,6 +51,31 @@ std::vector<uint8_t> RegistersToBytes(const std::vector<uint16_t>& registers) {
   return bytes;
 }
 
+bool GetJointInputSpan(const ProductConfig& config, uint16_t* start_addr,
+                       int* count) {
+  if (start_addr == nullptr || count == nullptr ||
+      config.valid_joints.empty() || config.joint_input_registers.empty()) {
+    return false;
+  }
+
+  bool found = false;
+  uint16_t start = 0xFFFF;
+  uint16_t end = 0;
+  for (JointId joint_id : config.valid_joints) {
+    auto it = config.joint_input_registers.find(joint_id);
+    if (it == config.joint_input_registers.end()) continue;
+    if (it->second < start) start = it->second;
+    uint16_t joint_end = static_cast<uint16_t>(it->second + 2);
+    if (joint_end > end) end = joint_end;
+    found = true;
+  }
+
+  if (!found) return false;
+  *start_addr = start;
+  *count = static_cast<int>(end - start + 1);
+  return true;
+}
+
 static std::string ParseUtf8String(const uint8_t* raw_bytes, size_t len) {
   std::string str(reinterpret_cast<const char*>(raw_bytes), len);
   // Strip null terminators and padding
@@ -125,6 +150,23 @@ std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
 
   for (JointId joint_id : valid_joints) {
     size_t offset = static_cast<size_t>(joint_id) * 3;
+    if (offset + 2 >= count) continue;
+    joints.push_back(ParseJointData(raw + offset, joint_id));
+  }
+  return joints;
+}
+
+std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
+                               const ProductConfig& config,
+                               uint16_t start_addr) {
+  std::vector<Joint> joints;
+  joints.reserve(config.valid_joints.size());
+
+  for (JointId joint_id : config.valid_joints) {
+    auto it = config.joint_input_registers.find(joint_id);
+    if (it == config.joint_input_registers.end()) continue;
+    if (it->second < start_addr) continue;
+    size_t offset = static_cast<size_t>(it->second - start_addr);
     if (offset + 2 >= count) continue;
     joints.push_back(ParseJointData(raw + offset, joint_id));
   }

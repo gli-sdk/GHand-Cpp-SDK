@@ -124,7 +124,7 @@ enum class JointId : uint8_t {
 std::string GHAND_API ToString(JointId id);
 
 // Product type definitions
-enum class ProductType : uint8_t { G5, AUTO };
+enum class ProductType : uint8_t { G5, AUTO, L1 };
 
 /**
  * @brief Get string representation of product type (for debug/logging)

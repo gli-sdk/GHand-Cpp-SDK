@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <thread>
 
 #include "ghand/logging.h"
 #include "logging_macros.h"
@@ -44,8 +45,62 @@ static std::vector<uint8_t> EncodeJointBlock(
   return RegistersToBytes(registers);
 }
 
+static std::vector<uint8_t> BuildCanfdRegisterPayload(
+    int addr, int count, const std::vector<uint16_t>& values) {
+  std::vector<uint16_t> registers;
+  registers.reserve(2 + static_cast<size_t>(count));
+  registers.push_back(static_cast<uint16_t>(addr));
+  registers.push_back(static_cast<uint16_t>(count));
+  for (int i = 0; i < count; ++i) {
+    uint16_t value = i < static_cast<int>(values.size()) ? values[i] : 0;
+    registers.push_back(value);
+  }
+  return RegistersToBytes(registers);
+}
+
+static void AddUniqueDst(std::vector<uint8_t>* values, uint8_t dst) {
+  if (std::find(values->begin(), values->end(), dst) == values->end()) {
+    values->push_back(dst);
+  }
+}
+
+static void AddUniquePayload(std::vector<std::vector<uint8_t>>* values,
+                             const std::vector<uint8_t>& payload) {
+  if (std::find(values->begin(), values->end(), payload) == values->end()) {
+    values->push_back(payload);
+  }
+}
+
+static std::vector<std::vector<uint8_t>> BuildConnectionPayloads(
+    const ProductConfig& config, bool delete_connection) {
+  std::vector<std::vector<uint8_t>> payloads;
+  if (delete_connection) {
+    AddUniquePayload(&payloads,
+                     BuildCanfdRegisterPayload(
+                         config.canfd_connection_delete_register,
+                         config.canfd_connection_delete_count,
+                         config.canfd_connection_delete_values));
+  } else {
+    AddUniquePayload(&payloads,
+                     BuildCanfdRegisterPayload(
+                         config.canfd_connection_timer_register,
+                         config.canfd_connection_timer_count,
+                         config.canfd_connection_timer_values));
+  }
+
+  if (config.name.empty()) {
+    AddUniquePayload(&payloads,
+                     delete_connection
+                         ? BuildCanfdRegisterPayload(
+                               0x0036, 3, {0x0000, 0x0000, 0x0000})
+                         : BuildCanfdRegisterPayload(0x0037, 2,
+                                                      {0x0000, 0x0000}));
+  }
+  return payloads;
+}
+
 CANFDComm::CANFDComm(const ProductConfig& config)
-    : driver_(CreateZLGDriver()), config_(config) {}
+    : driver_(CreateZLGDriver()), dst_id_(config.slave_id), config_(config) {}
 
 CANFDComm::~CANFDComm() { Disconnect(); }
 
@@ -277,29 +332,47 @@ bool CANFDComm::NodeIdDetection(int timeout_ms) {
 }
 
 bool CANFDComm::EstablishConnection(int timeout_ms) {
-  for (uint8_t dst : {0x31, 0x32}) {
-    uint8_t data[] = {0x00, 0x31, 0x00, 0x01, 0x00, 0x00};
-    uint32_t can_id =
-        PackArbitration(src_id_, dst, 0, 0x02, 1, 1, 0, 0);
-    SendFrame(can_id, data, sizeof(data));
+  std::vector<uint8_t> dst_ids;
+  AddUniqueDst(&dst_ids, config_.slave_id);
+  AddUniqueDst(&dst_ids, 0x31);
+  AddUniqueDst(&dst_ids, 0x32);
 
-    auto deadline = std::chrono::steady_clock::now() +
-                     std::chrono::milliseconds(timeout_ms);
-    while (std::chrono::steady_clock::now() < deadline) {
-      uint32_t resp_id = 0;
-      uint8_t resp_data[64];
-      uint8_t resp_len = 0;
-      if (!RecvFrame(&resp_id, resp_data, &resp_len, 50)) continue;
+  auto payloads = BuildConnectionPayloads(config_, false);
+  for (const auto& data : payloads) {
+    for (uint8_t dst : dst_ids) {
+      uint32_t can_id =
+          PackArbitration(src_id_, dst, 0, 0x02, 1, 1, 0, 0);
+      SendFrame(can_id, data.data(), static_cast<uint8_t>(data.size()));
 
-      int r_src = 0, r_dst = 0, r_ack = 0, r_fc = 0;
-      UnpackArbitration(resp_id, &r_src, &r_dst, &r_ack, &r_fc, nullptr,
-                         nullptr, nullptr, nullptr);
+      auto deadline = std::chrono::steady_clock::now() +
+                       std::chrono::milliseconds(timeout_ms);
+      while (std::chrono::steady_clock::now() < deadline) {
+        uint32_t resp_id = 0;
+        uint8_t resp_data[64];
+        uint8_t resp_len = 0;
+        if (!RecvFrame(&resp_id, resp_data, &resp_len, 50)) continue;
 
-      if (r_ack != 1 || r_dst != src_id_ || r_src != dst) continue;
-      if (r_fc == 0x82) break;  // Exception, try next dst
-      if (r_fc == 0x02) {
-        dst_id_ = dst;
-        return true;
+        int r_src = 0, r_dst = 0, r_ack = 0, r_fc = 0;
+        UnpackArbitration(resp_id, &r_src, &r_dst, &r_ack, &r_fc, nullptr,
+                           nullptr, nullptr, nullptr);
+
+        if (r_ack != 1 || r_dst != src_id_ || r_src != dst) continue;
+        if (r_fc == 0x82) {
+          if (resp_len > 0 && resp_data[0] == 0x03) {
+            uint8_t previous_dst = dst_id_;
+            dst_id_ = dst;
+            std::vector<uint8_t> bytes;
+            if (ReadRegisters(0x1000, 1, &bytes, 0x04, 500)) {
+              return true;
+            }
+            dst_id_ = previous_dst;
+          }
+          break;  // Exception, try next dst/payload
+        }
+        if (r_fc == 0x02) {
+          dst_id_ = dst;
+          return true;
+        }
       }
     }
   }
@@ -307,9 +380,11 @@ bool CANFDComm::EstablishConnection(int timeout_ms) {
 }
 
 void CANFDComm::DeleteConnection() {
-  uint8_t data[] = {0x00, 0x30, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00};
-  uint32_t can_id = PackArbitration(src_id_, dst_id_, 0, 0x05, 1, 1, 0, 0);
-  SendFrame(can_id, data, sizeof(data));
+  auto payloads = BuildConnectionPayloads(config_, true);
+  for (const auto& data : payloads) {
+    uint32_t can_id = PackArbitration(src_id_, dst_id_, 0, 0x05, 1, 1, 0, 0);
+    SendFrame(can_id, data.data(), static_cast<uint8_t>(data.size()));
+  }
 }
 
 int CANFDComm::Connect(const std::string& device_name) {
@@ -325,10 +400,16 @@ int CANFDComm::Connect(const std::string& device_name) {
     return -2;
   }
 
-  for (uint8_t dst : {0x31, 0x32}) {
-    uint8_t data[] = {0x00, 0x30, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00};
-    uint32_t can_id = PackArbitration(src_id_, dst, 0, 0x05, 1, 1, 0, 0);
-    SendFrame(can_id, data, sizeof(data));
+  std::vector<uint8_t> dst_ids;
+  AddUniqueDst(&dst_ids, config_.slave_id);
+  AddUniqueDst(&dst_ids, 0x31);
+  AddUniqueDst(&dst_ids, 0x32);
+  auto payloads = BuildConnectionPayloads(config_, true);
+  for (uint8_t dst : dst_ids) {
+    for (const auto& data : payloads) {
+      uint32_t can_id = PackArbitration(src_id_, dst, 0, 0x05, 1, 1, 0, 0);
+      SendFrame(can_id, data.data(), static_cast<uint8_t>(data.size()));
+    }
   }
 
   connected_.store(true);
@@ -357,6 +438,7 @@ int CANFDComm::Disconnect() {
 
   if (connected_.load()) {
     DeleteConnection();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
   connected_.store(false);
@@ -430,9 +512,30 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
                            ControlMode mode) {
   if (!IsConnected() || joints.empty()) return false;
 
-  // Write mode register
-  uint16_t mode_value = (static_cast<uint16_t>(mode) << 8) & 0xFF00;
-  if (!WriteSingleRegister(0x0010, mode_value)) return false;
+  if (config_.mode_register >= 0) {
+    uint16_t mode_value = (static_cast<uint16_t>(mode) << 8) & 0xFF00;
+    if (!WriteSingleRegister(config_.mode_register, mode_value)) return false;
+  }
+
+  if (config_.per_joint_mode_control) {
+    const auto& control_map = config_.joint_control_registers.empty()
+                                  ? kHoldingRegMap
+                                  : config_.joint_control_registers;
+    for (const auto& joint : joints) {
+      auto it = control_map.find(joint.id);
+      if (it == control_map.end()) continue;
+
+      std::vector<uint16_t> registers;
+      registers.push_back((static_cast<uint16_t>(mode) << 8) & 0xFF00);
+      auto regs = EncodeJointCommand(joint);
+      registers.push_back(regs.first);
+      registers.push_back(regs.second);
+      if (!WriteRegisters(it->second, RegistersToBytes(registers))) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   const JointCommand* ff_swing = nullptr;
   for (const auto& joint : joints) {
@@ -474,13 +577,11 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
     auto it = kHoldingRegMap.find(joint.id);
     if (it == kHoldingRegMap.end()) continue;
 
+    std::vector<uint16_t> registers;
     auto regs = EncodeJointCommand(joint);
-    std::vector<uint8_t> data = {
-        static_cast<uint8_t>((regs.first >> 8) & 0xFF),
-        static_cast<uint8_t>(regs.first & 0xFF),
-        static_cast<uint8_t>((regs.second >> 8) & 0xFF),
-        static_cast<uint8_t>(regs.second & 0xFF)};
-    if (!WriteRegisters(it->second, data)) return false;
+    registers.push_back(regs.first);
+    registers.push_back(regs.second);
+    if (!WriteRegisters(it->second, RegistersToBytes(registers))) return false;
   }
 
   return true;
@@ -488,7 +589,20 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
 
 void CANFDComm::Stop() {
   if (!IsConnected()) return;
-  WriteSingleRegister(0x0010, 0x0001);
+  if (config_.stop_register >= 0) {
+    WriteSingleRegister(config_.stop_register, 0x0001);
+    return;
+  }
+
+  const auto& control_map = config_.joint_control_registers.empty()
+                                ? kHoldingRegMap
+                                : config_.joint_control_registers;
+  for (JointId joint_id : config_.valid_joints) {
+    auto it = control_map.find(joint_id);
+    if (it != control_map.end()) {
+      WriteSingleRegister(it->second, 0x0001);
+    }
+  }
 }
 
 // System operations
@@ -511,7 +625,7 @@ bool CANFDComm::InitJoint() {
 
 bool CANFDComm::WriteTactileControl(uint16_t command) {
   if (!IsConnected()) return false;
-  return WriteSingleRegister(0x002B, command);
+  return WriteSingleRegister(config_.tactile_control_register, command);
 }
 
 bool CANFDComm::OpenTactile() {
@@ -551,15 +665,12 @@ bool CANFDComm::ZeroTactile() { return WriteTactileControl(0x0400); }
 std::vector<Joint> CANFDComm::GetJoints() {
   if (!IsConnected() || config_.valid_joints.empty()) return {};
 
-  uint8_t max_id = 0;
-  for (auto id : config_.valid_joints) {
-    uint8_t id_val = static_cast<uint8_t>(id);
-    if (id_val > max_id) max_id = id_val;
-  }
-  int count = (max_id + 1) * 3;
+  uint16_t start_addr = 0;
+  int count = 0;
+  if (!GetJointInputSpan(config_, &start_addr, &count)) return {};
 
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(0x1023, count, &bytes)) {
+  if (!ReadInputBytes(start_addr, count, &bytes)) {
     GHAND_LOG_ERROR("Failed to read joints over CANFD");
     return {};
   }
@@ -568,7 +679,7 @@ std::vector<Joint> CANFDComm::GetJoints() {
   for (size_t i = 0; i + 1 < bytes.size(); i += 2) {
     regs.push_back(static_cast<uint16_t>((bytes[i] << 8) | bytes[i + 1]));
   }
-  return ParseJoints(regs.data(), regs.size(), config_.valid_joints);
+  return ParseJoints(regs.data(), regs.size(), config_, start_addr);
 }
 
 HandState CANFDComm::GetHandInfo() {

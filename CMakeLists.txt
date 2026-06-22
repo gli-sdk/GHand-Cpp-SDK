@@ -264,9 +264,15 @@ add_custom_command(TARGET ghand POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/config/xiaoyao_hand.json"
         "${CMAKE_BINARY_DIR}/config/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/l1_hand.json"
+        "${CMAKE_BINARY_DIR}/config/"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/examples/config"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/config/xiaoyao_hand.json"
+        "${CMAKE_BINARY_DIR}/examples/config/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/l1_hand.json"
         "${CMAKE_BINARY_DIR}/examples/config/"
     COMMENT "Copying config files to build/config/ and build/examples/config/"
 )
