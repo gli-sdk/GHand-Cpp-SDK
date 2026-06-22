@@ -620,8 +620,10 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
     serial_num |= static_cast<unsigned char>(value[3]) << 24;
     info.serial_number = serial_num;
   }
-
-  info.software_version = ReadFirmwareVersion(0x01);
+  
+  if (info.software_version.empty()) {
+    info.software_version = ReadFirmwareVersion(0x01);
+  }
   info.position_sensor_version = ReadFirmwareVersion(0x02);
   info.tactile_sensor_version = ReadFirmwareVersion(0x03);
   info.motor_driver_version = ReadFirmwareVersion(0x04);
