@@ -1,6 +1,7 @@
 #include "dexhand_callback_manager.h"
 
 #include <chrono>
+#include <cmath>
 #include <iomanip>
 #include <sstream>
 
@@ -19,52 +20,81 @@ DexHandCallbackManager::DexHandCallbackManager() {
 }
 
 void DexHandCallbackManager::SetJointsCallback(JointsCallback callback) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   joints_callback_ = callback;
 }
 
 void DexHandCallbackManager::SetHandStateCallback(HandStateCallback callback) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   hand_state_callback_ = callback;
 }
 
 void DexHandCallbackManager::SetTactileDataCallback(
     TactileDataCallback callback) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   tactile_data_callback_ = callback;
 }
 
 void DexHandCallbackManager::UpdateJoints(const std::vector<Joint>& joints) {
+  JointsCallback callback;
+  std::vector<Joint> changed_joints;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
-    last_joints_ = joints;
-  }
-  if (HasJointDataChanged(joints)) {
-    if (joints_callback_) {
-      joints_callback_(joints);
+    if (last_joints_.empty()) {
+      changed_joints = joints;
+    } else {
+      for (const auto& joint : joints) {
+        const Joint* previous = nullptr;
+        for (const auto& cached : last_joints_) {
+          if (cached.id == joint.id) {
+            previous = &cached;
+            break;
+          }
+        }
+        if (previous == nullptr || joint.state != previous->state ||
+            joint.error != previous->error ||
+            std::abs(joint.angle - previous->angle) >
+                kJointAngleThreshold) {
+          changed_joints.push_back(joint);
+        }
+      }
     }
-    last_joint_callback_time_ = std::chrono::steady_clock::now();
+    last_joints_ = joints;
+    if (!changed_joints.empty()) {
+      callback = joints_callback_;
+      last_joint_callback_time_ = std::chrono::steady_clock::now();
+    }
+  }
+  if (callback) {
+    callback(changed_joints);
   }
 }
 
 void DexHandCallbackManager::UpdateTemperature(const HandState& temperature) {
+  HandStateCallback callback;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
+    if (HasTemperatureChanged(temperature)) {
+      callback = hand_state_callback_;
+      last_temp_callback_time_ = std::chrono::steady_clock::now();
+    }
     last_state_ = temperature;
   }
-  if (HasTemperatureChanged(temperature)) {
-    if (hand_state_callback_) {
-      hand_state_callback_(temperature);
-    }
-    last_temp_callback_time_ = std::chrono::steady_clock::now();
+  if (callback) {
+    callback(temperature);
   }
 }
 
 void DexHandCallbackManager::UpdateTactileData(const TactileData& data) {
+  TactileDataCallback callback;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
     last_tactile_data_ = data;
     has_tactile_data_ = true;
+    callback = tactile_data_callback_;
   }
-  if (tactile_data_callback_) {
-    tactile_data_callback_(data);
+  if (callback) {
+    callback(data);
   }
 }
 
