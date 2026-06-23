@@ -79,6 +79,31 @@ bool IsLikelyUsbSerialAdapter(const std::string& name) {
          upper_name.find("WCH") != std::string::npos;
 }
 
+bool ParseWindowsComPort(const std::string& name, int* port_number) {
+  if (name.size() <= 3) return false;
+  if (std::toupper(static_cast<unsigned char>(name[0])) != 'C' ||
+      std::toupper(static_cast<unsigned char>(name[1])) != 'O' ||
+      std::toupper(static_cast<unsigned char>(name[2])) != 'M') {
+    return false;
+  }
+
+  int value = 0;
+  for (size_t i = 3; i < name.size(); ++i) {
+    if (!std::isdigit(static_cast<unsigned char>(name[i]))) return false;
+    value = value * 10 + (name[i] - '0');
+  }
+  if (port_number) *port_number = value;
+  return true;
+}
+
+std::string NormalizeWindowsComPort(const std::string& name) {
+  int port_number = 0;
+  if (ParseWindowsComPort(name, &port_number) && port_number >= 10) {
+    return "\\\\.\\" + name;
+  }
+  return name;
+}
+
 }  // namespace
 #endif
 
@@ -218,7 +243,7 @@ int RS485Comm::Connect(const std::string& device_name) {
   AddUniqueSlaveId(&slave_ids, 0x02);
 
   for (int baud_rate : baud_rates) {
-    ctx_ = modbus_new_rtu(device_name.c_str(), baud_rate, 'N', 8, 1);
+    ctx_ = modbus_new_rtu(port_name.c_str(), baud_rate, 'N', 8, 1);
     if (!ctx_) {
       const int err = errno;
       GHAND_LOG_ERROR(
