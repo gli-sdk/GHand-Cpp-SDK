@@ -30,3 +30,4 @@ docs/CPP_SDK_USER_GUIDE.md
 CLAUDE.md
 tests/
 .claudeignore
+vendor/dist/include/zlgcan/zcan.h
