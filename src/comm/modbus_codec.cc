@@ -3,6 +3,34 @@
 namespace ghand {
 namespace internal {
 
+namespace {
+
+constexpr float kAngleScale = 10.0f;
+constexpr float kFfSwingProtocolOffsetDeg = 10.0f;
+constexpr float kFfSwingProtocolScale = 5.0f;
+
+float DecodeJointAngle(JointId joint_id, int16_t raw) {
+  if (joint_id == JointId::FF_SWING) {
+    return raw / kFfSwingProtocolScale - kFfSwingProtocolOffsetDeg;
+  }
+
+  float angle = raw / kAngleScale;
+  return angle;
+}
+
+int16_t EncodeJointAngle(const JointCommand& joint) {
+  float angle = joint.angle;
+  if (joint.id == JointId::FF_SWING) {
+    angle += kFfSwingProtocolOffsetDeg;
+    int16_t raw = static_cast<int16_t>(angle * kFfSwingProtocolScale);
+    if (raw == 0 && joint.angle < 0.0f) raw = 1;
+    return raw;
+  }
+  return static_cast<int16_t>(angle * kAngleScale);
+}
+
+}  // namespace
+
 const std::map<JointId, uint16_t> kHoldingRegMap = {
     {JointId::THUMB_PIP, 0x0011},     {JointId::THUMB_MCP, 0x0013},
     {JointId::THUMB_SWING, 0x0015},   {JointId::THUMB_ROTATION, 0x0017},
@@ -105,7 +133,7 @@ Joint ParseJointData(const uint16_t* raw, JointId joint_id) {
   joint.error = static_cast<ErrorCode>(error_byte);
 
   int16_t angle_raw = static_cast<int16_t>(raw[1]);
-  joint.angle = angle_raw / 10.0f;
+  joint.angle = DecodeJointAngle(joint_id, angle_raw);
 
   uint8_t speed = (raw[2] >> 8) & 0xFF;
   uint8_t torque = raw[2] & 0xFF;
@@ -191,7 +219,7 @@ std::vector<Force> ParseTactileDistributed(const uint8_t* data_bytes,
 }
 
 std::pair<uint16_t, uint16_t> EncodeJointCommand(const JointCommand& joint) {
-  int16_t angle_raw = static_cast<int16_t>(joint.angle * 10);
+  int16_t angle_raw = EncodeJointAngle(joint);
   uint16_t reg0 = static_cast<uint16_t>(angle_raw);
   uint16_t reg1 = ((static_cast<uint16_t>(joint.velocity) & 0xFF) << 8) |
                   (static_cast<uint16_t>(joint.torque) & 0xFF);

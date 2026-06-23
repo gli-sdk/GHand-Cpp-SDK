@@ -427,7 +427,7 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
   } else if (control_mode_ == ControlMode::SPEED) {
     if (joint.velocity < -100) {
       int8_t original = joint.velocity;
-      joint.velocity = 100;
+      joint.velocity = -100;
       GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
                                    << static_cast<int>(original)
                                    << " below limit in SPEED mode, "

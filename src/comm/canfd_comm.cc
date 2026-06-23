@@ -506,6 +506,15 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
     if (config_.per_joint_mode_control) {
       registers.push_back((static_cast<uint16_t>(mode) << 8) & 0xFF00);
     }
+  }
+
+  // Write each joint
+  for (const auto& joint : joints) {
+    if (ff_swing != nullptr && IsIndexFingerControlJoint(joint.id)) continue;
+
+    auto it = kHoldingRegMap.find(joint.id);
+    if (it == kHoldingRegMap.end()) continue;
+
     auto regs = EncodeJointCommand(joint);
     registers.push_back(regs.first);
     registers.push_back(regs.second);
