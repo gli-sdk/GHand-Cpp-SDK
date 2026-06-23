@@ -101,6 +101,7 @@ class CANFDComm : public IComm {
   void PollLoop();
 
   std::unique_ptr<CANFDDriver> driver_;
+  std::mutex io_mutex_;
   uint8_t src_id_ = 0x0A;
   uint8_t dst_id_ = 0x31;
   std::atomic<bool> connected_{false};

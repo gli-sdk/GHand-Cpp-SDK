@@ -163,6 +163,7 @@ bool CANFDComm::RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len,
 bool CANFDComm::ReadRegisters(int addr, int count,
                               std::vector<uint8_t>* out_bytes,
                               int func_code, int timeout_ms) {
+  std::lock_guard<std::mutex> io_lock(io_mutex_);
   // Command frame data: AddrHi, AddrLo, CountHi, CountLo
   uint8_t cmd_data[4];
   cmd_data[0] = (addr >> 8) & 0xFF;
@@ -232,6 +233,7 @@ bool CANFDComm::ReadRegisters(int addr, int count,
 
 bool CANFDComm::WriteRegisters(int addr, const std::vector<uint8_t>& data,
                                int timeout_ms) {
+  std::lock_guard<std::mutex> io_lock(io_mutex_);
   uint8_t func_code;
   std::vector<uint8_t> payload;
 
@@ -419,6 +421,18 @@ int CANFDComm::Connect(const std::string& device_name) {
     driver_->Close();
     connected_.store(false);
     return -3;
+  }
+
+  bool should_start_poll = false;
+  {
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    joints_poll_enabled_ = static_cast<bool>(joints_cb_);
+    hand_state_poll_enabled_ = static_cast<bool>(hand_state_cb_);
+    should_start_poll = joints_poll_enabled_ || hand_state_poll_enabled_ ||
+                        tactile_poll_enabled_;
+  }
+  if (should_start_poll) {
+    EnsurePollStarted();
   }
 
   GHAND_LOG_INFO("CANFD device connected (" << device_name << ")");
