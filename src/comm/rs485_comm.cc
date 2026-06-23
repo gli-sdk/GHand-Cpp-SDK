@@ -207,15 +207,8 @@ void RS485Comm::CloseContext() {
 int RS485Comm::Connect(const std::string& device_name) {
   GHAND_LOG_INFO("RS485 connecting to: " << device_name);
 
-  const int baud_rates[] = {1000000, 6000000, 19200, 115200, 57600, 38400,
-                            9600};
-  std::vector<int> slave_ids;
-  AddUniqueSlaveId(&slave_ids, config_.slave_id);
-  AddUniqueSlaveId(&slave_ids, 0x32);
-  AddUniqueSlaveId(&slave_ids, 0x31);
-  AddUniqueSlaveId(&slave_ids, 0x71);
-  AddUniqueSlaveId(&slave_ids, 0x01);
-  AddUniqueSlaveId(&slave_ids, 0x02);
+  const int baud_rates[] = {1000000};
+  const int slave_ids[] = {0x32, 0x31};
 
   for (int baud_rate : baud_rates) {
     ctx_ = modbus_new_rtu(device_name.c_str(), baud_rate, 'N', 8, 1);

@@ -413,8 +413,7 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
     }
 
   } else if (control_mode_ == ControlMode::TORQUE) {
-    // TORQUE:
-    // >100 -> 100, <-100 -> 100, -100~100 take absolute value.
+    // Torque mode encodes velocity as 0-100.
     int velocity = static_cast<int>(joint.velocity);
     if (velocity > 100) {
       velocity = 100;
