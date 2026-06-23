@@ -11,6 +11,8 @@ std::string ToString(ProductType type) {
       return "G5-13A23D-S01";
     case ProductType::AUTO:
       return "AUTO";
+    case ProductType::L1:
+      return "L1-Hand-V1";
     default:
       return "UNKNOWN";
   }

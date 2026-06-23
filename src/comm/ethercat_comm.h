@@ -92,6 +92,7 @@ class EtherCATComm : public IComm {
   int64_t cycletime_ = 10000000;
 
   uint8_t rxpdo_buffer_[80] = {0};
+  size_t rxpdo_size_ = 0;
 
   std::mutex context_mutex_;
   std::mutex rt_context_mutex_;
@@ -136,7 +137,7 @@ class EtherCATComm : public IComm {
                               int32_t totalsize);
 
   // Parse PDO raw data and trigger structured callbacks
-  void ParseHandAndJoints(const uint8_t* data, size_t* offset,
+  void ParseHandAndJoints(const uint8_t* data, size_t size, size_t* offset,
                           std::vector<Joint>* parsed_joints,
                           HandState* parsed_temperature) const;
   TactileData ParseTactileData(const uint8_t* data, size_t size,

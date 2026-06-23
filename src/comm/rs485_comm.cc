@@ -82,6 +82,16 @@ bool IsLikelyUsbSerialAdapter(const std::string& name) {
 }  // namespace
 #endif
 
+namespace {
+
+void AddUniqueSlaveId(std::vector<int>* values, int sid) {
+  if (std::find(values->begin(), values->end(), sid) == values->end()) {
+    values->push_back(sid);
+  }
+}
+
+}  // namespace
+
 RS485Comm::RS485Comm(const ProductConfig& config) : config_(config) {}
 
 RS485Comm::~RS485Comm() { Disconnect(); }
@@ -199,7 +209,13 @@ int RS485Comm::Connect(const std::string& device_name) {
 
   const int baud_rates[] = {1000000, 6000000, 19200, 115200, 57600, 38400,
                             9600};
-  const int slave_ids[] = {0x32, 0x31, 0x71, 0x01, 0x02};
+  std::vector<int> slave_ids;
+  AddUniqueSlaveId(&slave_ids, config_.slave_id);
+  AddUniqueSlaveId(&slave_ids, 0x32);
+  AddUniqueSlaveId(&slave_ids, 0x31);
+  AddUniqueSlaveId(&slave_ids, 0x71);
+  AddUniqueSlaveId(&slave_ids, 0x01);
+  AddUniqueSlaveId(&slave_ids, 0x02);
 
   for (int baud_rate : baud_rates) {
     ctx_ = modbus_new_rtu(device_name.c_str(), baud_rate, 'N', 8, 1);
@@ -327,21 +343,31 @@ bool RS485Comm::MoveJoints(const std::vector<JointCommand>& joints,
   std::lock_guard<std::mutex> io_lock(io_mutex_);
   modbus_set_slave(ctx_, slave_id_);
 
-  // Write mode register
-  uint16_t mode_value = (static_cast<uint16_t>(mode) << 8) & 0xFF00;
-  if (modbus_write_register(ctx_, 0x0010, mode_value) != 1) {
-    GHAND_LOG_ERROR("Failed to write mode register");
-    return false;
+  if (config_.mode_register >= 0) {
+    uint16_t mode_value = (static_cast<uint16_t>(mode) << 8) & 0xFF00;
+    if (modbus_write_register(ctx_, config_.mode_register, mode_value) != 1) {
+      GHAND_LOG_ERROR("Failed to write mode register");
+      return false;
+    }
   }
 
-  // Write each joint
+  const auto& control_map = config_.joint_control_registers.empty()
+                                ? kHoldingRegMap
+                                : config_.joint_control_registers;
   for (const auto& joint : joints) {
-    auto it = kHoldingRegMap.find(joint.id);
-    if (it == kHoldingRegMap.end()) continue;
+    auto it = control_map.find(joint.id);
+    if (it == control_map.end()) continue;
 
     auto regs = EncodeJointCommand(joint);
-    uint16_t data[2] = {regs.first, regs.second};
-    if (modbus_write_registers(ctx_, it->second, 2, data) != 2) {
+    std::vector<uint16_t> data;
+    if (config_.per_joint_mode_control) {
+      data.push_back((static_cast<uint16_t>(mode) << 8) & 0xFF00);
+    }
+    data.push_back(regs.first);
+    data.push_back(regs.second);
+    int reg_count = static_cast<int>(data.size());
+    if (modbus_write_registers(ctx_, it->second, reg_count, data.data()) !=
+        reg_count) {
       GHAND_LOG_ERROR("Failed to write joint register: "
                       << ToString(joint.id));
       return false;
@@ -355,7 +381,20 @@ void RS485Comm::Stop() {
   if (!IsConnected()) return;
   std::lock_guard<std::mutex> io_lock(io_mutex_);
   modbus_set_slave(ctx_, slave_id_);
-  modbus_write_register(ctx_, 0x0010, 0x0001);
+  if (config_.stop_register >= 0) {
+    modbus_write_register(ctx_, config_.stop_register, 0x0001);
+    return;
+  }
+
+  const auto& control_map = config_.joint_control_registers.empty()
+                                ? kHoldingRegMap
+                                : config_.joint_control_registers;
+  for (JointId joint_id : config_.valid_joints) {
+    auto it = control_map.find(joint_id);
+    if (it != control_map.end()) {
+      modbus_write_register(ctx_, it->second, 0x0001);
+    }
+  }
 }
 
 // System operations
@@ -417,7 +456,8 @@ bool RS485Comm::WriteTactileControl(uint16_t command) {
   if (!IsConnected()) return false;
   std::lock_guard<std::mutex> io_lock(io_mutex_);
   modbus_set_slave(ctx_, slave_id_);
-  return modbus_write_register(ctx_, 0x002B, command) == 1;
+  return modbus_write_register(ctx_, config_.tactile_control_register,
+                               command) == 1;
 }
 
 // Data retrieval
@@ -440,21 +480,20 @@ bool RS485Comm::ReadInputRegistersBytes(int addr, int count,
 std::vector<Joint> RS485Comm::GetJoints() {
   if (!IsConnected() || config_.valid_joints.empty()) return {};
 
-  uint8_t max_id = 0;
-  for (auto id : config_.valid_joints) {
-    max_id = std::max(max_id, static_cast<uint8_t>(id));
-  }
-  int count = (max_id + 1) * 3;
+  uint16_t start_addr = 0;
+  int count = 0;
+  if (!GetJointInputSpan(config_, &start_addr, &count)) return {};
 
   std::lock_guard<std::mutex> io_lock(io_mutex_);
   modbus_set_slave(ctx_, slave_id_);
   std::vector<uint16_t> regs(count);
-  if (modbus_read_input_registers(ctx_, 0x1023, count, regs.data()) != count) {
+  if (modbus_read_input_registers(ctx_, start_addr, count, regs.data()) !=
+      count) {
     GHAND_LOG_ERROR("Failed to read joint registers");
     return {};
   }
 
-  return ParseJoints(regs.data(), regs.size(), config_.valid_joints);
+  return ParseJoints(regs.data(), regs.size(), config_, start_addr);
 }
 
 HandState RS485Comm::GetHandInfo() {
