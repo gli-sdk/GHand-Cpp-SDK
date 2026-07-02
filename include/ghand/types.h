@@ -72,6 +72,8 @@ enum class ErrorCode : uint8_t {
   MOTOR_STALLED = 5,               // Motor stall
   MOTOR_DRIVER_OVERTEMP = 6,       // Motor driver overtemperature
   MOTOR_COMM_ERROR = 7,            // Motor communication error
+  MOTOR_OVER_TEMP = 8,             // Motor overtemperature
+  MOTOR_DRIVER_OVER_TEMP = 9,      // Motor Driver over temperature
   // Finger errors
   JOINT_CONFLICT = 11,  // Joint conflict
   TIP_CONFLICT = 12,    // Tip conflict
