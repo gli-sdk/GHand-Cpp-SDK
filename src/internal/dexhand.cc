@@ -312,7 +312,7 @@ FirmwareUpdateError DexHand::BootUpdate(
   GHAND_LOG_INFO("Starting firmware update: " << filename);
 
   const int retry_count = 10;
-  const int retry_delay_ms = 1000;
+  const int retry_delay_ms = 2000;
   std::string last_version = comm_->GetDeviceInfo().software_version;
 
   FirmwareUpdateError ret =

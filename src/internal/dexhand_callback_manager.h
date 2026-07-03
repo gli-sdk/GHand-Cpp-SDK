@@ -64,6 +64,7 @@ class DexHandCallbackManager {
   // Last data cache (used for change detection + polled access)
   mutable std::mutex data_mutex_;
   std::vector<Joint> last_joints_;
+  std::vector<Joint> last_delivered_joints_;  // as change detection baseline
   HandState last_state_;
   TactileData last_tactile_data_;
   bool has_tactile_data_ = false;

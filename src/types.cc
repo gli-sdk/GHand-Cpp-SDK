@@ -85,6 +85,10 @@ std::string ToString(ErrorCode error) {
       return "MOTOR_DRIVER_OVERTEMP";
     case ErrorCode::MOTOR_COMM_ERROR:
       return "MOTOR_COMM_ERROR";
+    case ErrorCode::MOTOR_OVER_TEMP:
+      return "MOTOR_OVER_TEMP";
+    case ErrorCode::MOTOR_DRIVER_OVER_TEMP:
+      return "MOTOR_DRIVER_OVER_TEMP";
     case ErrorCode::JOINT_CONFLICT:
       return "JOINT_CONFLICT";
     case ErrorCode::TIP_CONFLICT:
