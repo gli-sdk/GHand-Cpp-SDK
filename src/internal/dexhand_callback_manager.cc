@@ -11,6 +11,15 @@
 namespace ghand {
 namespace internal {
 
+namespace {
+const Joint* FindJointById(const std::vector<Joint>& joints, JointId id) {
+  for (const auto& j : joints) {
+    if (j.id == id) return &j;
+  }
+  return nullptr;
+}
+}  // namespace
+
 DexHandCallbackManager::DexHandCallbackManager() {
   // Initialize cached data
   last_joints_.clear();
@@ -37,36 +46,23 @@ void DexHandCallbackManager::SetTactileDataCallback(
 
 void DexHandCallbackManager::UpdateJoints(const std::vector<Joint>& joints) {
   JointsCallback callback;
-  std::vector<Joint> changed_joints;
+  std::vector<Joint> payload;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
-    if (last_joints_.empty()) {
-      changed_joints = joints;
-    } else {
-      for (const auto& joint : joints) {
-        const Joint* previous = nullptr;
-        for (const auto& cached : last_joints_) {
-          if (cached.id == joint.id) {
-            previous = &cached;
-            break;
-          }
-        }
-        if (previous == nullptr || joint.state != previous->state ||
-            joint.error != previous->error ||
-            std::abs(joint.angle - previous->angle) >
-                kJointAngleThreshold) {
-          changed_joints.push_back(joint);
-        }
-      }
-    }
+    // Always cache the lastest temp frame for GetJointsData() to poll
     last_joints_ = joints;
-    if (!changed_joints.empty()) {
+    // Change detection is based on the "last actually delivered value",
+    // not on the previous polled frame.
+    if (HasJointDataChanged(joints)) {
       callback = joints_callback_;
+      last_delivered_joints_ = joints;  // Advance the baseline only when delivering
       last_joint_callback_time_ = std::chrono::steady_clock::now();
+      payload = joints;  // Always deliver the full joint set, not a subset
     }
   }
+
   if (callback) {
-    callback(changed_joints);
+    callback(payload);
   }
 }
 
@@ -117,35 +113,38 @@ TactileData DexHandCallbackManager::GetTactileData() const {
 
 bool DexHandCallbackManager::HasJointDataChanged(
     const std::vector<Joint>& joints) {
-  // First update
-  if (last_joints_.empty()) {
+  // First delivery
+  if (last_delivered_joints_.empty()) {
     return true;
   }
-
-  // 1. State or error changes → trigger immediately (highest priority)
-  for (size_t i = 0; i < joints.size() && i < last_joints_.size(); i++) {
-    if (joints[i].state != last_joints_[i].state ||
-        joints[i].error != last_joints_[i].error) {
-      return true;  // Trigger immediately regardless of angle changes
+  // 1. State/error changes -> deliver immediately
+  for (const auto& joint : joints) {
+    const Joint* previous = FindJointById(last_delivered_joints_, joint.id);
+    if (previous == nullptr) {
+      return true;
     }
-  }
-
-  // 2. Angle change triggers (>1°)
-  for (size_t i = 0; i < joints.size() && i < last_joints_.size(); i++) {
-    float angle_diff = std::abs(joints[i].angle - last_joints_[i].angle);
-    if (angle_diff > kJointAngleThreshold) {
+    if (joint.state != previous->state || joint.error != previous->error) {
       return true;
     }
   }
-
-  // 3. Data freshness check (force send if not updated for 100ms)
+  
+  // 2. Accumulated angle change relative to the "last delivered value"
+  //    exceeds the threshold.
+  for (const auto& joint : joints) {
+    const Joint* previous = FindJointById(last_delivered_joints_, joint.id);
+    if (previous != nullptr &&
+        std::abs(joint.angle - previous->angle) > kJointAngleThreshold) {
+      return true;
+    }
+  }
+  // 3. Freshness fallback: force delivery if no data has been delivered
+  //    for more than 100 ms.
   auto now = std::chrono::steady_clock::now();
   auto age = std::chrono::duration_cast<std::chrono::milliseconds>(
       now - last_joint_callback_time_);
   if (age.count() > kDataFreshnessMs) {
-    return true;  // Force send to ensure data freshness
+    return true;
   }
-
   return false;
 }
 
