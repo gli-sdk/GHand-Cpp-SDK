@@ -1,5 +1,5 @@
 # GHand SDK C++
-[![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)](include/ghand/version.h)
+[![Version](https://img.shields.io/badge/version-v2.0.0-blue.svg)](include/ghand/version.h)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 
 [![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
