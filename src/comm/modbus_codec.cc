@@ -6,27 +6,13 @@ namespace internal {
 namespace {
 
 constexpr float kAngleScale = 10.0f;
-constexpr float kFfSwingProtocolOffsetDeg = 10.0f;
-constexpr float kFfSwingProtocolScale = 5.0f;
 
-float DecodeJointAngle(JointId joint_id, int16_t raw) {
-  if (joint_id == JointId::FF_SWING) {
-    return raw / kFfSwingProtocolScale - kFfSwingProtocolOffsetDeg;
-  }
-
-  float angle = raw / kAngleScale;
-  return angle;
+float DecodeJointAngle(int16_t raw) {
+  return raw / kAngleScale;
 }
 
 int16_t EncodeJointAngle(const JointCommand& joint) {
-  float angle = joint.angle;
-  if (joint.id == JointId::FF_SWING) {
-    angle += kFfSwingProtocolOffsetDeg;
-    int16_t raw = static_cast<int16_t>(angle * kFfSwingProtocolScale);
-    if (raw == 0 && joint.angle < 0.0f) raw = 1;
-    return raw;
-  }
-  return static_cast<int16_t>(angle * kAngleScale);
+  return static_cast<int16_t>(joint.angle * kAngleScale);
 }
 
 }  // namespace
@@ -133,7 +119,7 @@ Joint ParseJointData(const uint16_t* raw, JointId joint_id) {
   joint.error = static_cast<ErrorCode>(error_byte);
 
   int16_t angle_raw = static_cast<int16_t>(raw[1]);
-  joint.angle = DecodeJointAngle(joint_id, angle_raw);
+  joint.angle = DecodeJointAngle(angle_raw);
 
   uint8_t speed = (raw[2] >> 8) & 0xFF;
   uint8_t torque = raw[2] & 0xFF;
