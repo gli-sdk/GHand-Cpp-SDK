@@ -944,10 +944,11 @@ void EtherCATComm::ParseHandAndJoints(
       joint.id = joint_id;
       joint.state = static_cast<State>(data[*offset]);
       joint.error = static_cast<ErrorCode>(data[*offset + 1]);
-      uint16_t angle_raw =
-          static_cast<uint16_t>(data[*offset + 2] |
-                                (data[*offset + 3] << 8));
-      joint.angle = angle_raw / 10.0f;
+      uint16_t angle_bits =
+          static_cast<uint16_t>(data[*offset + 2]) |
+          (static_cast<uint16_t>(data[*offset + 3]) << 8);
+      int16_t angle_raw = static_cast<int16_t>(angle_bits);
+      joint.angle = static_cast<float>(angle_raw) / 10.0f;
       joint.velocity = static_cast<int8_t>(data[*offset + 4]);
       joint.torque = static_cast<int8_t>(data[*offset + 5]);
       *offset += 6;
