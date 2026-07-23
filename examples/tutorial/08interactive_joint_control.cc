@@ -53,10 +53,10 @@ bool ParseInt(const std::string& input, int* value) {
  */
 void DisplayJointIdList() {
   std::cout << "\nJoint ID List:" << '\n';
-  std::cout << "  1: THUMB_PIP,      2: THUMB_MCP,      "
-               "3: THUMB_SWING,     4: THUMB_ROTATION"
+  std::cout << "  1: THUMB_MCP,      2: THUMB_TMC_FE,      "
+               "3: THUMB_TMC_AA,     4: THUMB_TMC_PS"
             << '\n';
-  std::cout << "  6: FF_PIP,         7: FF_MCP,         8: FF_SWING"
+  std::cout << "  6: FF_PIP,         7: FF_MCP,         8: FF_MCP_AA"
             << '\n';
   std::cout << " 10: MF_PIP,        11: MF_MCP" << '\n';
   std::cout << " 13: RF_PIP,        14: RF_MCP" << '\n';
@@ -161,13 +161,13 @@ bool IsValidJointId(int id) {
 
 std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::CANFD);
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     return nullptr;
   }
 
-  std::cout << "\nConnecting to dexterous hand via CANFD..." << '\n';
+  std::cout << "\nConnecting to dexterous hand..." << '\n';
   if (!hand->AutoConnect()) {
     std::cerr << "Error: Unable to connect to dexterous hand!" << '\n';
     return nullptr;

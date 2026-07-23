@@ -98,15 +98,15 @@ enum class ErrorCode : uint8_t {
 std::string GHAND_API ToString(ErrorCode error);
 
 enum class JointId : uint8_t {
-  THUMB_DIP,
-  THUMB_PIP,
+  THUMB_IP,
   THUMB_MCP,
-  THUMB_SWING,
-  THUMB_ROTATION,
+  THUMB_TMC_FE,
+  THUMB_TMC_AA,
+  THUMB_TMC_PS,
   FF_DIP,
   FF_PIP,
   FF_MCP,
-  FF_SWING,
+  FF_MCP_AA,
   MF_DIP,
   MF_PIP,
   MF_MCP,

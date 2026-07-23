@@ -12,13 +12,13 @@
 // Lift pose
 std::vector<ghand::JointCommand> MakeLiftPose() {
   return {
-      {ghand::JointId::THUMB_PIP, 0.0f, 100, 100},
       {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
-      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, 0.0f, 100, 100},
       {ghand::JointId::FF_PIP, 60.0f, 100, 100},
       {ghand::JointId::FF_MCP, 35.0f, 100, 100},
-      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, 0.0f, 100, 100},
       {ghand::JointId::MF_PIP, 60.0f, 100, 100},
       {ghand::JointId::MF_MCP, 35.0f, 100, 100},
       {ghand::JointId::RF_PIP, 60.0f, 100, 100},
@@ -31,13 +31,13 @@ std::vector<ghand::JointCommand> MakeLiftPose() {
 // Open hand pose
 std::vector<ghand::JointCommand> MakeOpenHand() {
   return {
-      {ghand::JointId::THUMB_PIP, 0.0f, 100, 100},
       {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
-      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, 0.0f, 100, 100},
       {ghand::JointId::FF_PIP, 0.0f, 100, 100},
       {ghand::JointId::FF_MCP, 0.0f, 100, 100},
-      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, 0.0f, 100, 100},
       {ghand::JointId::MF_PIP, 0.0f, 100, 100},
       {ghand::JointId::MF_MCP, 0.0f, 100, 100},
       {ghand::JointId::RF_PIP, 0.0f, 100, 100},
@@ -64,7 +64,7 @@ int main() {
   std::cout << "***** Xiaoyao Dexterous Hand SDK - Lift Demo *****\n"
             << '\n';
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::CANFD);
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     return -1;

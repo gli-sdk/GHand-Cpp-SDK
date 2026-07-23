@@ -170,15 +170,15 @@ std::vector<std::string> GetConfigSearchPaths() {
 }
 
 JointId JointIdFromString(const std::string& name) {
-  if (name == "THUMB_DIP") return JointId::THUMB_DIP;
-  if (name == "THUMB_PIP") return JointId::THUMB_PIP;
+  if (name == "THUMB_IP") return JointId::THUMB_IP;
   if (name == "THUMB_MCP") return JointId::THUMB_MCP;
-  if (name == "THUMB_SWING") return JointId::THUMB_SWING;
-  if (name == "THUMB_ROTATION") return JointId::THUMB_ROTATION;
+  if (name == "THUMB_TMC_FE") return JointId::THUMB_TMC_FE;
+  if (name == "THUMB_TMC_AA") return JointId::THUMB_TMC_AA;
+  if (name == "THUMB_TMC_PS") return JointId::THUMB_TMC_PS;
   if (name == "FF_DIP") return JointId::FF_DIP;
   if (name == "FF_PIP") return JointId::FF_PIP;
   if (name == "FF_MCP") return JointId::FF_MCP;
-  if (name == "FF_SWING") return JointId::FF_SWING;
+  if (name == "FF_MCP_AA") return JointId::FF_MCP_AA;
   if (name == "MF_DIP") return JointId::MF_DIP;
   if (name == "MF_PIP") return JointId::MF_PIP;
   if (name == "MF_MCP") return JointId::MF_MCP;
@@ -267,13 +267,13 @@ void ApplyG5ModbusProfile(ProductConfig* config) {
   }
 
   config->joint_control_registers = {
-      {JointId::THUMB_PIP, 0x0011},
-      {JointId::THUMB_MCP, 0x0013},
-      {JointId::THUMB_SWING, 0x0015},
-      {JointId::THUMB_ROTATION, 0x0017},
+      {JointId::THUMB_MCP, 0x0011},
+      {JointId::THUMB_TMC_FE, 0x0013},
+      {JointId::THUMB_TMC_AA, 0x0015},
+      {JointId::THUMB_TMC_PS, 0x0017},
       {JointId::FF_PIP, 0x0019},
       {JointId::FF_MCP, 0x001B},
-      {JointId::FF_SWING, 0x001D},
+      {JointId::FF_MCP_AA, 0x001D},
       {JointId::MF_PIP, 0x001F},
       {JointId::MF_MCP, 0x0021},
       {JointId::RF_PIP, 0x0023},
@@ -296,9 +296,9 @@ void ApplyG5ModbusProfile(ProductConfig* config) {
 
 void ApplyL1ModbusProfile(ProductConfig* config) {
   config->joint_input_registers = {
-      {JointId::THUMB_PIP, 0x1023},
-      {JointId::THUMB_MCP, 0x1026},
-      {JointId::THUMB_SWING, 0x1029},
+      {JointId::THUMB_MCP, 0x1023},
+      {JointId::THUMB_TMC_FE, 0x1026},
+      {JointId::THUMB_TMC_AA, 0x1029},
       {JointId::FF_PIP, 0x102C},
       {JointId::FF_MCP, 0x102F},
       {JointId::MF_PIP, 0x1032},
@@ -310,9 +310,9 @@ void ApplyL1ModbusProfile(ProductConfig* config) {
   };
 
   config->joint_control_registers = {
-      {JointId::THUMB_PIP, 0x0010},
-      {JointId::THUMB_MCP, 0x0013},
-      {JointId::THUMB_SWING, 0x0016},
+      {JointId::THUMB_MCP, 0x0010},
+      {JointId::THUMB_TMC_FE, 0x0013},
+      {JointId::THUMB_TMC_AA, 0x0016},
       {JointId::FF_PIP, 0x0019},
       {JointId::FF_MCP, 0x001C},
       {JointId::MF_PIP, 0x001F},

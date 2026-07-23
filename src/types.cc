@@ -117,24 +117,24 @@ std::string ToString(ErrorCode error) {
 // JointId
 std::string ToString(JointId id) {
   switch (id) {
-    case JointId::THUMB_DIP:
-      return "THUMB_DIP";
-    case JointId::THUMB_PIP:
-      return "THUMB_PIP";
+    case JointId::THUMB_IP:
+      return "THUMB_IP";
     case JointId::THUMB_MCP:
       return "THUMB_MCP";
-    case JointId::THUMB_SWING:
-      return "THUMB_SWING";
-    case JointId::THUMB_ROTATION:
-      return "THUMB_ROTATION";
+    case JointId::THUMB_TMC_FE:
+      return "THUMB_TMC_FE";
+    case JointId::THUMB_TMC_AA:
+      return "THUMB_TMC_AA";
+    case JointId::THUMB_TMC_PS:
+      return "THUMB_TMC_PS";
     case JointId::FF_DIP:
       return "INDEX_DIP";
     case JointId::FF_PIP:
       return "INDEX_PIP";
     case JointId::FF_MCP:
       return "INDEX_MCP";
-    case JointId::FF_SWING:
-      return "INDEX_SWING";
+    case JointId::FF_MCP_AA:
+      return "FF_MCP_AA";
     case JointId::MF_DIP:
       return "MIDDLE_DIP";
     case JointId::MF_PIP:

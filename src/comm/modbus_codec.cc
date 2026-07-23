@@ -18,10 +18,10 @@ int16_t EncodeJointAngle(const JointCommand& joint) {
 }  // namespace
 
 const std::map<JointId, uint16_t> kHoldingRegMap = {
-    {JointId::THUMB_PIP, 0x0011},     {JointId::THUMB_MCP, 0x0013},
-    {JointId::THUMB_SWING, 0x0015},   {JointId::THUMB_ROTATION, 0x0017},
+    {JointId::THUMB_MCP, 0x0011},     {JointId::THUMB_TMC_FE, 0x0013},
+    {JointId::THUMB_TMC_AA, 0x0015},   {JointId::THUMB_TMC_PS, 0x0017},
     {JointId::FF_PIP, 0x0019},        {JointId::FF_MCP, 0x001B},
-    {JointId::FF_SWING, 0x001D},      {JointId::MF_PIP, 0x001F},
+    {JointId::FF_MCP_AA, 0x001D},      {JointId::MF_PIP, 0x001F},
     {JointId::MF_MCP, 0x0021},        {JointId::RF_PIP, 0x0023},
     {JointId::RF_MCP, 0x0025},        {JointId::LF_PIP, 0x0027},
     {JointId::LF_MCP, 0x0029},

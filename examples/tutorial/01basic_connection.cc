@@ -4,14 +4,14 @@
 
 int main() {
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::CANFD);
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     return -1;
   }
 
-  // Try to auto-connect to the dexterous hand via CANFD
-  std::cout << "Connecting to dexterous hand via CANFD..." << '\n';
+  // Try to auto-connect to the dexterous hand
+  std::cout << "Connecting to dexterous hand..." << '\n';
   bool success = hand->AutoConnect();
 
   if (success) {

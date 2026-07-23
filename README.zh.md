@@ -145,7 +145,7 @@ int main() {
 
     // 控制关节
     std::vector<ghand::JointCommand> cmds = {
-        {ghand::JointId::THUMB_MCP, 45.0f, 50, 50},
+        {ghand::JointId::THUMB_TMC_FE, 45.0f, 50, 50},
         {ghand::JointId::FF_MCP,    30.0f, 50, 50},
     };
     hand->MoveJoints(cmds);

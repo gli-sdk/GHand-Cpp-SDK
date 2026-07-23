@@ -25,7 +25,7 @@ static uint8_t NearestCanfdLength(uint8_t len) {
 
 static bool IsIndexFingerControlJoint(JointId id) {
   return id == JointId::FF_PIP || id == JointId::FF_MCP ||
-         id == JointId::FF_SWING;
+         id == JointId::FF_MCP_AA;
 }
 
 static void AppendEncodedJoint(const JointCommand& joint,
@@ -554,7 +554,7 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
   const JointCommand* ff_swing = nullptr;
   for (const auto& joint : joints) {
     command_cache_[joint.id] = joint;
-    if (joint.id == JointId::FF_SWING) {
+    if (joint.id == JointId::FF_MCP_AA) {
       ff_swing = &joint;
     }
   }
@@ -575,7 +575,7 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
     std::vector<JointCommand> index_group;
     index_group.push_back(get_cached_or_default(JointId::FF_PIP));
     index_group.push_back(get_cached_or_default(JointId::FF_MCP));
-    index_group.push_back(get_cached_or_default(JointId::FF_SWING));
+    index_group.push_back(get_cached_or_default(JointId::FF_MCP_AA));
 
     auto it = kHoldingRegMap.find(JointId::FF_PIP);
     if (it == kHoldingRegMap.end()) return false;
