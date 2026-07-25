@@ -38,13 +38,13 @@ std::string ToString(FingerType finger) {
     case FingerType::THUMB:
       return "THUMB";
     case FingerType::FF:
-      return "INDEX";
+      return "FF";
     case FingerType::MF:
-      return "MIDDLE";
+      return "MF";
     case FingerType::RF:
-      return "RING";
+      return "RF";
     case FingerType::LF:
-      return "PINKY";
+      return "LF";
     default:
       return "UNKNOWN";
   }
@@ -128,31 +128,31 @@ std::string ToString(JointId id) {
     case JointId::THUMB_TMC_PS:
       return "THUMB_TMC_PS";
     case JointId::FF_DIP:
-      return "INDEX_DIP";
+      return "FF_DIP";
     case JointId::FF_PIP:
-      return "INDEX_PIP";
+      return "FF_PIP";
     case JointId::FF_MCP:
-      return "INDEX_MCP";
+      return "FF_MCP";
     case JointId::FF_MCP_AA:
       return "FF_MCP_AA";
     case JointId::MF_DIP:
-      return "MIDDLE_DIP";
+      return "MF_DIP";
     case JointId::MF_PIP:
-      return "MIDDLE_PIP";
+      return "MF_PIP";
     case JointId::MF_MCP:
       return "MIDDLE_MCP";
     case JointId::RF_DIP:
-      return "RING_DIP";
+      return "RF_DIP";
     case JointId::RF_PIP:
-      return "RING_PIP";
+      return "RF_PIP";
     case JointId::RF_MCP:
-      return "RING_MCP";
+      return "RF_MCP";
     case JointId::LF_DIP:
-      return "PINKY_DIP";
+      return "LF_DIP";
     case JointId::LF_PIP:
-      return "PINKY_PIP";
+      return "LF_PIP";
     case JointId::LF_MCP:
-      return "PINKY_MCP";
+      return "LF_MCP";
     default:
       return "UNKNOWN";
   }
