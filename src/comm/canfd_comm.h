@@ -86,6 +86,8 @@ class CANFDComm : public IComm {
                       int timeout_ms = 5000);
 
   bool WriteSingleRegister(int addr, uint16_t value, int timeout_ms = 500);
+  bool WaitHoldingResult(int addr, int timeout_ms = 2000,
+                         int interval_ms = 50);
 
   bool NodeIdDetection(int timeout_ms = 500);
   bool EstablishConnection(int timeout_ms = 500);

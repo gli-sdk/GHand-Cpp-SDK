@@ -76,6 +76,8 @@ class RS485Comm : public IComm {
   bool ProbeSlave(int sid, int attempt, const std::string& device_name);
   void CloseContext();
   bool WriteTactileControl(uint16_t command);
+  bool WaitHoldingResult(int addr, int timeout_ms = 2000,
+                         int interval_ms = 50);
   bool HasCallbacks();
   void EnsurePollStarted();
   void StopPoll();

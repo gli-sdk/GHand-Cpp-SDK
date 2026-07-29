@@ -507,6 +507,10 @@ bool RS485Comm::ClearFault() {
   std::lock_guard<std::mutex> io_lock(io_mutex_);
   modbus_set_slave(ctx_, slave_id_);
   if (modbus_write_register(ctx_, 0x0001, 0x0100) != 1) return false;
+  if (!WaitHoldingResult(0x0001)) {
+    GHAND_LOG_ERROR("Fault clearance failed or timed out over RS485");
+    return false;
+  }
   GHAND_LOG_INFO("Fault cleared");
   return true;
 }
@@ -561,6 +565,22 @@ bool RS485Comm::WriteTactileControl(uint16_t command) {
   modbus_set_slave(ctx_, slave_id_);
   return modbus_write_register(ctx_, config_.tactile_control_register,
                                command) == 1;
+}
+
+bool RS485Comm::WaitHoldingResult(int addr, int timeout_ms, int interval_ms) {
+  auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+  while (std::chrono::steady_clock::now() < deadline) {
+    uint16_t reg = 0;
+    modbus_set_slave(ctx_, slave_id_);
+    if (modbus_read_registers(ctx_, addr, 1, &reg) == 1) {
+      uint8_t status = static_cast<uint8_t>(reg & 0x00FF);
+      if (status == 1) return true;
+      if (status == 2) return false;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
+  }
+  return false;
 }
 
 // Data retrieval
