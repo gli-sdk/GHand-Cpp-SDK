@@ -5,7 +5,7 @@
 namespace ghand {
 
 // ProductType
-std::string ToString(ProductType type) {
+const char* ToString(ProductType type) {
   switch (type) {
     case ProductType::G5:
       return "G5-13A23D-S01";
@@ -19,7 +19,7 @@ std::string ToString(ProductType type) {
 }
 
 // HandType
-std::string ToString(HandType type) {
+const char* ToString(HandType type) {
   switch (type) {
     case HandType::NONE:
       return "NONE";
@@ -33,7 +33,7 @@ std::string ToString(HandType type) {
 }
 
 // FingerType
-std::string ToString(FingerType finger) {
+const char* ToString(FingerType finger) {
   switch (finger) {
     case FingerType::THUMB:
       return "THUMB";
@@ -51,7 +51,7 @@ std::string ToString(FingerType finger) {
 }
 
 // State
-std::string ToString(State state) {
+const char* ToString(State state) {
   switch (state) {
     case State::STOPPED:
       return "STOPPED";
@@ -67,7 +67,7 @@ std::string ToString(State state) {
 }
 
 // ErrorCode
-std::string ToString(ErrorCode error) {
+const char* ToString(ErrorCode error) {
   switch (error) {
     case ErrorCode::NORMAL:
       return "NORMAL";
@@ -87,12 +87,12 @@ std::string ToString(ErrorCode error) {
       return "MOTOR_COMM_ERROR";
     case ErrorCode::MOTOR_OVER_TEMP:
       return "MOTOR_OVER_TEMP";
-    case ErrorCode::MOTOR_DRIVER_OVER_TEMP:
-      return "MOTOR_DRIVER_OVER_TEMP";
     case ErrorCode::JOINT_CONFLICT:
       return "JOINT_CONFLICT";
     case ErrorCode::TIP_CONFLICT:
       return "TIP_CONFLICT";
+    case ErrorCode::JOINT_POSITION_ERROR:
+      return "JOINT_POSITION_ERROR";
     case ErrorCode::LOW_TEMP:
       return "LOW_TEMP";
     case ErrorCode::HIGH_TEMP:
@@ -101,12 +101,14 @@ std::string ToString(ErrorCode error) {
       return "LOW_VOLTAGE";
     case ErrorCode::HIGH_VOLTAGE:
       return "HIGH_VOLTAGE";
-    case ErrorCode::TACTILE_ERROR:
-      return "TACTILE_ERROR";
+    case ErrorCode::TACTILE_DISCONNECTED:
+      return "TACTILE_DISCONNECTED";
+    case ErrorCode::TACTILE_DATA_ERROR:
+      return "TACTILE_DATA_ERROR";
+    case ErrorCode::SELF_CHECK_ERROR:
+      return "SELF_CHECK_ERROR";
     case ErrorCode::PARAM_ERROR:
       return "PARAM_ERROR";
-    case ErrorCode::TIMEOUT:
-      return "TIMEOUT";
     case ErrorCode::UNKNOWN_ERROR:
       return "UNKNOWN_ERROR";
     default:
@@ -115,7 +117,7 @@ std::string ToString(ErrorCode error) {
 }
 
 // JointId
-std::string ToString(JointId id) {
+const char* ToString(JointId id) {
   switch (id) {
     case JointId::THUMB_IP:
       return "THUMB_IP";

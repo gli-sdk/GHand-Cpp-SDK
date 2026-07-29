@@ -1,3 +1,5 @@
+// Copyright 2025 Glitech.
+
 #ifndef SRC_INTERNAL_DEXHAND_H_
 #define SRC_INTERNAL_DEXHAND_H_
 

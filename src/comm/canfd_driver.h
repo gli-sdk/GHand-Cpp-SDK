@@ -1,5 +1,7 @@
-#ifndef SRC_INTERNAL_CANFD_DRIVER_H_
-#define SRC_INTERNAL_CANFD_DRIVER_H_
+// Copyright 2025 Glitech.
+
+#ifndef SRC_COMM_CANFD_DRIVER_H_
+#define SRC_COMM_CANFD_DRIVER_H_
 
 #include <cstdint>
 #include <map>
@@ -74,4 +76,4 @@ std::unique_ptr<CANFDDriver> CreateCANFDDriver();
 }  // namespace internal
 }  // namespace ghand
 
-#endif  // SRC_INTERNAL_CANFD_DRIVER_H_
+#endif  // SRC_COMM_CANFD_DRIVER_H_

@@ -1,5 +1,7 @@
-#ifndef GHAND_INTERNAL_DEXHAND_CALLBACK_MANAGER_H_
-#define GHAND_INTERNAL_DEXHAND_CALLBACK_MANAGER_H_
+// Copyright 2025 Glitech.
+
+#ifndef SRC_INTERNAL_DEXHAND_CALLBACK_MANAGER_H_
+#define SRC_INTERNAL_DEXHAND_CALLBACK_MANAGER_H_
 
 #include <chrono>
 #include <functional>
@@ -81,4 +83,4 @@ class DexHandCallbackManager {
 }  // namespace internal
 }  // namespace ghand
 
-#endif  // GHAND_INTERNAL_DEXHAND_CALLBACK_MANAGER_H_
+#endif  // SRC_INTERNAL_DEXHAND_CALLBACK_MANAGER_H_

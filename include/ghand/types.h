@@ -1,5 +1,7 @@
-#ifndef GHAND_TYPES_H_
-#define GHAND_TYPES_H_
+// Copyright 2025 Glitech.
+
+#ifndef INCLUDE_GHAND_TYPES_H_
+#define INCLUDE_GHAND_TYPES_H_
 
 #include <cstdint>
 #include <string>
@@ -21,7 +23,7 @@ enum class HandType : uint8_t {
  * @brief Get string representation of hand type (for debug/logging)
  * @warning Do not call in real-time control loops (string processing overhead)
  */
-std::string GHAND_API ToString(HandType type);
+GHAND_API const char* ToString(HandType type);  // NOLINT(runtime/string)
 
 // Finger type definitions
 enum class FingerType : uint8_t {
@@ -37,7 +39,7 @@ enum class FingerType : uint8_t {
  * @brief Get string representation of finger type (for debug/logging)
  * @warning Do not call in real-time control loops (string processing overhead)
  */
-std::string GHAND_API ToString(FingerType finger);
+GHAND_API const char* ToString(FingerType finger);  // NOLINT(runtime/string)
 
 // Force data structure
 struct Force {
@@ -60,7 +62,7 @@ enum class State : uint8_t {
  * @brief Get string representation of state (for debug/logging)
  * @warning Do not call in real-time control loops (string processing overhead)
  */
-std::string GHAND_API ToString(State state);
+GHAND_API const char* ToString(State state);  // NOLINT(runtime/string)
 
 enum class ErrorCode : uint8_t {
   NORMAL = 0,
@@ -73,20 +75,21 @@ enum class ErrorCode : uint8_t {
   MOTOR_DRIVER_OVERTEMP = 6,       // Motor driver overtemperature
   MOTOR_COMM_ERROR = 7,            // Motor communication error
   MOTOR_OVER_TEMP = 8,             // Motor overtemperature
-  MOTOR_DRIVER_OVER_TEMP = 9,      // Motor Driver over temperature
   // Finger errors
-  JOINT_CONFLICT = 11,  // Joint conflict
-  TIP_CONFLICT = 12,    // Tip conflict
+  JOINT_CONFLICT = 11,       // Joint position conflict
+  TIP_CONFLICT = 12,         // Fingertip pose conflict
+  JOINT_POSITION_ERROR = 13,  // Joint position error
   // Hand errors
   LOW_TEMP = 21,      // Temperature too low
   HIGH_TEMP = 22,     // Temperature too high
   LOW_VOLTAGE = 23,   // Voltage too low
   HIGH_VOLTAGE = 24,  // Voltage too high
   // Tactile sensor errors
-  TACTILE_ERROR = 31,  // Tactile sensor error
+  TACTILE_DISCONNECTED = 31,  // Tactile sensor disconnected
+  TACTILE_DATA_ERROR = 32,    // Tactile sensor data error
+  SELF_CHECK_ERROR = 41,  // Self-check error
   // Data processing errors
   PARAM_ERROR = 101,  // Parameter error
-  TIMEOUT = 102,      // Timeout
   // Other
   UNKNOWN_ERROR = 201  // Unknown error
 };
@@ -95,7 +98,7 @@ enum class ErrorCode : uint8_t {
  * @brief Get string representation of error code (for debug/logging)
  * @warning Do not call in real-time control loops (string processing overhead)
  */
-std::string GHAND_API ToString(ErrorCode error);
+GHAND_API const char* ToString(ErrorCode error);  // NOLINT(runtime/string)
 
 enum class JointId : uint8_t {
   THUMB_IP,
@@ -123,7 +126,7 @@ enum class JointId : uint8_t {
  * @brief Get string representation of joint ID (for debug/logging)
  * @warning Do not call in real-time control loops (string processing overhead)
  */
-std::string GHAND_API ToString(JointId id);
+GHAND_API const char* ToString(JointId id);  // NOLINT(runtime/string)
 
 // Product type definitions
 enum class ProductType : uint8_t { G5, AUTO, L1 };
@@ -132,7 +135,7 @@ enum class ProductType : uint8_t { G5, AUTO, L1 };
  * @brief Get string representation of product type (for debug/logging)
  * @warning Do not call in real-time control loops (string processing overhead)
  */
-std::string GHAND_API ToString(ProductType type);
+GHAND_API const char* ToString(ProductType type);  // NOLINT(runtime/string)
 
 // Communication type definitions
 enum class CommType : uint8_t { ETHERCAT, CANFD, RS485 };
@@ -165,6 +168,8 @@ struct DeviceInfo {
   std::string tactile_sensor_version;
   std::string motor_driver_version;
   std::string firmware_package_version;
+  std::string thumb_tactile_sensor_version;
+  std::string finger_tactile_sensor_version;
   unsigned int serial_number;
 };
 
@@ -245,9 +250,9 @@ inline bool HasError(const Joint& j) {
          (j.state != State::RUNNING && j.state != State::STOPPED);
 }
 
-std::string GHAND_API ToString(const HandState& hs);
-std::string GHAND_API ToString(const Joint& joint);
+GHAND_API std::string ToString(const HandState& hs);
+GHAND_API std::string ToString(const Joint& joint);
 
 }  // namespace ghand
 
-#endif  // GHAND_TYPES_H_
+#endif  // INCLUDE_GHAND_TYPES_H_

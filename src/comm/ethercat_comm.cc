@@ -671,6 +671,8 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
   info.tactile_sensor_version = ReadFirmwareVersion(0x03);
   info.motor_driver_version = ReadFirmwareVersion(0x04);
   info.firmware_package_version = ReadFirmwareVersion(0x05);
+  info.thumb_tactile_sensor_version = ReadFirmwareVersion(0x06);
+  info.finger_tactile_sensor_version = ReadFirmwareVersion(0x07);
 
   return info;
 }
@@ -1084,10 +1086,7 @@ std::string EtherCATComm::ReadFirmwareVersion(uint8_t mcu_id) {
          std::to_string(patch);
 }
 
-bool EtherCATComm::QueryFirmwareUpdateResults(uint8_t* main_result,
-                                               uint8_t* pos_result,
-                                               uint8_t* tac_result,
-                                               uint8_t* motor_result) {
+bool EtherCATComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
   auto read_result = [this](uint8_t cmd, uint8_t* out) -> bool {
     int size = sizeof(std::uint8_t);
     if (SDOWrite(1, 0x2005, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
@@ -1111,10 +1110,12 @@ bool EtherCATComm::QueryFirmwareUpdateResults(uint8_t* main_result,
   };
 
   bool ok = true;
-  ok = read_result(0xA1, main_result) && ok;
-  ok = read_result(0xA2, pos_result) && ok;
-  ok = read_result(0xA3, tac_result) && ok;
-  ok = read_result(0xA4, motor_result) && ok;
+  ok = read_result(0xA1, &results->main) && ok;
+  ok = read_result(0xA2, &results->position_sensor) && ok;
+  ok = read_result(0xA3, &results->tactile_board) && ok;
+  ok = read_result(0xA4, &results->motor_driver) && ok;
+  ok = read_result(0xA5, &results->thumb_tactile) && ok;
+  ok = read_result(0xA6, &results->finger_tactile) && ok;
   return ok;
 }
 

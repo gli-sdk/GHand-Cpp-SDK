@@ -1,5 +1,7 @@
-#ifndef GHAND_H_
-#define GHAND_H_
+// Copyright 2025 Glitech.
+
+#ifndef INCLUDE_GHAND_GHAND_H_
+#define INCLUDE_GHAND_GHAND_H_
 
 #include <functional>
 #include <map>
@@ -189,4 +191,4 @@ class GHAND_API DexHand {
 #pragma warning(pop)
 #endif
 
-#endif  // GHAND_H_
+#endif  // INCLUDE_GHAND_GHAND_H_

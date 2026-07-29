@@ -84,6 +84,16 @@ std::string ParseFirmwareVersion(const uint8_t* raw_bytes, size_t len) {
   return ParseUtf8String(raw_bytes, len);
 }
 
+std::string ParsePackedFirmwareVersion(uint16_t raw) {
+  uint8_t version_high = static_cast<uint8_t>((raw >> 8) & 0xFF);
+  uint8_t version_low = static_cast<uint8_t>(raw & 0xFF);
+  uint8_t major = (version_high >> 5) & 0x07;
+  uint8_t minor = version_high & 0x1F;
+  uint8_t patch = (version_low >> 4) & 0x0F;
+  return std::to_string(major) + "." + std::to_string(minor) + "." +
+         std::to_string(patch);
+}
+
 uint32_t ParseSerialNumber(const uint8_t* raw_bytes, size_t len) {
   uint32_t serial = 0;
   for (size_t i = 0; i < len && i < 4; ++i) {

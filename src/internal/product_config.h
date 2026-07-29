@@ -1,3 +1,5 @@
+// Copyright 2025 Glitech.
+
 #ifndef SRC_INTERNAL_PRODUCT_CONFIG_H_
 #define SRC_INTERNAL_PRODUCT_CONFIG_H_
 

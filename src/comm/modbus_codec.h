@@ -1,5 +1,7 @@
-#ifndef SRC_INTERNAL_MODBUS_CODEC_H_
-#define SRC_INTERNAL_MODBUS_CODEC_H_
+// Copyright 2025 Glitech.
+
+#ifndef SRC_COMM_MODBUS_CODEC_H_
+#define SRC_COMM_MODBUS_CODEC_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -32,6 +34,9 @@ std::string ParseHardwareVersion(const uint8_t* raw_bytes, size_t len = 16);
 
 // Parse firmware version from 16 bytes (8 registers).
 std::string ParseFirmwareVersion(const uint8_t* raw_bytes, size_t len = 16);
+
+// Parse packed firmware version from one uint16 register.
+std::string ParsePackedFirmwareVersion(uint16_t raw);
 
 // Parse serial number from 16 bytes (8 registers).
 uint32_t ParseSerialNumber(const uint8_t* raw_bytes, size_t len = 16);
@@ -77,4 +82,4 @@ std::pair<uint16_t, uint16_t> EncodeJointCommand(const JointCommand& joint);
 }  // namespace internal
 }  // namespace ghand
 
-#endif  // SRC_INTERNAL_MODBUS_CODEC_H_
+#endif  // SRC_COMM_MODBUS_CODEC_H_

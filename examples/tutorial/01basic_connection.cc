@@ -32,6 +32,10 @@ int main() {
               << device_info.position_sensor_version << '\n';
     std::cout << "Tactile sensor version: "
               << device_info.tactile_sensor_version << '\n';
+    std::cout << "Thumb tactile sensor version: "
+              << device_info.thumb_tactile_sensor_version << '\n';
+    std::cout << "Finger tactile sensor version: "
+              << device_info.finger_tactile_sensor_version << '\n';
     std::cout << "Firmware package version: "
               << device_info.firmware_package_version << '\n';
     std::cout << "Serial number: " << device_info.serial_number << '\n';

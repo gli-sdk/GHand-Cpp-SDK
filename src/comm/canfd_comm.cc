@@ -479,6 +479,18 @@ bool CANFDComm::ReadInputBytes(int addr, int count,
 DeviceInfo CANFDComm::GetDeviceInfo() {
   DeviceInfo info;
   std::vector<uint8_t> bytes;
+  auto read_version = [this](int addr, const char* name) -> std::string {
+    std::vector<uint8_t> version_bytes;
+    if (!ReadInputBytes(addr, 1, &version_bytes) ||
+        version_bytes.size() < 2) {
+      GHAND_LOG_WARNING("Failed to read " << name << " version over CANFD");
+      return "";
+    }
+    uint16_t raw =
+        (static_cast<uint16_t>(version_bytes[0]) << 8) | version_bytes[1];
+    return ParsePackedFirmwareVersion(raw);
+  };
+
   if (!ReadInputBytes(0x1000, 8, &bytes)) {
     GHAND_LOG_ERROR("Failed to read device name over CANFD");
     return info;
@@ -502,6 +514,15 @@ DeviceInfo CANFDComm::GetDeviceInfo() {
     return info;
   }
   info.serial_number = ParseSerialNumber(bytes.data(), bytes.size());
+
+  info.firmware_package_version = read_version(0x1185, "firmware package");
+  info.position_sensor_version = read_version(0x1186, "position sensor");
+  info.tactile_sensor_version = read_version(0x1187, "tactile MCU");
+  info.motor_driver_version = read_version(0x1188, "motor driver");
+  info.thumb_tactile_sensor_version =
+      read_version(0x1189, "thumb tactile sensor");
+  info.finger_tactile_sensor_version =
+      read_version(0x118A, "finger tactile sensor");
   return info;
 }
 
@@ -822,14 +843,8 @@ FirmwareUpdateError CANFDComm::BootUpdate(const std::string& filename,
   return FirmwareUpdateError::NOT_SUPPORTED;
 }
 
-bool CANFDComm::QueryFirmwareUpdateResults(uint8_t* main_result,
-                                            uint8_t* pos_result,
-                                            uint8_t* tac_result,
-                                            uint8_t* motor_result) {
-  (void)main_result;
-  (void)pos_result;
-  (void)tac_result;
-  (void)motor_result;
+bool CANFDComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
+  (void)results;
   return false;
 }
 

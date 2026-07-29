@@ -1,5 +1,7 @@
-#ifndef SRC_INTERNAL_CANFD_PROTOCOL_H_
-#define SRC_INTERNAL_CANFD_PROTOCOL_H_
+// Copyright 2025 Glitech.
+
+#ifndef SRC_COMM_CANFD_PROTOCOL_H_
+#define SRC_COMM_CANFD_PROTOCOL_H_
 
 #include <chrono>
 #include <cstdint>
@@ -121,4 +123,4 @@ class PacketAssembler {
 }  // namespace internal
 }  // namespace ghand
 
-#endif  // SRC_INTERNAL_CANFD_PROTOCOL_H_
+#endif  // SRC_COMM_CANFD_PROTOCOL_H_

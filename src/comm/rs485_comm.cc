@@ -392,6 +392,31 @@ DeviceInfo RS485Comm::GetDeviceInfo() {
   }
   info.serial_number = ParseSerialNumber(bytes.data(), bytes.size());
 
+  if (ReadInputRegistersBytes(0x1185, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.firmware_package_version = ParsePackedFirmwareVersion(raw);
+  }
+  if (ReadInputRegistersBytes(0x1186, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.position_sensor_version = ParsePackedFirmwareVersion(raw);
+  }
+  if (ReadInputRegistersBytes(0x1187, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.tactile_sensor_version = ParsePackedFirmwareVersion(raw);
+  }
+  if (ReadInputRegistersBytes(0x1188, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.motor_driver_version = ParsePackedFirmwareVersion(raw);
+  }
+  if (ReadInputRegistersBytes(0x1189, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.thumb_tactile_sensor_version = ParsePackedFirmwareVersion(raw);
+  }
+  if (ReadInputRegistersBytes(0x118A, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.finger_tactile_sensor_version = ParsePackedFirmwareVersion(raw);
+  }
+
   return info;
 }
 
@@ -682,14 +707,8 @@ FirmwareUpdateError RS485Comm::BootUpdate(
   return FirmwareUpdateError::NOT_SUPPORTED;
 }
 
-bool RS485Comm::QueryFirmwareUpdateResults(uint8_t* main_result,
-                                            uint8_t* pos_result,
-                                            uint8_t* tac_result,
-                                            uint8_t* motor_result) {
-  (void)main_result;
-  (void)pos_result;
-  (void)tac_result;
-  (void)motor_result;
+bool RS485Comm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
+  (void)results;
   return false;
 }
 
