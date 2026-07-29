@@ -66,6 +66,7 @@ GHand SDK C++ 是GHand灵巧手的 C++ 开发包，支持 EtherCAT 、CANFD 和 
 
 ### 已集成的第三方库
 以下库已包含在 `deps/` 目录中，CMake 会直接使用：
+Linux 下 `libmodbus.so`、`libmodbus.so.5` 和 `libmodbus.so.5.1.0` 已放在 `deps/lib/linux/`，用户不需要额外安装或编译 `libmodbus`。
 
 | 库 | 用途 | 许可证 |
 |----|------|--------|
@@ -95,10 +96,9 @@ GHand SDK C++ 是GHand灵巧手的 C++ 开发包，支持 EtherCAT 、CANFD 和 
 ### CMake 安装
 
 ```bash
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build .
-cmake --install . --prefix /path/to/install
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+cmake --install build --prefix /path/to/install
 ```
 
 然后在你的 `CMakeLists.txt` 中：
@@ -169,12 +169,11 @@ if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
 ### Windows
 
 ```bash
-mkdir build && cd build
-cmake ..
-cmake --build . --config Release
+cmake -S . -B build
+cmake --build build --config Release
 
 # 运行示例
-.\examples\Release\basic_connection.exe
+.\build\examples\Release\basic_connection.exe
 ```
 
 > **Windows RS485 使用提示：** 构建时会将 `deps/lib/windows/modbus.dll` 复制到 `ghand.dll` 所在目录。
@@ -185,13 +184,48 @@ cmake --build . --config Release
 # 安装依赖
 sudo apt install -y cmake build-essential pkg-config libssl-dev
 
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
+mkdir -p build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
 
-# 运行示例（需要原始套接字权限）
-sudo setcap cap_net_raw,cap_net_admin+eip ./examples/tutorial/basic_connection
-./examples/tutorial/basic_connection
+# 第一步：为所有已编译示例授予原始套接字权限
+find build/examples -maxdepth 1 -type f -executable \
+  -exec sudo setcap cap_net_raw,cap_net_admin+eip {} +
+
+# 第二步：运行 EtherCAT 示例
+./build/examples/basic_connection
+```
+
+### Linux RS485 / CANFD 运行
+
+RS485 和 CANFD 都走 USB 串口设备，不需要 `setcap`；只有 EtherCAT 需要原始套接字权限。
+
+```bash
+# 查看串口设备
+ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
+ls -l /dev/serial/by-id 2>/dev/null
+
+# 如果当前用户没有串口权限，加入 dialout 后重新登录
+sudo usermod -aG dialout $USER
+
+# 临时让当前终端会话生效，也可以直接重新登录
+newgrp dialout
+```
+
+RS485 调试时建议显式指定 USB-RS485 转接器，常见设备名是 `/dev/ttyUSB0` 或 `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`：
+
+```cpp
+auto rs485_hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                         ghand::CommType::RS485);
+rs485_hand->Connect("/dev/ttyUSB0");
+```
+
+CANFD 使用 ZQWL USB-CDC 适配器，通道号写在设备名后面，例如 `:0`：
+
+```cpp
+auto canfd_hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                         ghand::CommType::CANFD);
+canfd_hand->Connect("/dev/ttyACM0:0");
 ```
 
 ## 📁 目录结构

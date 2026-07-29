@@ -87,7 +87,7 @@ EtherCATComm* EtherCATComm::foe_instance_ = nullptr;
 static std::atomic<bool> print_debug_info{false};
 
 EtherCATComm::EtherCATComm(const ProductConfig& config)
-    : soem_(std::make_unique<SoemState>()), config_(config) {
+    : soem_(std::unique_ptr<SoemState>(new SoemState())), config_(config) {
   rxpdo_size_ = EthercatRxpdoSize(config_);
 }
 
