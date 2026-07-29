@@ -29,6 +29,10 @@ bool DexHand::Disconnect() { return impl_->Disconnect(); }
 
 bool DexHand::IsConnected() const { return impl_->IsConnected(); }
 
+bool DexHand::SetSlaveId(uint8_t slave_id) {
+  return impl_->SetSlaveId(slave_id);
+}
+
 std::map<std::string, std::string> DexHand::SearchAdapters() {
   return impl_->SearchAdapters();
 }

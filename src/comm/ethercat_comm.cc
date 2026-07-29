@@ -150,6 +150,12 @@ std::map<std::string, std::string> EtherCATComm::SearchAdapters() {
   return adapter_names;
 }
 
+bool EtherCATComm::SetSlaveId(uint8_t slave_id) {
+  (void)slave_id;
+  GHAND_LOG_WARNING("SetSlaveId is not supported on EtherCAT");
+  return false;
+}
+
 int EtherCATComm::Connect(const std::string& device_name) {
   GHAND_LOG_INFO("EtherCAT connecting to: " << device_name);
 
@@ -1002,7 +1008,7 @@ TactileData EtherCATComm::ParseTactileData(const uint8_t* data, size_t size,
   for (size_t i = 0; i < config_.tactile_regions.size(); ++i) {
     const auto& rc = config_.tactile_regions[i];
     RegionTactile region;
-    region.region_name = rc.name.c_str();
+    region.region_name = rc.id.c_str();
     region.state = (tactile_data.sensor_state & (1 << i)) != 0;
 
     if (*offset + 6 <= size) {

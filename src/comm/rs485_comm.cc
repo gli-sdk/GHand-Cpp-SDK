@@ -25,6 +25,9 @@
 #include <cstdint>
 #include <cstring>
 #include <sstream>
+#include <utility>
+#include <string>
+#include <vector>
 
 #ifdef GHAND_NO_LIBMODBUS
 // Stub implementation when libmodbus is not available
@@ -52,6 +55,7 @@ inline int modbus_write_registers(modbus_t*, int, int, const uint16_t*) {
 #include "ghand/logging.h"
 #include "logging_macros.h"
 #include "modbus_codec.h"
+#include <map>
 
 namespace ghand {
 namespace internal {
@@ -109,11 +113,37 @@ std::string NormalizeWindowsComPort(const std::string& name) {
 
 namespace {
 
-void AddUniqueSlaveId(std::vector<int>* values, int sid) {
-  if (std::find(values->begin(), values->end(), sid) == values->end()) {
-    values->push_back(sid);
-  }
+void AddUniqueAdapter(std::map<std::string, std::string>* adapters,
+                      const std::string& path,
+                      const std::string& desc) {
+  if (path.empty() || adapters->find(path) != adapters->end()) return;
+  (*adapters)[path] = desc;
 }
+
+#ifndef _WIN32
+void AddLinuxSerialById(std::map<std::string, std::string>* adapters) {
+  const std::string dir_path = "/dev/serial/by-id";
+  DIR* dir = opendir(dir_path.c_str());
+  if (!dir) return;
+
+  struct dirent* entry = nullptr;
+  while ((entry = readdir(dir)) != nullptr) {
+    std::string name(entry->d_name);
+    if (name == "." || name == "..") continue;
+    AddUniqueAdapter(adapters, dir_path + "/" + name, name);
+  }
+  closedir(dir);
+}
+
+void LogLinuxSerialHint(const std::string& device_name) {
+  GHAND_LOG_ERROR("Failed to open RS485 serial port "
+                  << device_name
+                  << ". On Linux, verify the device exists and the user has "
+                     "permission, for example: ls -l "
+                  << device_name
+                  << "; sudo usermod -aG dialout $USER; then log in again.");
+}
+#endif
 
 }  // namespace
 
@@ -151,6 +181,7 @@ std::map<std::string, std::string> RS485Comm::SearchAdapters() {
     SetupDiDestroyDeviceInfoList(hDevInfo);
   }
 #else
+  AddLinuxSerialById(&adapters);
   const char* tty_dirs[] = {"/dev/"};
   for (const char* dir : tty_dirs) {
     DIR* d = opendir(dir);
@@ -159,9 +190,10 @@ std::map<std::string, std::string> RS485Comm::SearchAdapters() {
     while ((entry = readdir(d)) != nullptr) {
       std::string name(entry->d_name);
       if (name.find("ttyUSB") == 0 || name.find("ttyACM") == 0 ||
-          name.find("tty.SLAB") == 0 || name.find("tty.wch") == 0) {
+          name.find("ttyAMA") == 0 || name.find("tty.SLAB") == 0 ||
+          name.find("tty.wch") == 0) {
         std::string path = std::string(dir) + name;
-        adapters[path] = path;
+        AddUniqueAdapter(&adapters, path, path);
       }
     }
     closedir(d);
@@ -169,6 +201,17 @@ std::map<std::string, std::string> RS485Comm::SearchAdapters() {
 #endif
 
   return adapters;
+}
+
+bool RS485Comm::SetSlaveId(uint8_t slave_id) {
+  if (!IsConnected()) return false;
+  std::lock_guard<std::mutex> io_lock(io_mutex_);
+  modbus_set_slave(ctx_, slave_id_);
+  if (modbus_write_register(ctx_, 0x0000, slave_id) != 1) return false;
+  slave_id_ = slave_id;
+  GHAND_LOG_INFO("RS485 slave ID set to 0x"
+                 << std::hex << static_cast<int>(slave_id) << std::dec);
+  return true;
 }
 
 bool RS485Comm::ProbeSlave(int sid, int attempt,
@@ -235,7 +278,15 @@ int RS485Comm::Connect(const std::string& device_name) {
 #ifdef _WIN32
   std::string port_name = NormalizeWindowsComPort(device_name);
 #else
-  const std::string& port_name = device_name;
+  std::string port_name = device_name;
+  if (port_name.empty()) {
+    std::map<std::string, std::string> adapters = SearchAdapters();
+    if (adapters.empty()) {
+      GHAND_LOG_ERROR("No RS485 serial adapters found");
+      return -1;
+    }
+    port_name = adapters.begin()->first;
+  }
 #endif
 
   const int baud_rates[] = {1000000};
@@ -264,6 +315,9 @@ int RS485Comm::Connect(const std::string& device_name) {
           "modbus_connect failed on "
           << device_name << " at " << baud_rate
           << " baud: errno=" << err << ", " << modbus_strerror(err));
+#ifndef _WIN32
+      LogLinuxSerialHint(port_name);
+#endif
       modbus_free(ctx_);
       ctx_ = nullptr;
       continue;
@@ -555,7 +609,7 @@ TactileData RS485Comm::GetTactileData() {
     int idx = static_cast<int>(i);
 
     RegionTactile rt;
-    rt.region_name = region.name.c_str();
+    rt.region_name = region.id.c_str();
     rt.state = (tactile_err.first & (1 << idx)) != 0;
     rt.resultant_force = ParseTactileResultant(regs, idx);
 

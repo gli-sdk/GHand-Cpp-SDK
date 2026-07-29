@@ -14,8 +14,7 @@ namespace internal {
 /**
  * @brief Platform-independent CANFD driver interface
  *
- * Implemented by the ZLG driver (unified for Windows/Linux) or
- * platform-specific implementations.
+ * Implemented by a platform-specific CANFD backend.
  */
 class CANFDDriver {
  public:
@@ -69,8 +68,8 @@ class CANFDDriver {
   virtual bool IsOpen() const = 0;
 };
 
-// Factory function: create a platform-specific CANFD driver instance
-std::unique_ptr<CANFDDriver> CreateZLGDriver();
+// Factory function: create the default CANFD driver instance.
+std::unique_ptr<CANFDDriver> CreateCANFDDriver();
 
 }  // namespace internal
 }  // namespace ghand

@@ -212,6 +212,15 @@ bool DexHand::Disconnect() {
 
 bool DexHand::IsConnected() const { return comm_->IsConnected(); }
 
+bool DexHand::SetSlaveId(uint8_t slave_id) {
+  if (!IsConnected()) {
+    GHAND_LOG_ERROR("Cannot set slave ID: device not connected");
+    return false;
+  }
+  bool result = comm_->SetSlaveId(slave_id);
+  return result;
+}
+
 std::map<std::string, std::string> DexHand::SearchAdapters() const {
   return comm_->SearchAdapters();
 }

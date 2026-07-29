@@ -58,12 +58,6 @@ static std::vector<uint8_t> BuildCanfdRegisterPayload(
   return RegistersToBytes(registers);
 }
 
-static void AddUniqueDst(std::vector<uint8_t>* values, uint8_t dst) {
-  if (std::find(values->begin(), values->end(), dst) == values->end()) {
-    values->push_back(dst);
-  }
-}
-
 static void AddUniquePayload(std::vector<std::vector<uint8_t>>* values,
                              const std::vector<uint8_t>& payload) {
   if (std::find(values->begin(), values->end(), payload) == values->end()) {
@@ -100,7 +94,7 @@ static std::vector<std::vector<uint8_t>> BuildConnectionPayloads(
 }
 
 CANFDComm::CANFDComm(const ProductConfig& config)
-    : driver_(CreateZLGDriver()), dst_id_(config.slave_id), config_(config) {}
+    : driver_(CreateCANFDDriver()), config_(config) {}
 
 CANFDComm::~CANFDComm() { Disconnect(); }
 
@@ -334,10 +328,7 @@ bool CANFDComm::NodeIdDetection(int timeout_ms) {
 }
 
 bool CANFDComm::EstablishConnection(int timeout_ms) {
-  std::vector<uint8_t> dst_ids;
-  AddUniqueDst(&dst_ids, config_.slave_id);
-  AddUniqueDst(&dst_ids, 0x31);
-  AddUniqueDst(&dst_ids, 0x32);
+  const uint8_t dst_ids[] = {0x31, 0x32};
 
   auto payloads = BuildConnectionPayloads(config_, false);
   for (const auto& data : payloads) {
@@ -402,10 +393,7 @@ int CANFDComm::Connect(const std::string& device_name) {
     return -2;
   }
 
-  std::vector<uint8_t> dst_ids;
-  AddUniqueDst(&dst_ids, config_.slave_id);
-  AddUniqueDst(&dst_ids, 0x31);
-  AddUniqueDst(&dst_ids, 0x32);
+  const uint8_t dst_ids[] = {0x31, 0x32};
   auto payloads = BuildConnectionPayloads(config_, true);
   for (uint8_t dst : dst_ids) {
     for (const auto& data : payloads) {
@@ -469,6 +457,15 @@ std::map<std::string, std::string> CANFDComm::SearchAdapters() {
     return driver_->EnumerateAdapters();
   }
   return {};
+}
+
+bool CANFDComm::SetSlaveId(uint8_t slave_id) {
+  if (!IsConnected()) return false;
+  if (!WriteSingleRegister(0x0000, slave_id)) return false;
+  dst_id_ = slave_id;
+  GHAND_LOG_INFO("CANFD slave ID set to 0x"
+                 << std::hex << static_cast<int>(slave_id) << std::dec);
+  return true;
 }
 
 // Device info
@@ -733,7 +730,7 @@ TactileData CANFDComm::GetTactileData() {
   for (size_t i = 0; i < config_.tactile_regions.size(); ++i) {
     const auto& region = config_.tactile_regions[i];
     RegionTactile rt;
-    rt.region_name = region.name.c_str();
+    rt.region_name = region.id.c_str();
     rt.state = (tactile_err.first & (1 << static_cast<int>(i))) != 0;
     rt.resultant_force =
         ParseTactileResultant(regs.data(), static_cast<int>(i));

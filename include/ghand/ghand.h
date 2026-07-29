@@ -70,6 +70,13 @@ class GHAND_API DexHand {
    */
   bool IsConnected() const;
 
+  /**
+   * @brief Set RS485/CANFD slave ID on the connected device.
+   * @param slave_id New slave ID written to holding register 0x0000
+   * @return true on success; false if unsupported, disconnected, or rejected
+   */
+  bool SetSlaveId(uint8_t slave_id);
+
   // Device info
   /**
    * @brief Search available communication adapters

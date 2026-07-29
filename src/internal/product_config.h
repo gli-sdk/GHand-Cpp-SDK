@@ -16,7 +16,7 @@ namespace internal {
  * @brief Configuration for a single tactile region
  */
 struct TactileRegionConfig {
-  std::string name;
+  std::string id;
   int sensor_count = 0;
 };
 
@@ -34,7 +34,6 @@ struct ProductConfig {
   bool has_tactile = false;
   std::vector<TactileRegionConfig> tactile_regions;
 
-  uint8_t slave_id = 0x31;
   std::string modbus_profile = "g5";
   std::map<JointId, uint16_t> joint_input_registers;
   std::map<JointId, uint16_t> joint_control_registers;

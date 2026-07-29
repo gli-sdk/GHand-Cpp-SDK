@@ -27,9 +27,9 @@ namespace internal {
 std::string ProductTypeToFileName(ProductType type) {
   switch (type) {
     case ProductType::G5:
-      return "xiaoyao_hand.json";
+      return "ghand5.json";
     case ProductType::L1:
-      return "l1_hand.json";
+      return "ghandlite1.json";
     case ProductType::AUTO:
       return "";  // AUTO mode defers config loading
     default:
@@ -372,13 +372,13 @@ void LoadTactileConfig(const nlohmann::json& j, ProductConfig* config) {
 
   for (const auto& item : j["tactile_regions"]) {
     TactileRegionConfig region;
-    if (item.contains("name") && item["name"].is_string()) {
-      region.name = item["name"].get<std::string>();
+    if (item.contains("id") && item["id"].is_string()) {
+      region.id = item["id"].get<std::string>();
     }
     if (item.contains("count") && item["count"].is_number_integer()) {
       region.sensor_count = item["count"].get<int>();
     }
-    if (!region.name.empty() && region.sensor_count > 0) {
+    if (!region.id.empty() && region.sensor_count > 0) {
       config->tactile_regions.push_back(region);
     }
   }
@@ -389,8 +389,6 @@ ProductConfig ParseProductConfigJson(const nlohmann::json& j) {
   config.model = JsonStringOrEmpty(j, "model");
   config.name = JsonStringOrEmpty(j, "name");
   config.aliases = JsonStringArray(j, "aliases");
-  config.slave_id =
-      static_cast<uint8_t>(JsonIntOrDefault(j, "slave_id", 0x31));
   std::string modbus_profile = JsonStringOrEmpty(j, "modbus_profile");
   if (!modbus_profile.empty()) config.modbus_profile = modbus_profile;
   config.ethercat_input_sizes = JsonIntArray(j, "ethercat_input_sizes");

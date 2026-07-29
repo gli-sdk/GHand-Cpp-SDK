@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
+
 project(GHandSDK VERSION 2.0.0 LANGUAGES C CXX)
 
 # Set C++ standard
@@ -8,7 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Windows-specific compile options
 if(WIN32)
     add_compile_definitions(_WIN32)
-    add_compile_definitions(_WINSOCKAPI_)
+    add_compile_definitions(WIN32_LEAN_AND_MEAN)
+    add_compile_definitions(NOMINMAX)
     # Set UTF-8 encoding to support Chinese strings
     if(MSVC)
         add_compile_options("/utf-8")
@@ -24,130 +26,88 @@ endif()
 
 # ========== Dependencies ==========
 
+set(DEPS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+set(DEPS_INCLUDE_DIR "${DEPS_ROOT}/include")
+if(WIN32)
+    set(DEPS_LIB_DIR "${DEPS_ROOT}/lib/windows")
+elseif(UNIX AND NOT APPLE)
+    set(DEPS_LIB_DIR "${DEPS_ROOT}/lib/linux")
+else()
+    message(FATAL_ERROR "Unsupported platform for deps layout")
+endif()
+
+if(NOT EXISTS "${DEPS_INCLUDE_DIR}" OR NOT EXISTS "${DEPS_LIB_DIR}")
+    message(FATAL_ERROR
+        "deps directory not found. Download the release package with deps/.\n"
+        "Expected:\n"
+        "  ${DEPS_INCLUDE_DIR}\n"
+        "  ${DEPS_LIB_DIR}"
+    )
+endif()
+
+find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp
+    PATHS "${DEPS_INCLUDE_DIR}"
+    NO_DEFAULT_PATH
+)
+if(NOT NLOHMANN_JSON_INCLUDE_DIR)
+    message(FATAL_ERROR "nlohmann/json.hpp not found in deps/include")
+endif()
+
 # Linux system libraries
 if(UNIX AND NOT APPLE)
     find_package(Threads REQUIRED)
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(PCAP REQUIRED libpcap)
     pkg_check_modules(OPENSSL REQUIRED openssl)
 endif()
 
 # SOEM (required for EtherCAT)
-find_library(SOEM_LIBRARY NAMES soem PATHS
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/linux
-    NO_DEFAULT_PATH
-)
-find_path(SOEM_INCLUDE_DIR soem/soem.h PATHS
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include
-    NO_DEFAULT_PATH
-)
-if(NOT SOEM_LIBRARY)
-    message(FATAL_ERROR "SOEM library not found. Check third_party/lib/")
-endif()
-if(NOT SOEM_INCLUDE_DIR)
-    message(FATAL_ERROR "SOEM headers not found. Check third_party/include/")
-endif()
-
-# ZLG CAN (Windows only, required for CANFD)
 if(WIN32)
-    find_library(ZLG_LIBRARY NAMES zlgcan PATHS
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows
-        NO_DEFAULT_PATH
-    )
-    find_path(ZLG_INCLUDE_DIR zlgcan.h PATHS
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/zlgcan
-        NO_DEFAULT_PATH
-    )
-    if(NOT ZLG_LIBRARY OR NOT ZLG_INCLUDE_DIR)
-        message(FATAL_ERROR "ZLG CAN library not found. Check third_party/")
-    endif()
+    set(SOEM_LIBRARY "${DEPS_LIB_DIR}/soem.lib")
+else()
+    set(SOEM_LIBRARY "${DEPS_LIB_DIR}/libsoem.a")
+endif()
+set(SOEM_INCLUDE_DIR "${DEPS_INCLUDE_DIR}")
+if(NOT EXISTS "${SOEM_LIBRARY}")
+    message(FATAL_ERROR "SOEM library not found in ${DEPS_LIB_DIR}")
+endif()
+if(NOT EXISTS "${SOEM_INCLUDE_DIR}/soem/soem.h")
+    message(FATAL_ERROR "SOEM headers not found in ${DEPS_INCLUDE_DIR}")
+endif()
+if(WIN32)
+    set(SOEM_PLATFORM_INCLUDE_DIR "${SOEM_INCLUDE_DIR}/soem/win32")
+elseif(UNIX AND NOT APPLE)
+    set(SOEM_PLATFORM_INCLUDE_DIR "${SOEM_INCLUDE_DIR}/soem/linux")
 endif()
 
 # WinPcap / Packet (Windows only, required for EtherCAT)
 if(WIN32)
-    find_library(WPCAP_LIBRARY NAMES wpcap PATHS
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows
-        NO_DEFAULT_PATH
-    )
-    find_library(PACKET_LIBRARY NAMES Packet PATHS
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows
-        NO_DEFAULT_PATH
-    )
-    find_path(WPCAP_INCLUDE_DIR pcap.h PATHS
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/wpcap
-        NO_DEFAULT_PATH
-    )
-    if(NOT WPCAP_LIBRARY OR NOT PACKET_LIBRARY)
-        message(FATAL_ERROR "WinPcap/Packet library not found. Check third_party/")
+    set(WPCAP_LIBRARY "${DEPS_LIB_DIR}/wpcap.lib")
+    set(PACKET_LIBRARY "${DEPS_LIB_DIR}/Packet.lib")
+    set(WPCAP_INCLUDE_DIR "${DEPS_INCLUDE_DIR}/wpcap")
+    if(NOT EXISTS "${WPCAP_LIBRARY}" OR NOT EXISTS "${PACKET_LIBRARY}")
+        message(FATAL_ERROR "WinPcap/Packet library not found in ${DEPS_LIB_DIR}")
+    endif()
+    if(NOT EXISTS "${WPCAP_INCLUDE_DIR}/pcap.h")
+        message(FATAL_ERROR "WinPcap headers not found in ${WPCAP_INCLUDE_DIR}")
     endif()
 endif()
 
-# libmodbus (optional, required only for RS485)
-set(LIBMODBUS_FOUND FALSE)
-
-# 1. Try pkg-config first (Linux/macOS)
-find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND)
-    pkg_check_modules(LIBMODBUS QUIET libmodbus)
-    if(LIBMODBUS_FOUND)
-        message(STATUS "Found libmodbus via pkg-config: ${LIBMODBUS_LIBRARIES}")
-    endif()
-endif()
-
-# 2. Fallback: find_library / find_path
-if(NOT LIBMODBUS_FOUND)
-    find_library(LIBMODBUS_LIBRARY NAMES modbus libmodbus)
-    find_path(LIBMODBUS_INCLUDE_DIR modbus/modbus.h)
-    if(LIBMODBUS_INCLUDE_DIR AND LIBMODBUS_LIBRARY)
-        set(LIBMODBUS_FOUND TRUE)
-        set(LIBMODBUS_INCLUDE_DIRS ${LIBMODBUS_INCLUDE_DIR})
-        set(LIBMODBUS_LIBRARIES ${LIBMODBUS_LIBRARY})
-        message(STATUS "Found libmodbus via find_library: ${LIBMODBUS_LIBRARY}")
-    endif()
-endif()
-
-# 3. Windows bundled fallback
-if(NOT LIBMODBUS_FOUND AND WIN32)
-    set(LIBMODBUS_BUNDLED_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include)
-    set(LIBMODBUS_BUNDLED_LIB ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows/libmodbus.lib)
-    if(EXISTS ${LIBMODBUS_BUNDLED_LIB})
-        set(LIBMODBUS_FOUND TRUE)
-        set(LIBMODBUS_INCLUDE_DIRS ${LIBMODBUS_BUNDLED_INCLUDE})
-        set(LIBMODBUS_LIBRARIES ${LIBMODBUS_BUNDLED_LIB})
-        message(STATUS "Using bundled libmodbus: ${LIBMODBUS_BUNDLED_LIB}")
-    endif()
-endif()
-
-if(NOT LIBMODBUS_FOUND)
-    message(WARNING
-        "libmodbus not found. RS485 support will be disabled.\n"
-        "Install it:\n"
-        "  Ubuntu/Debian: sudo apt install libmodbus-dev\n"
-        "  Or build from source: https://github.com/stephane/libmodbus\n"
-        "  Windows: place libmodbus.lib and headers in third_party/"
-    )
-    add_compile_definitions(GHAND_NO_LIBMODBUS)
+# libmodbus (required for RS485)
+if(WIN32)
+    set(LIBMODBUS_LIBRARY "${DEPS_LIB_DIR}/libmodbus.lib")
 else()
-    message(STATUS "libmodbus enabled: ${LIBMODBUS_LIBRARIES}")
+    set(LIBMODBUS_LIBRARY "${DEPS_LIB_DIR}/libmodbus.so")
 endif()
+set(LIBMODBUS_INCLUDE_DIR "${DEPS_INCLUDE_DIR}")
+if(NOT EXISTS "${LIBMODBUS_INCLUDE_DIR}/modbus/modbus.h" OR NOT EXISTS "${LIBMODBUS_LIBRARY}")
+    message(FATAL_ERROR "libmodbus not found in deps")
+endif()
+set(LIBMODBUS_FOUND TRUE)
+set(LIBMODBUS_INCLUDE_DIRS ${LIBMODBUS_INCLUDE_DIR})
+set(LIBMODBUS_LIBRARIES ${LIBMODBUS_LIBRARY})
 
-# Auto-generate device type mapping from zlgcan.h
-set(ZLGCAN_H "${CMAKE_CURRENT_SOURCE_DIR}/third_party/include/zlgcan/zlgcan.h")
 set(GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY ${GENERATED_DIR})
-
-file(STRINGS ${ZLGCAN_H} ZLGCAN_LINES REGEX "^#define ZCAN_[A-Za-z0-9_]+[ \t]+[0-9]+")
-set(DEVICE_TYPE_INC "")
-foreach(line ${ZLGCAN_LINES})
-    string(REGEX MATCH "ZCAN_[A-Za-z0-9_]+" MACRO_NAME ${line})
-    if(MACRO_NAME)
-        set(DEVICE_TYPE_INC "${DEVICE_TYPE_INC}{\"${MACRO_NAME}\", ${MACRO_NAME}},\n")
-    endif()
-endforeach()
-
-set(GENERATED_INC "${GENERATED_DIR}/zlgcan_device_types.inc")
-file(WRITE ${GENERATED_INC} "${DEVICE_TYPE_INC}")
 
 # Source file list (explicitly listed to avoid GLOB_RECURSE desync on add/remove)
 set(SOURCES
@@ -178,23 +138,20 @@ target_include_directories(ghand
         ${CMAKE_CURRENT_SOURCE_DIR}/src/comm
         ${CMAKE_CURRENT_SOURCE_DIR}/src/internal
         ${GENERATED_DIR}
-        $<$<BOOL:${LIBMODBUS_FOUND}>:${LIBMODBUS_INCLUDE_DIRS}>
+        ${NLOHMANN_JSON_INCLUDE_DIR}
+        ${LIBMODBUS_INCLUDE_DIRS}
         ${SOEM_INCLUDE_DIR}
-        $<$<BOOL:${WIN32}>:${SOEM_INCLUDE_DIR}/soem/win32>
-        $<$<BOOL:${UNIX}>:${SOEM_INCLUDE_DIR}/soem/linux>
-        $<$<BOOL:${WIN32}>:${ZLG_INCLUDE_DIR}>
+        ${SOEM_PLATFORM_INCLUDE_DIR}
         $<$<BOOL:${WIN32}>:${WPCAP_INCLUDE_DIR}>
 )
 
 # Link dependencies
 target_link_libraries(ghand PRIVATE
     ${SOEM_LIBRARY}
-    $<$<BOOL:${WIN32}>:${ZLG_LIBRARY}>
     $<$<BOOL:${WIN32}>:${WPCAP_LIBRARY}>
     $<$<BOOL:${WIN32}>:${PACKET_LIBRARY}>
-    $<$<BOOL:${LIBMODBUS_FOUND}>:${LIBMODBUS_LIBRARIES}>
+    ${LIBMODBUS_LIBRARIES}
     $<$<BOOL:${UNIX}>:Threads::Threads>
-    $<$<BOOL:${UNIX}>:${PCAP_LIBRARIES}>
     $<$<BOOL:${UNIX}>:ssl>
     $<$<BOOL:${UNIX}>:crypto>
     $<$<BOOL:${UNIX}>:rt>
@@ -202,7 +159,6 @@ target_link_libraries(ghand PRIVATE
     $<$<BOOL:${WIN32}>:winmm>
     $<$<BOOL:${WIN32}>:ws2_32>
     $<$<BOOL:${WIN32}>:setupapi>
-    $<$<BOOL:${WIN32}>:cfgmgr32>
 )
 
 # Set output name and version info
@@ -216,27 +172,14 @@ set_target_properties(ghand PROPERTIES
 set(RUNTIME_DLLS)
 
 if(WIN32)
-    # ZLG CAN driver
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows/zlgcan.dll")
-        list(APPEND RUNTIME_DLLS
-            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows/zlgcan.dll"
-        )
-    endif()
-
-    # ZLG kernel DLLs
-    file(GLOB ZLG_KERNEL_DLLS
-        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/windows/kerneldlls/*.dll"
-    )
-    if(ZLG_KERNEL_DLLS)
-        list(APPEND RUNTIME_DLLS ${ZLG_KERNEL_DLLS})
-    endif()
-
-    # libmodbus DLL (if found alongside the import library)
+    # libmodbus DLL (if found alongside the import library in deps/lib/windows)
     if(LIBMODBUS_FOUND)
         get_filename_component(LIBMODBUS_LIB_DIR "${LIBMODBUS_LIBRARIES}" DIRECTORY)
         file(GLOB LIBMODBUS_DLLS
             "${LIBMODBUS_LIB_DIR}/libmodbus.dll"
             "${LIBMODBUS_LIB_DIR}/modbus.dll"
+            "${LIBMODBUS_LIB_DIR}/../bin/libmodbus.dll"
+            "${LIBMODBUS_LIB_DIR}/../bin/modbus.dll"
         )
         if(LIBMODBUS_DLLS)
             list(APPEND RUNTIME_DLLS ${LIBMODBUS_DLLS})
@@ -262,17 +205,17 @@ endforeach()
 add_custom_command(TARGET ghand POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/config"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/config/xiaoyao_hand.json"
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/ghand5.json"
         "${CMAKE_BINARY_DIR}/config/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/config/l1_hand.json"
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/ghandlite1.json"
         "${CMAKE_BINARY_DIR}/config/"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/examples/config"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/config/xiaoyao_hand.json"
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/ghand5.json"
         "${CMAKE_BINARY_DIR}/examples/config/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/config/l1_hand.json"
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/ghandlite1.json"
         "${CMAKE_BINARY_DIR}/examples/config/"
     COMMENT "Copying config files to build/config/ and build/examples/config/"
 )

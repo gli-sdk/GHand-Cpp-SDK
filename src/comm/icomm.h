@@ -33,6 +33,7 @@ class IComm {
   virtual int Disconnect() = 0;
   virtual bool IsConnected() const = 0;
   virtual std::map<std::string, std::string> SearchAdapters() = 0;
+  virtual bool SetSlaveId(uint8_t slave_id) = 0;
 
   // Device info
   virtual DeviceInfo GetDeviceInfo() = 0;

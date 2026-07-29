@@ -35,6 +35,7 @@ class EtherCATComm : public IComm {
   int Disconnect() override;
   bool IsConnected() const override { return is_connected_; }
   std::map<std::string, std::string> SearchAdapters() override;
+  bool SetSlaveId(uint8_t slave_id) override;
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;
