@@ -174,7 +174,8 @@ bool DexHand::ConnectToDevice(const std::string& device_name) {
         }
       }
     }
-
+    GHAND_LOG_INFO("Successfully connected to device, device_name: "
+                   << device_name_);
     return true;
   }
   return false;
