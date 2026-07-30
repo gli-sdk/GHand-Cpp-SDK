@@ -166,9 +166,10 @@ bool DexHand::ConnectToDevice(const std::string& device_name) {
           }
         }
         if (!name_matched) {
-          GHAND_LOG_WARNING("Device name mismatch: device reports \""
+          GHAND_LOG_ERROR("Device name mismatch: device reports \""
                       << dev_name << "\", config expects \"" << config_.name
                       << "\"");
+          return false;
         }
       }
     }
