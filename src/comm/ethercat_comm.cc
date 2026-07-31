@@ -58,18 +58,10 @@ std::vector<JointId> ControlledJoints(const ProductConfig& config) {
 }
 
 size_t EthercatRxpdoSize(const ProductConfig& config) {
-  if (config.ethercat_output_size > 0) {
-    return static_cast<size_t>(config.ethercat_output_size);
+  if (config.product_type == ProductType::L1) {
+    return config.joint_limits.size() * 6;
   }
   return config.joint_limits.size() * kEthercatJointDataSize + 2;
-}
-
-bool IsL1EthercatRpdo(const ProductConfig& config) {
-  return config.ethercat_rpdo_layout == "per_joint_mode_3reg";
-}
-
-bool IsL1EthercatTpdo(const ProductConfig& config) {
-  return config.ethercat_tpdo_layout == "l1_extended";
 }
 
 }  // namespace
@@ -171,7 +163,7 @@ int EtherCATComm::Connect(const std::string& device_name) {
 
   memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
   rxpdo_size_ = EthercatRxpdoSize(config_);
-  if (!IsL1EthercatRpdo(config_)) {
+  if (config_.product_type != ProductType::L1) {
     rxpdo_buffer_[1] = {0x01};
   }
 
@@ -244,7 +236,7 @@ int EtherCATComm::Disconnect() {
 
   memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
   rxpdo_size_ = EthercatRxpdoSize(config_);
-  if (!IsL1EthercatRpdo(config_)) {
+  if (config_.product_type != ProductType::L1) {
     rxpdo_buffer_[1] = {0x01};
   }
   if (soem_->ctx.slavecount > 0) {
@@ -711,7 +703,7 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
     joint_map[joint.id] = joint;
   }
 
-  if (IsL1EthercatRpdo(config_)) {
+  if (config_.product_type == ProductType::L1) {
     std::vector<JointId> controlled_joints = ControlledJoints(config_);
     std::vector<uint8_t> buffer;
     buffer.reserve(controlled_joints.size() * 6);
@@ -780,7 +772,7 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
 
 void EtherCATComm::Stop() {
   GHAND_LOG_INFO("Sending stop command");
-  if (IsL1EthercatRpdo(config_)) {
+  if (config_.product_type == ProductType::L1) {
     std::vector<JointId> controlled_joints = ControlledJoints(config_);
     std::vector<uint8_t> buffer;
     buffer.reserve(controlled_joints.size() * 6);
@@ -945,7 +937,7 @@ void EtherCATComm::ParseHandAndJoints(
   parsed_temperature->temperature = temperature;
 
   parsed_joints->reserve(config_.valid_joints.size());
-  if (IsL1EthercatTpdo(config_)) {
+  if (config_.product_type == ProductType::L1) {
     for (const auto& joint_id : config_.valid_joints) {
       if (*offset + 6 > size) break;
       Joint joint;

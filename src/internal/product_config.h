@@ -28,6 +28,7 @@ struct TactileRegionConfig {
  * Per-product differentiated parameters loaded from a JSON configuration file.
  */
 struct ProductConfig {
+  ProductType product_type = ProductType::AUTO;
   std::string model;
   std::string name;
   std::vector<std::string> aliases;
@@ -36,10 +37,8 @@ struct ProductConfig {
   bool has_tactile = false;
   std::vector<TactileRegionConfig> tactile_regions;
 
-  std::string modbus_profile = "g5";
   std::map<JointId, uint16_t> joint_input_registers;
   std::map<JointId, uint16_t> joint_control_registers;
-  bool per_joint_mode_control = false;
   int mode_register = 0x0010;
   int stop_register = 0x0010;
   int tactile_control_register = 0x002B;
@@ -50,10 +49,6 @@ struct ProductConfig {
   int canfd_connection_delete_count = 2;
   std::vector<uint16_t> canfd_connection_delete_values;
 
-  std::vector<int> ethercat_input_sizes;
-  int ethercat_output_size = 0;
-  std::string ethercat_rpdo_layout = "shared_mode_float";
-  std::string ethercat_tpdo_layout = "default";
 };
 
 }  // namespace internal

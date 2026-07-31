@@ -463,7 +463,7 @@ bool RS485Comm::MoveJoints(const std::vector<JointCommand>& joints,
 
     auto regs = EncodeJointCommand(joint);
     std::vector<uint16_t> data;
-    if (config_.per_joint_mode_control) {
+    if (config_.product_type == ProductType::L1) {
       data.push_back((static_cast<uint16_t>(mode) << 8) & 0xFF00);
     }
     data.push_back(regs.first);

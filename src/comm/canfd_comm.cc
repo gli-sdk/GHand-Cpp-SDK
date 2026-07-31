@@ -566,7 +566,7 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
     if (!WriteSingleRegister(config_.mode_register, mode_value)) return false;
   }
 
-  if (config_.per_joint_mode_control) {
+  if (config_.product_type == ProductType::L1) {
     const auto& control_map = config_.joint_control_registers.empty()
                                   ? kHoldingRegMap
                                   : config_.joint_control_registers;

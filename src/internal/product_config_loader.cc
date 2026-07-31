@@ -234,27 +234,12 @@ bool JsonBoolOrFalse(const nlohmann::json& j, const char* key) {
   return j[key].get<bool>();
 }
 
-int JsonIntOrDefault(const nlohmann::json& j, const char* key,
-                     int default_value) {
-  if (!j.contains(key) || !j[key].is_number_integer()) return default_value;
-  return j[key].get<int>();
-}
-
 std::vector<std::string> JsonStringArray(const nlohmann::json& j,
                                          const char* key) {
   std::vector<std::string> values;
   if (!j.contains(key) || !j[key].is_array()) return values;
   for (const auto& item : j[key]) {
     if (item.is_string()) values.push_back(item.get<std::string>());
-  }
-  return values;
-}
-
-std::vector<int> JsonIntArray(const nlohmann::json& j, const char* key) {
-  std::vector<int> values;
-  if (!j.contains(key) || !j[key].is_array()) return values;
-  for (const auto& item : j[key]) {
-    if (item.is_number_integer()) values.push_back(item.get<int>());
   }
   return values;
 }
@@ -282,7 +267,6 @@ void ApplyG5ModbusProfile(ProductConfig* config) {
       {JointId::LF_MCP, 0x0029},
   };
 
-  config->per_joint_mode_control = false;
   config->mode_register = 0x0010;
   config->stop_register = 0x0010;
   config->tactile_control_register = 0x002B;
@@ -323,7 +307,6 @@ void ApplyL1ModbusProfile(ProductConfig* config) {
       {JointId::LF_MCP, 0x002E},
   };
 
-  config->per_joint_mode_control = true;
   config->mode_register = -1;
   config->stop_register = -1;
   config->tactile_control_register = 0x0031;
@@ -335,14 +318,17 @@ void ApplyL1ModbusProfile(ProductConfig* config) {
   config->canfd_connection_delete_values = {0x0000, 0x0000, 0x0000};
 }
 
-void ApplyProtocolDefaults(ProductConfig* config) {
+void ApplyProtocolDefaults(ProductType product, ProductConfig* config) {
   if (config == nullptr) return;
-  std::string profile = config->modbus_profile;
-  std::transform(profile.begin(), profile.end(), profile.begin(), ::tolower);
-  if (profile == "l1") {
-    ApplyL1ModbusProfile(config);
-  } else {
-    ApplyG5ModbusProfile(config);
+  config->product_type = product;
+  switch (product) {
+    case ProductType::L1:
+      ApplyL1ModbusProfile(config);
+      break;
+    case ProductType::G5:
+    default:
+      ApplyG5ModbusProfile(config);
+      break;
   }
 }
 
@@ -384,24 +370,16 @@ void LoadTactileConfig(const nlohmann::json& j, ProductConfig* config) {
   }
 }
 
-ProductConfig ParseProductConfigJson(const nlohmann::json& j) {
+ProductConfig ParseProductConfigJson(const nlohmann::json& j,
+                                     ProductType product) {
   ProductConfig config;
   config.model = JsonStringOrEmpty(j, "model");
   config.name = JsonStringOrEmpty(j, "name");
   config.aliases = JsonStringArray(j, "aliases");
-  std::string modbus_profile = JsonStringOrEmpty(j, "modbus_profile");
-  if (!modbus_profile.empty()) config.modbus_profile = modbus_profile;
-  config.ethercat_input_sizes = JsonIntArray(j, "ethercat_input_sizes");
-  config.ethercat_output_size =
-      JsonIntOrDefault(j, "ethercat_output_size", 0);
-  std::string rpdo_layout = JsonStringOrEmpty(j, "ethercat_rpdo_layout");
-  if (!rpdo_layout.empty()) config.ethercat_rpdo_layout = rpdo_layout;
-  std::string tpdo_layout = JsonStringOrEmpty(j, "ethercat_tpdo_layout");
-  if (!tpdo_layout.empty()) config.ethercat_tpdo_layout = tpdo_layout;
+  ApplyProtocolDefaults(product, &config);
   LoadJointConfig(j, &config);
   config.has_tactile = JsonBoolOrFalse(j, "has_tactile");
   LoadTactileConfig(j, &config);
-  ApplyProtocolDefaults(&config);
   return config;
 }
 
@@ -454,7 +432,7 @@ bool TryLoadMatchingConfig(const std::string& file_path,
     }
   }
   if (!matched) return false;
-  *config = ParseProductConfigJson(j);
+  *config = ParseProductConfigJson(j, ProductType::AUTO);
   return true;
 }
 
@@ -489,7 +467,7 @@ ProductConfig LoadProductConfig(ProductType product) {
     return ProductConfig();
   }
 
-  config = ParseProductConfigJson(j);
+  config = ParseProductConfigJson(j, product);
   if (config.name.empty() || config.valid_joints.empty()) {
     GHAND_LOG_ERROR("Product config missing required fields in "
                     << found_path);
