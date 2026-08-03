@@ -190,7 +190,7 @@ cmake --build build -j$(nproc)
 
 # 第一步：为所有已编译示例授予原始套接字权限
 find build/examples -maxdepth 1 -type f -executable \
-  -exec sudo setcap cap_net_raw,cap_net_admin+eip {} +
+  -exec sudo setcap cap_net_raw,cap_net_admin=eip {} \;
 
 # 第二步：运行 EtherCAT 示例
 ./build/examples/basic_connection

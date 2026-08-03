@@ -193,7 +193,7 @@ cmake --build build -j$(nproc)
 
 # Grant raw socket permissions once to all built examples
 find build/examples -maxdepth 1 -type f -executable \
-  -exec sudo setcap cap_net_raw,cap_net_admin+eip {} +
+  -exec sudo setcap cap_net_raw,cap_net_admin=eip {} \;
 
 # Run the EtherCAT example
 ./build/examples/basic_connection
