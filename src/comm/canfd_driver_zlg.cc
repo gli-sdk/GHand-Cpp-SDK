@@ -332,7 +332,7 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
 
     std::map<std::string, std::string> adapters;
     for (const auto& port : ports) {
-      adapters[port + ":0"] = "ZQWL CANFD CDC Ch0";
+      adapters[port + ":0"] = port + ":0";
     }
     return adapters;
   }

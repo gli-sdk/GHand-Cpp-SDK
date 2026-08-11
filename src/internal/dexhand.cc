@@ -13,6 +13,7 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include <map>
 
 #include "canfd_comm.h"
 #include "dexhand_callback_manager.h"
@@ -225,7 +226,11 @@ bool DexHand::SetSlaveId(uint8_t slave_id) {
 }
 
 std::map<std::string, std::string> DexHand::SearchAdapters() const {
-  return comm_->SearchAdapters();
+  auto adapters = comm_->SearchAdapters();
+  for (const auto& adapter : adapters) {
+    GHAND_LOG_DEBUG("Found adapter: " << adapter.first);
+  }
+  return adapters;
 }
 
 HandType DexHand::GetHandType() const { return comm_->GetHandType(); }

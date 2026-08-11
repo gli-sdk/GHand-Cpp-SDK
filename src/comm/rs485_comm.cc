@@ -344,7 +344,6 @@ int RS485Comm::Connect(const std::string& device_name) {
 }
 
 int RS485Comm::Disconnect() {
-  GHAND_LOG_INFO("RS485 disconnecting");
 
   StopPoll();
   {
@@ -357,7 +356,6 @@ int RS485Comm::Disconnect() {
 
   connected_.store(false);
   slave_id_ = 0x31;
-  GHAND_LOG_INFO("RS485 disconnected");
   return 0;
 }
 
