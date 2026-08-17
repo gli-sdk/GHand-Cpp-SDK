@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "ghand/types.h"
+#include "product_config.h"
 
 namespace ghand {
 namespace internal {
@@ -40,11 +41,14 @@ class IComm {
   virtual ~IComm() = default;
 
   // Connection management
-  virtual int Connect(const std::string& device_name) = 0;
+  virtual int Connect(const std::string& device_name, uint8_t slave_id,
+                      uint8_t baudrate_gear) = 0;
   virtual int Disconnect() = 0;
   virtual bool IsConnected() const = 0;
   virtual std::map<std::string, std::string> SearchAdapters() = 0;
+  virtual void UpdateConfig(const ProductConfig& config) = 0;
   virtual bool SetSlaveId(uint8_t slave_id) = 0;
+  virtual bool SetBaudrateConfig(uint8_t baudrate_gear) = 0;
 
   // Device info
   virtual DeviceInfo GetDeviceInfo() = 0;

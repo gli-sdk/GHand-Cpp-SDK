@@ -41,10 +41,13 @@ class DexHand {
 
   // Connection management
   bool AutoConnect();
-  bool Connect(const std::string& device_name);
+  bool AutoConnect(uint8_t slave_id, uint8_t baudrate_gear);
+  bool Connect(const std::string& device_name, uint8_t slave_id = 0,
+               uint8_t baudrate_gear = 0x05);
   bool Disconnect();
   bool IsConnected() const;
   bool SetSlaveId(uint8_t slave_id);
+  bool SetBaudrateConfig(uint8_t baudrate_gear);
 
   // Device info
   std::map<std::string, std::string> SearchAdapters() const;
@@ -79,7 +82,8 @@ class DexHand {
       std::function<void(int)> progress_callback);
 
  private:
-  bool ConnectToDevice(const std::string& device_name);
+  bool ConnectToDevice(const std::string& device_name, uint8_t slave_id,
+                       uint8_t baudrate_gear);
   void SetupCallbacks();
   void ClampJointAngle(JointCommand& joint);
   void ClampJointVelocity(JointCommand& joint);

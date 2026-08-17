@@ -37,11 +37,14 @@ class CANFDComm : public IComm {
   CANFDComm& operator=(CANFDComm&&) = delete;
 
   // IComm interface implementation
-  int Connect(const std::string& device_name) override;
+  int Connect(const std::string& device_name, uint8_t slave_id,
+              uint8_t baudrate_gear) override;
   int Disconnect() override;
   bool IsConnected() const override { return connected_.load(); }
   std::map<std::string, std::string> SearchAdapters() override;
+  void UpdateConfig(const ProductConfig& config) override;
   bool SetSlaveId(uint8_t slave_id) override;
+  bool SetBaudrateConfig(uint8_t baudrate_gear) override;
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;
@@ -90,7 +93,7 @@ class CANFDComm : public IComm {
                          int interval_ms = 50);
 
   bool NodeIdDetection(int timeout_ms = 500);
-  bool EstablishConnection(int timeout_ms = 500);
+  bool EstablishConnection(uint8_t slave_id, int timeout_ms = 500);
   void DeleteConnection();
 
   bool ReadInputBytes(int addr, int count, std::vector<uint8_t>* bytes);
@@ -106,7 +109,7 @@ class CANFDComm : public IComm {
   std::unique_ptr<CANFDDriver> driver_;
   std::mutex io_mutex_;
   uint8_t src_id_ = 0x0A;
-  uint8_t dst_id_ = 0x31;
+  uint8_t slave_id_ = 0x31;
   std::atomic<bool> connected_{false};
 
   std::thread poll_thread_;

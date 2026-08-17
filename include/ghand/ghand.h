@@ -56,11 +56,16 @@ class GHAND_API DexHand {
   bool AutoConnect();
 
   /**
-   * @brief Connect to specified device
+   * @brief Connect to specified device.
    * @param device_name Device name ("auto" for auto-discovery)
+   * @param slave_id RS485/CANFD slave ID used for this connection; 0 scans
+   *     default IDs 0x31 and 0x32
+   * @param baudrate_gear RS485/CANFD baud-rate gear used for this connection
    * @return true on success
    */
-  bool Connect(const std::string& device_name = "auto");
+  bool Connect(const std::string& device_name = "auto",
+               uint8_t slave_id = 0,
+               uint8_t baudrate_gear = 0x05);
 
   /**
    * @brief Disconnect
@@ -78,6 +83,17 @@ class GHAND_API DexHand {
    * @return true on success; false if unsupported, disconnected, or rejected
    */
   bool SetSlaveId(uint8_t slave_id);
+
+  /**
+   * @brief Set RS485/CANFD baud-rate gear on the connected device.
+   *
+   * The value is written to holding register 0x002C, saved by the device, and
+   * takes effect after the next power-up.
+   *
+   * @param baudrate_gear Protocol baud-rate gear written to the device
+   * @return true on success; false if unsupported, disconnected, or rejected
+   */
+  bool SetBaudrateConfig(uint8_t baudrate_gear);
 
   // Device info
   /**

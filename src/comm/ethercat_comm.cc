@@ -148,7 +148,20 @@ bool EtherCATComm::SetSlaveId(uint8_t slave_id) {
   return false;
 }
 
-int EtherCATComm::Connect(const std::string& device_name) {
+void EtherCATComm::UpdateConfig(const ProductConfig& config) {
+  config_ = config;
+}
+
+bool EtherCATComm::SetBaudrateConfig(uint8_t baudrate_gear) {
+  (void)baudrate_gear;
+  GHAND_LOG_WARNING("SetBaudrateConfig is not supported on EtherCAT");
+  return false;
+}
+
+int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
+                          uint8_t baudrate_gear) {
+  (void)slave_id;
+  (void)baudrate_gear;
   GHAND_LOG_INFO("EtherCAT connecting to: " << device_name);
 
   std::lock_guard<std::mutex> lock(context_mutex_);

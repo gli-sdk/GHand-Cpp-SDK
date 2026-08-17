@@ -21,8 +21,9 @@ DexHand::~DexHand() {}
 // Forward all calls
 bool DexHand::AutoConnect() { return impl_->AutoConnect(); }
 
-bool DexHand::Connect(const std::string& device_name) {
-  return impl_->Connect(device_name);
+bool DexHand::Connect(const std::string& device_name, uint8_t slave_id,
+                      uint8_t baudrate_gear) {
+  return impl_->Connect(device_name, slave_id, baudrate_gear);
 }
 
 bool DexHand::Disconnect() { return impl_->Disconnect(); }
@@ -31,6 +32,10 @@ bool DexHand::IsConnected() const { return impl_->IsConnected(); }
 
 bool DexHand::SetSlaveId(uint8_t slave_id) {
   return impl_->SetSlaveId(slave_id);
+}
+
+bool DexHand::SetBaudrateConfig(uint8_t baudrate_gear) {
+  return impl_->SetBaudrateConfig(baudrate_gear);
 }
 
 std::map<std::string, std::string> DexHand::SearchAdapters() {

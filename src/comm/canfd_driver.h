@@ -33,10 +33,13 @@ class CANFDDriver {
    * @param name Channel name (e.g. "can0" or "PCAN_USBBUS1")
    * @param bitrate Arbitration segment baud rate (e.g. 1000000)
    * @param dbitrate Data segment baud rate (e.g. 5000000)
+   * @param bitrate_sample_point Arbitration segment sample point percentage
+   * @param dbitrate_sample_point Data segment sample point percentage
    * @return 0 on success, negative value on failure
    */
   virtual int Open(const std::string& name, uint32_t bitrate,
-                   uint32_t dbitrate) = 0;
+                   uint32_t dbitrate, uint8_t bitrate_sample_point,
+                   uint8_t dbitrate_sample_point) = 0;
 
   /**
    * @brief Close driver

@@ -33,11 +33,14 @@ class EtherCATComm : public IComm {
   EtherCATComm& operator=(EtherCATComm&&) = delete;
 
   // IComm interface implementation
-  int Connect(const std::string& device_name) override;
+  int Connect(const std::string& device_name, uint8_t slave_id,
+              uint8_t baudrate_gear) override;
   int Disconnect() override;
   bool IsConnected() const override { return is_connected_; }
   std::map<std::string, std::string> SearchAdapters() override;
+  void UpdateConfig(const ProductConfig& config) override;
   bool SetSlaveId(uint8_t slave_id) override;
+  bool SetBaudrateConfig(uint8_t baudrate_gear) override;
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;

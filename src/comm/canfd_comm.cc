@@ -18,6 +18,42 @@ namespace internal {
 // CANFD valid data lengths (DLC mapping)
 static const uint8_t kCanfdLengths[] = {0,  1,  2,  3,  4,  5,  6,  7,
                                          8,  12, 16, 20, 24, 32, 48, 64};
+static const int kBaudrateConfigRegister = 0x002C;
+static const uint8_t kDefaultBaudrateGear = 0x05;
+
+struct CANFDBaudrateConfig {
+  uint32_t bitrate;
+  uint8_t bitrate_sample_point;
+  uint32_t dbitrate;
+  uint8_t dbitrate_sample_point;
+};
+
+static bool ResolveCANFDBaudrateConfig(uint8_t baudrate_gear,
+                                       CANFDBaudrateConfig* config) {
+  if (config == nullptr) return false;
+  switch (baudrate_gear) {
+    case 0x00:
+      *config = CANFDBaudrateConfig{500000, 80, 1000000, 75};
+      return true;
+    case 0x01:
+      *config = CANFDBaudrateConfig{500000, 80, 2000000, 80};
+      return true;
+    case 0x02:
+      *config = CANFDBaudrateConfig{500000, 80, 4000000, 80};
+      return true;
+    case 0x03:
+      *config = CANFDBaudrateConfig{500000, 80, 5000000, 75};
+      return true;
+    case 0x04:
+      *config = CANFDBaudrateConfig{1000000, 75, 4000000, 80};
+      return true;
+    case 0x05:
+      *config = CANFDBaudrateConfig{1000000, 75, 5000000, 75};
+      return true;
+    default:
+      return false;
+  }
+}
 
 static uint8_t NearestCanfdLength(uint8_t len) {
   for (uint8_t vl : kCanfdLengths) {
@@ -147,7 +183,7 @@ bool CANFDComm::ReadRegisters(int addr, int count,
   cmd_data[3] = count & 0xFF;
 
   uint32_t can_id =
-      PackArbitration(src_id_, dst_id_, 0, func_code, 1, 1, 0, 0);
+      PackArbitration(src_id_, slave_id_, 0, func_code, 1, 1, 0, 0);
   if (!SendFrame(can_id, cmd_data, 4)) return false;
 
   // Gather response segments
@@ -173,7 +209,7 @@ bool CANFDComm::ReadRegisters(int addr, int count,
     UnpackArbitration(resp_id, &r_src, &r_dst, &r_ack, &r_fc, &r_start,
                        &r_end, &r_toggle, &r_seg);
 
-    if (r_ack != 1 || r_dst != src_id_ || r_src != dst_id_) continue;
+    if (r_ack != 1 || r_dst != src_id_ || r_src != slave_id_) continue;
 
     // Exception response?
     if (r_fc == (0x80 | func_code)) return false;
@@ -245,7 +281,7 @@ bool CANFDComm::WriteRegisters(int addr, const std::vector<uint8_t>& data,
     int seg_len =
         std::min(kSegSize, static_cast<int>(payload.size()) - offset);
 
-    uint32_t can_id = PackArbitration(src_id_, dst_id_, 0, func_code, start,
+    uint32_t can_id = PackArbitration(src_id_, slave_id_, 0, func_code, start,
                                        end, toggle, seg_idx);
     if (!SendFrame(can_id, payload.data() + offset, seg_len)) return false;
   }
@@ -270,7 +306,7 @@ bool CANFDComm::WriteRegisters(int addr, const std::vector<uint8_t>& data,
     UnpackArbitration(resp_id, &r_src, &r_dst, &r_ack, &r_fc, &r_start,
                        &r_end, nullptr, nullptr);
 
-    if (r_ack != 1 || r_dst != src_id_ || r_src != dst_id_) continue;
+    if (r_ack != 1 || r_dst != src_id_ || r_src != slave_id_) continue;
     if (r_fc == (0x80 | func_code)) return false;
     if (r_fc == func_code && r_start == 1 && r_end == 1) return true;
   }
@@ -315,9 +351,9 @@ bool CANFDComm::NodeIdDetection(int timeout_ms) {
                        nullptr, nullptr, nullptr);
 
     if (r_ack == 1 && r_fc == 0x09 && resp_len >= 1) {
-      if (resp_data[0] == dst_id_) {
+      if (resp_data[0] == slave_id_) {
         GHAND_LOG_INFO("Detected slave Node ID 0x"
-                       << std::hex << static_cast<int>(dst_id_));
+                       << std::hex << static_cast<int>(slave_id_));
         return true;
       }
     }
@@ -325,14 +361,18 @@ bool CANFDComm::NodeIdDetection(int timeout_ms) {
   return false;
 }
 
-bool CANFDComm::EstablishConnection(int timeout_ms) {
-  const uint8_t dst_ids[] = {0x31, 0x32};
+bool CANFDComm::EstablishConnection(uint8_t slave_id, int timeout_ms) {
+  const uint8_t slave_ids[] = {
+      slave_id == 0 ? static_cast<uint8_t>(0x31) : slave_id,
+      static_cast<uint8_t>(0x32)};
+  const int slave_id_count = slave_id == 0 ? 2 : 1;
 
   auto payloads = BuildConnectionPayloads(config_, false);
   for (const auto& data : payloads) {
-    for (uint8_t dst : dst_ids) {
+    for (int i = 0; i < slave_id_count; ++i) {
+      uint8_t target_id = slave_ids[i];
       uint32_t can_id =
-          PackArbitration(src_id_, dst, 0, 0x02, 1, 1, 0, 0);
+          PackArbitration(src_id_, target_id, 0, 0x02, 1, 1, 0, 0);
       SendFrame(can_id, data.data(), static_cast<uint8_t>(data.size()));
 
       auto deadline = std::chrono::steady_clock::now() +
@@ -347,21 +387,12 @@ bool CANFDComm::EstablishConnection(int timeout_ms) {
         UnpackArbitration(resp_id, &r_src, &r_dst, &r_ack, &r_fc, nullptr,
                            nullptr, nullptr, nullptr);
 
-        if (r_ack != 1 || r_dst != src_id_ || r_src != dst) continue;
+        if (r_ack != 1 || r_dst != src_id_ || r_src != target_id) continue;
         if (r_fc == 0x82) {
-          if (resp_len > 0 && resp_data[0] == 0x03) {
-            uint8_t previous_dst = dst_id_;
-            dst_id_ = dst;
-            std::vector<uint8_t> bytes;
-            if (ReadRegisters(0x1000, 1, &bytes, 0x04, 500)) {
-              return true;
-            }
-            dst_id_ = previous_dst;
-          }
-          break;  // Exception, try next dst/payload
+          break;  // Exception, try next payload
         }
         if (r_fc == 0x02) {
-          dst_id_ = dst;
+          slave_id_ = target_id;
           return true;
         }
       }
@@ -373,25 +404,43 @@ bool CANFDComm::EstablishConnection(int timeout_ms) {
 void CANFDComm::DeleteConnection() {
   auto payloads = BuildConnectionPayloads(config_, true);
   for (const auto& data : payloads) {
-    uint32_t can_id = PackArbitration(src_id_, dst_id_, 0, 0x05, 1, 1, 0, 0);
+    uint32_t can_id =
+        PackArbitration(src_id_, slave_id_, 0, 0x05, 1, 1, 0, 0);
     SendFrame(can_id, data.data(), static_cast<uint8_t>(data.size()));
   }
 }
 
-int CANFDComm::Connect(const std::string& device_name) {
+int CANFDComm::Connect(const std::string& device_name, uint8_t slave_id,
+                       uint8_t baudrate_gear) {
   if (!driver_) {
     GHAND_LOG_ERROR("CANFD driver not available");
     return -1;
   }
+  if (slave_id > 0x3F) {
+    GHAND_LOG_ERROR("Invalid CANFD slave ID: 0x"
+                    << std::hex << static_cast<int>(slave_id) << std::dec);
+    return -1;
+  }
 
-  if (driver_->Open(device_name, 1000000, 5000000) != 0) {
+  CANFDBaudrateConfig baudrate_config = {};
+  if (!ResolveCANFDBaudrateConfig(baudrate_gear, &baudrate_config)) {
+    GHAND_LOG_ERROR("Invalid CANFD baudrate gear: 0x"
+                    << std::hex << static_cast<int>(baudrate_gear)
+                    << std::dec);
+    return -1;
+  }
+
+  if (driver_->Open(device_name, baudrate_config.bitrate,
+                    baudrate_config.dbitrate,
+                    baudrate_config.bitrate_sample_point,
+                    baudrate_config.dbitrate_sample_point) != 0) {
     GHAND_LOG_ERROR("Failed to open CANFD channel: " << device_name);
     return -2;
   }
 
   connected_.store(true);
 
-  if (!EstablishConnection(500)) {
+  if (!EstablishConnection(slave_id, 500)) {
     GHAND_LOG_ERROR("Failed to establish CANFD connection");
     driver_->Close();
     connected_.store(false);
@@ -441,12 +490,39 @@ std::map<std::string, std::string> CANFDComm::SearchAdapters() {
   return {};
 }
 
+void CANFDComm::UpdateConfig(const ProductConfig& config) { config_ = config; }
+
 bool CANFDComm::SetSlaveId(uint8_t slave_id) {
   if (!IsConnected()) return false;
   if (!WriteSingleRegister(0x0000, slave_id)) return false;
-  dst_id_ = slave_id;
+  slave_id_ = slave_id;
   GHAND_LOG_INFO("CANFD slave ID set to 0x"
                  << std::hex << static_cast<int>(slave_id) << std::dec);
+  return true;
+}
+
+bool CANFDComm::SetBaudrateConfig(uint8_t baudrate_gear) {
+  if (!IsConnected()) return false;
+
+  CANFDBaudrateConfig baudrate_config = {};
+  if (!ResolveCANFDBaudrateConfig(baudrate_gear, &baudrate_config)) {
+    GHAND_LOG_ERROR("Invalid CANFD baudrate gear: 0x"
+                    << std::hex << static_cast<int>(baudrate_gear)
+                    << std::dec);
+    return false;
+  }
+
+  if (!WriteSingleRegister(kBaudrateConfigRegister, baudrate_gear)) {
+    return false;
+  }
+
+  GHAND_LOG_INFO("CANFD baudrate config set to gear 0x"
+                 << std::hex << static_cast<int>(baudrate_gear) << std::dec
+                 << " (bitrate=" << baudrate_config.bitrate << "/"
+                 << static_cast<int>(baudrate_config.bitrate_sample_point)
+                 << "%, dbitrate=" << baudrate_config.dbitrate << "/"
+                 << static_cast<int>(baudrate_config.dbitrate_sample_point)
+                 << "%, effective after next power-up)");
   return true;
 }
 

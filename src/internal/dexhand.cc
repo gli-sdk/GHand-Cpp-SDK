@@ -25,6 +25,9 @@
 
 namespace {
 
+const uint8_t kDefaultSlaveId = 0;
+const uint8_t kDefaultBaudrateGear = 0x05;
+
 bool IsVersionNewer(const std::string& old_ver, const std::string& new_ver) {
   auto parse = [](const std::string& ver) {
     std::vector<int> parts;
@@ -111,10 +114,17 @@ void DexHand::SetupCallbacks() {
   });
 }
 
-bool DexHand::ConnectToDevice(const std::string& device_name) {
-  GHAND_LOG_INFO("Connecting to device: " << device_name);
-
-  int result = comm_->Connect(device_name);
+bool DexHand::ConnectToDevice(const std::string& device_name,
+                              uint8_t slave_id,
+                              uint8_t baudrate_gear) {
+  GHAND_LOG_INFO("Connecting to device: " << device_name
+                                          << " with slave ID 0x"
+                                          << std::hex
+                                          << static_cast<int>(slave_id)
+                                          << " with baudrate gear 0x"
+                                          << static_cast<int>(baudrate_gear)
+                                          << std::dec);
+  int result = comm_->Connect(device_name, slave_id, baudrate_gear);
   if (result == 0) {
     device_name_ = device_name;
     GHAND_LOG_INFO("Successfully connected to device: " << device_name);
@@ -129,26 +139,8 @@ bool DexHand::ConnectToDevice(const std::string& device_name) {
           comm_->Disconnect();
           return false;
         }
-        comm_->Disconnect();
-        switch (comm_type_) {
-          case CommType::ETHERCAT:
-            comm_.reset(new EtherCATComm(config_));
-            break;
-          case CommType::CANFD:
-            comm_.reset(new CANFDComm(config_));
-            break;
-          case CommType::RS485:
-            comm_.reset(new RS485Comm(config_));
-            break;
-          default:
-            break;
-        }
+        comm_->UpdateConfig(config_);
         SetupCallbacks();
-        int rc = comm_->Connect(device_name);
-        if (rc != 0) {
-          GHAND_LOG_ERROR("Failed to reconnect after auto-detection");
-          return false;
-        }
         GHAND_LOG_INFO("Auto-detected product: " << config_.name);
       } else if (!config_.name.empty()) {
         std::vector<std::string> config_names = config_.aliases;
@@ -183,20 +175,25 @@ bool DexHand::ConnectToDevice(const std::string& device_name) {
 }
 
 bool DexHand::AutoConnect() {
+  return AutoConnect(kDefaultSlaveId, kDefaultBaudrateGear);
+}
+
+bool DexHand::AutoConnect(uint8_t slave_id, uint8_t baudrate_gear) {
   std::map<std::string, std::string> adapter_names = SearchAdapters();
   for (const auto& adapter_pair : adapter_names) {
-    if (ConnectToDevice(adapter_pair.first)) {
+    if (ConnectToDevice(adapter_pair.first, slave_id, baudrate_gear)) {
       return true;
     }
   }
   return false;
 }
 
-bool DexHand::Connect(const std::string& device_name) {
+bool DexHand::Connect(const std::string& device_name, uint8_t slave_id,
+                      uint8_t baudrate_gear) {
   if (device_name == "auto") {
-    return AutoConnect();
+    return AutoConnect(slave_id, baudrate_gear);
   }
-  return ConnectToDevice(device_name);
+  return ConnectToDevice(device_name, slave_id, baudrate_gear);
 }
 
 bool DexHand::Disconnect() {
@@ -223,6 +220,14 @@ bool DexHand::SetSlaveId(uint8_t slave_id) {
   }
   bool result = comm_->SetSlaveId(slave_id);
   return result;
+}
+
+bool DexHand::SetBaudrateConfig(uint8_t baudrate_gear) {
+  if (!IsConnected()) {
+    GHAND_LOG_ERROR("Cannot set baudrate config: device not connected");
+    return false;
+  }
+  return comm_->SetBaudrateConfig(baudrate_gear);
 }
 
 std::map<std::string, std::string> DexHand::SearchAdapters() const {

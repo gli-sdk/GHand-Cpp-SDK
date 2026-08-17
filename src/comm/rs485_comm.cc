@@ -113,6 +113,35 @@ std::string NormalizeWindowsComPort(const std::string& name) {
 
 namespace {
 
+const int kBaudrateConfigRegister = 0x002C;
+const uint8_t kDefaultBaudrateGear = 0x05;
+
+bool ResolveRS485Baudrate(uint8_t baudrate_gear, int* baudrate) {
+  if (baudrate == nullptr) return false;
+  switch (baudrate_gear) {
+    case 0x00:
+      *baudrate = 57600;
+      return true;
+    case 0x01:
+      *baudrate = 115200;
+      return true;
+    case 0x02:
+      *baudrate = 230400;
+      return true;
+    case 0x03:
+      *baudrate = 460800;
+      return true;
+    case 0x04:
+      *baudrate = 921600;
+      return true;
+    case 0x05:
+      *baudrate = 1000000;
+      return true;
+    default:
+      return false;
+  }
+}
+
 void AddUniqueAdapter(std::map<std::string, std::string>* adapters,
                       const std::string& path,
                       const std::string& desc) {
@@ -203,6 +232,8 @@ std::map<std::string, std::string> RS485Comm::SearchAdapters() {
   return adapters;
 }
 
+void RS485Comm::UpdateConfig(const ProductConfig& config) { config_ = config; }
+
 bool RS485Comm::SetSlaveId(uint8_t slave_id) {
   if (!IsConnected()) return false;
   std::lock_guard<std::mutex> io_lock(io_mutex_);
@@ -272,7 +303,8 @@ void RS485Comm::CloseContext() {
   ctx_ = nullptr;
 }
 
-int RS485Comm::Connect(const std::string& device_name) {
+int RS485Comm::Connect(const std::string& device_name, uint8_t slave_id,
+                       uint8_t baudrate_gear) {
   GHAND_LOG_INFO("RS485 connecting to: " << device_name);
 
 #ifdef _WIN32
@@ -289,55 +321,70 @@ int RS485Comm::Connect(const std::string& device_name) {
   }
 #endif
 
-  const int baud_rates[] = {1000000};
-  const int slave_ids[] = {0x32, 0x31};
+  const int slave_ids[] = {
+      slave_id == 0 ? 0x31 : static_cast<int>(slave_id), 0x32};
+  const int slave_id_count = slave_id == 0 ? 2 : 1;
+  int baud_rate = 0;
+  if (!ResolveRS485Baudrate(baudrate_gear, &baud_rate)) {
+    GHAND_LOG_ERROR("Invalid RS485 baudrate gear: 0x"
+                    << std::hex << static_cast<int>(baudrate_gear)
+                    << std::dec);
+    return -1;
+  }
 
-  for (int baud_rate : baud_rates) {
-    ctx_ = modbus_new_rtu(port_name.c_str(), baud_rate, 'N', 8, 1);
-    if (!ctx_) {
-      const int err = errno;
-      GHAND_LOG_ERROR(
-          "Failed to create Modbus RTU context: errno="
-          << err << ", " << modbus_strerror(err));
-      return -1;
-    }
+  ctx_ = modbus_new_rtu(port_name.c_str(), baud_rate, 'N', 8, 1);
+  if (!ctx_) {
+    const int err = errno;
+    GHAND_LOG_ERROR("Failed to create Modbus RTU context: errno="
+                    << err << ", " << modbus_strerror(err));
+    return -1;
+  }
 
-    if (modbus_set_response_timeout(ctx_, 0, 500000) == -1) {
-      const int err = errno;
-      GHAND_LOG_ERROR(
-          "Failed to set response timeout: errno="
-          << err << ", " << modbus_strerror(err));
-    }
+  if (modbus_set_response_timeout(ctx_, 0, 500000) == -1) {
+    const int err = errno;
+    GHAND_LOG_ERROR("Failed to set response timeout: errno="
+                    << err << ", " << modbus_strerror(err));
+  }
 
-    if (modbus_connect(ctx_) == -1) {
-      const int err = errno;
-      GHAND_LOG_ERROR(
-          "modbus_connect failed on "
-          << device_name << " at " << baud_rate
-          << " baud: errno=" << err << ", " << modbus_strerror(err));
+  if (modbus_connect(ctx_) == -1) {
+    const int err = errno;
+    GHAND_LOG_ERROR("modbus_connect failed on "
+                    << device_name << " at " << baud_rate
+                    << " baud: errno=" << err << ", "
+                    << modbus_strerror(err));
 #ifndef _WIN32
-      LogLinuxSerialHint(port_name);
+    LogLinuxSerialHint(port_name);
 #endif
-      modbus_free(ctx_);
-      ctx_ = nullptr;
-      continue;
-    }
+    modbus_free(ctx_);
+    ctx_ = nullptr;
+    return -2;
+  }
 
-    GHAND_LOG_INFO(
-        "Serial port opened successfully: "
-        << device_name << " at " << baud_rate << " baud");
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  GHAND_LOG_INFO("Serial port opened successfully: "
+                 << device_name << " at " << baud_rate << " baud");
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    for (int attempt = 0; attempt < 1; ++attempt) {
-      for (int sid : slave_ids) {
-        if (ProbeSlave(sid, attempt, device_name)) {
-          return 0;
+  for (int attempt = 0; attempt < 1; ++attempt) {
+    int tried_ids[2] = {0, 0};
+    int tried_count = 0;
+    for (int i = 0; i < slave_id_count; ++i) {
+      int sid = slave_ids[i];
+      bool already_tried = false;
+      for (int i = 0; i < tried_count; ++i) {
+        if (tried_ids[i] == sid) {
+          already_tried = true;
+          break;
         }
       }
+      if (already_tried) continue;
+      tried_ids[tried_count++] = sid;
+      if (ProbeSlave(sid, attempt, device_name)) {
+        return 0;
+      }
     }
-
-    CloseContext();
   }
+
+  CloseContext();
 
   GHAND_LOG_ERROR("Failed to connect to RS485 device: " << device_name);
   return -2;
@@ -475,6 +522,31 @@ bool RS485Comm::MoveJoints(const std::vector<JointCommand>& joints,
     }
   }
 
+  return true;
+}
+
+bool RS485Comm::SetBaudrateConfig(uint8_t baudrate_gear) {
+  if (!IsConnected()) return false;
+
+  int baudrate = 0;
+  if (!ResolveRS485Baudrate(baudrate_gear, &baudrate)) {
+    GHAND_LOG_ERROR("Invalid RS485 baudrate gear: 0x"
+                    << std::hex << static_cast<int>(baudrate_gear)
+                    << std::dec);
+    return false;
+  }
+
+  std::lock_guard<std::mutex> io_lock(io_mutex_);
+  modbus_set_slave(ctx_, slave_id_);
+  if (modbus_write_register(ctx_, kBaudrateConfigRegister, baudrate_gear) !=
+      1) {
+    return false;
+  }
+
+  GHAND_LOG_INFO("RS485 baudrate config set to gear 0x"
+                 << std::hex << static_cast<int>(baudrate_gear) << std::dec
+                 << " (" << baudrate
+                 << " bps, effective after next power-up)");
   return true;
 }
 

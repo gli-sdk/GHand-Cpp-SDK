@@ -23,10 +23,12 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <map>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "ghand/logging.h"
@@ -179,8 +181,9 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
   ZqwlSerialCanfdDriver() = default;
   ~ZqwlSerialCanfdDriver() override { Close(); }
 
-  int Open(const std::string& name, uint32_t bitrate,
-           uint32_t dbitrate) override {
+  int Open(const std::string& name, uint32_t bitrate, uint32_t dbitrate,
+           uint8_t bitrate_sample_point,
+           uint8_t dbitrate_sample_point) override {
     Close();
     can_index_ = 0;
     std::string port_name = name;
@@ -200,7 +203,8 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
     }
 
     if (!OpenSerial(port_name)) return -1;
-    if (!ConfigureChannel(bitrate, dbitrate)) {
+    if (!ConfigureChannel(bitrate, dbitrate, bitrate_sample_point,
+                          dbitrate_sample_point)) {
       Close();
       return -2;
     }
@@ -208,7 +212,15 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
     GHAND_LOG_INFO("ZQWL CANFD serial opened: " << port_name
                                                << " channel=" << can_index_
                                                << " bitrate=" << bitrate
-                                               << " dbitrate=" << dbitrate);
+                                               << "/"
+                                               << static_cast<int>(
+                                                      bitrate_sample_point)
+                                               << "%"
+                                               << " dbitrate=" << dbitrate
+                                               << "/"
+                                               << static_cast<int>(
+                                                      dbitrate_sample_point)
+                                               << "%");
     return 0;
   }
 
@@ -398,7 +410,9 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
 #endif
   }
 
-  bool ConfigureChannel(uint32_t bitrate, uint32_t dbitrate) {
+  bool ConfigureChannel(uint32_t bitrate, uint32_t dbitrate,
+                        uint8_t bitrate_sample_point,
+                        uint8_t dbitrate_sample_point) {
     auto bitrates = CommonBitrateCodes();
     auto dbitrates = CommonDataBitrateCodes();
     auto abit_it = bitrates.find(bitrate);
@@ -413,7 +427,13 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
     params[0] = static_cast<uint8_t>(can_index_ & 0xFF);
     params[1] = 0x00;
     params[2] = bitrate_code;
+    GHAND_LOG_DEBUG("ZQWL CANFD common bitrate config: bitrate="
+                    << bitrate << "/"
+                    << static_cast<int>(bitrate_sample_point)
+                    << "% dbitrate=" << dbitrate << "/"
+                    << static_cast<int>(dbitrate_sample_point) << "%");
     if (!WriteConfig(0x42, params, sizeof(params))) return false;
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     uint8_t control[16] = {0};
     control[0] = 0x01;
@@ -438,7 +458,11 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
     memcpy(cmd + 4, payload, copy_size);
     cmd[20] = kConfigTail[0];
     cmd[21] = kConfigTail[1];
-    return WriteAll(cmd, sizeof(cmd));
+    if (!WriteAll(cmd, sizeof(cmd))) return false;
+
+    uint8_t response[22] = {0};
+    ReadBytes(response, sizeof(response), 50);
+    return true;
   }
 
   bool WriteAll(const uint8_t* data, size_t size) {
