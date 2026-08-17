@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-17
+
+### Added
+- Added RS485/CANFD connection parameters for slave ID and baud-rate gear.
+- Added RS485/CANFD baud-rate configuration through holding register `0x002C`.
+
+### Changed
+- CANFD ZQWL configuration now clears configuration ACK responses and waits after bitrate setup, matching the Python SDK transport behavior.
+
 ### Changed
 - **BREAKING:** Removed `LOG_DEBUG`, `LOG_INFO`, `LOG_WARNING`, `LOG_ERROR` macros from public header `include/ghand/logging.h`. These were never documented as public API. If your code depended on them, define your own macros or call `ghand::Log()` directly.
 - **BREAKING:** Renamed all example files to remove number prefixes for consistency with C++ naming conventions

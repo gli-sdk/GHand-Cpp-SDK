@@ -1,5 +1,5 @@
 # GHand SDK C++
-[![Version](https://img.shields.io/badge/version-v2.0.0-blue.svg)](include/ghand/version.h)
+[![Version](https://img.shields.io/badge/version-v2.2.0-blue.svg)](include/ghand/version.h)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 
 [![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
@@ -230,6 +230,42 @@ auto canfd_hand = ghand::DexHand::Create(ghand::ProductType::G5,
                                          ghand::CommType::CANFD);
 canfd_hand->Connect("/dev/ttyACM0:0");
 ```
+
+`Connect()` accepts optional RS485/CANFD slave ID and baud-rate gear parameters:
+
+```cpp
+// slave_id = 0 scans the default IDs 0x31 and 0x32.
+hand->Connect("auto", 0, 0x05);
+
+// Use an explicit slave ID and baud-rate gear for this connection.
+hand->Connect("COM17:0", 0x31, 0x05);
+```
+
+`SetSlaveId()` writes a new RS485/CANFD slave ID to holding register `0x0000`.
+`SetBaudrateConfig()` writes the baud-rate gear to holding register `0x002C`;
+the device stores it and applies it after the next power-up.
+
+RS485 baud-rate gears:
+
+| Gear | Baud rate |
+| --- | --- |
+| `0x00` | 57,600 bps |
+| `0x01` | 115,200 bps |
+| `0x02` | 230,400 bps |
+| `0x03` | 460,800 bps |
+| `0x04` | 921,600 bps |
+| `0x05` | 1,000,000 bps |
+
+CANFD baud-rate gears:
+
+| Gear | Arbitration phase | Data phase |
+| --- | --- | --- |
+| `0x00` | 500 Kbps, 80% sample point | 1 Mbps, 75% sample point |
+| `0x01` | 500 Kbps, 80% sample point | 2 Mbps, 80% sample point |
+| `0x02` | 500 Kbps, 80% sample point | 4 Mbps, 80% sample point |
+| `0x03` | 500 Kbps, 80% sample point | 5 Mbps, 75% sample point |
+| `0x04` | 1 Mbps, 75% sample point | 4 Mbps, 80% sample point |
+| `0x05` | 1 Mbps, 75% sample point | 5 Mbps, 75% sample point |
 
 ## 📁 Directory Structure
 
