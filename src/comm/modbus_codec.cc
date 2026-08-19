@@ -18,10 +18,10 @@ int16_t EncodeJointAngle(const JointCommand& joint) {
 }  // namespace
 
 const std::map<JointId, uint16_t> kHoldingRegMap = {
-    {JointId::THUMB_PIP, 0x0011},     {JointId::THUMB_MCP, 0x0013},
-    {JointId::THUMB_SWING, 0x0015},   {JointId::THUMB_ROTATION, 0x0017},
+    {JointId::THUMB_MCP, 0x0011},     {JointId::THUMB_TMC_FE, 0x0013},
+    {JointId::THUMB_TMC_AA, 0x0015},   {JointId::THUMB_TMC_PS, 0x0017},
     {JointId::FF_PIP, 0x0019},        {JointId::FF_MCP, 0x001B},
-    {JointId::FF_SWING, 0x001D},      {JointId::MF_PIP, 0x001F},
+    {JointId::FF_MCP_AA, 0x001D},      {JointId::MF_PIP, 0x001F},
     {JointId::MF_MCP, 0x0021},        {JointId::RF_PIP, 0x0023},
     {JointId::RF_MCP, 0x0025},        {JointId::LF_PIP, 0x0027},
     {JointId::LF_MCP, 0x0029},
@@ -82,6 +82,16 @@ std::string ParseHardwareVersion(const uint8_t* raw_bytes, size_t len) {
 
 std::string ParseFirmwareVersion(const uint8_t* raw_bytes, size_t len) {
   return ParseUtf8String(raw_bytes, len);
+}
+
+std::string ParsePackedFirmwareVersion(uint16_t raw) {
+  uint8_t version_high = static_cast<uint8_t>((raw >> 8) & 0xFF);
+  uint8_t version_low = static_cast<uint8_t>(raw & 0xFF);
+  uint8_t major = (version_high >> 5) & 0x07;
+  uint8_t minor = version_high & 0x1F;
+  uint8_t patch = (version_low >> 4) & 0x0F;
+  return std::to_string(major) + "." + std::to_string(minor) + "." +
+         std::to_string(patch);
 }
 
 uint32_t ParseSerialNumber(const uint8_t* raw_bytes, size_t len) {

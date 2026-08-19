@@ -56,7 +56,7 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 - Ubuntu 20.04 LTS or higher
 - GCC 7.5+ (C++11 support)
 - CMake 3.5 or higher
-- libpcap-dev, libssl-dev
+- libssl-dev
 
 ## 🔧 Dependencies
 
@@ -64,21 +64,20 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 - CMake 3.5 or higher
 - C++11 compatible compiler
 
-### Bundled Third-Party Libraries
-The following libraries are included in `third_party/` and built automatically:
+### Release Dependencies
+
+Source builds use the prebuilt dependencies under `deps/`. The repository and release packages keep this layout, and CMake only searches `deps/`.
+On Linux, `libmodbus.so`, `libmodbus.so.5`, and `libmodbus.so.5.1.0` are shipped under `deps/lib/linux/`; users do not need to install or build `libmodbus` separately.
 
 | Library | Purpose | License |
 |---------|---------|---------|
-| [SOEM](https://github.com/OpenEtherCATsociety/SOEM) | EtherCAT master stack | GPL-2.0 |
 | [nlohmann/json](https://github.com/nlohmann/json) | JSON parsing | MIT |
-| [ZLG CAN](https://www.zlg.cn/) | CANFD driver (Windows) | Proprietary |
-| WinPcap | Packet capture (Windows) | BSD |
+| [SOEM](https://github.com/OpenEtherCATsociety/SOEM) | EtherCAT master stack | GPL-2.0 |
 | [libmodbus](https://github.com/stephane/libmodbus) | Modbus RTU/RS485 support | LGPL-2.1 |
+| WinPcap | Packet capture (Windows EtherCAT) | BSD |
 
 ### System Libraries (Linux only)
-- libpcap-dev
 - libssl-dev
-- libmodbus-dev
 - pthreads
 
 ## 📦 Installation
@@ -91,17 +90,16 @@ Copy the following artifacts into your project:
 |----------|-------------|
 | `include/ghand/` | Public headers |
 | `lib/ghand.dll` / `libghand.so` | Shared library |
-| `config/xiaoyao_hand.json` | Product configuration |
+| `config/ghand5.json`, `config/ghandlite1.json` | Product configuration |
 
 Link against `ghand` and ensure the JSON config is accessible at runtime.
 
 ### CMake Install
 
 ```bash
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build .
-cmake --install . --prefix /path/to/install
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+cmake --install build --prefix /path/to/install
 ```
 
 Then in your `CMakeLists.txt`:
@@ -169,32 +167,68 @@ if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
 
 ## 🔨 Build from Source
 
+Build from the repository or release package root that contains `deps/`.
+
 ### Windows
 
 ```bash
-mkdir build && cd build
-cmake ..
-cmake --build . --config Release
+cmake -S . -B build
+cmake --build build --config Release
 
 # Run example
-.\examples\Release\basic_connection.exe
+.\build\examples\Release\basic_connection.exe
 ```
 
-> **RS485 on Windows:** If you use RS485 communication, place `libmodbus.dll` in the same directory as `ghand.dll` (or in a directory on your `PATH`). The build system auto-copies it when found in `third_party/lib/windows/`.
+> **Windows RS485:** `modbus.dll` from `deps/lib/windows` is copied next to `ghand.dll` during the build when present.
 
 ### Linux
 
 ```bash
 # Install dependencies
-sudo apt install -y cmake build-essential pkg-config libpcap-dev libssl-dev libmodbus-dev
+sudo apt install -y cmake build-essential pkg-config libssl-dev
 
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
+mkdir -p build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
 
-# Run example (requires raw socket access)
-sudo setcap cap_net_raw,cap_net_admin+eip ./examples/tutorial/basic_connection
-./examples/tutorial/basic_connection
+# Grant raw socket permissions once to all built examples
+find build/examples -maxdepth 1 -type f -executable \
+  -exec sudo setcap cap_net_raw,cap_net_admin=eip {} \;
+
+# Run the EtherCAT example
+./build/examples/basic_connection
+```
+
+### Linux RS485 / CANFD
+
+RS485 and CANFD both use USB serial devices and do not need `setcap`; raw socket permissions are only required for EtherCAT.
+
+```bash
+# Check serial devices
+ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
+ls -l /dev/serial/by-id 2>/dev/null
+
+# If the current user cannot open serial ports, add it to dialout and log in again
+sudo usermod -aG dialout $USER
+
+# Make the current terminal session pick up the group, or log in again
+newgrp dialout
+```
+
+For RS485 debugging, specify the USB-RS485 adapter explicitly. Common device names are `/dev/ttyUSB0` or `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`:
+
+```cpp
+auto rs485_hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                         ghand::CommType::RS485);
+rs485_hand->Connect("/dev/ttyUSB0");
+```
+
+For CANFD, use the ZQWL USB-CDC adapter and append the channel number to the device name, for example `:0`:
+
+```cpp
+auto canfd_hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                         ghand::CommType::CANFD);
+canfd_hand->Connect("/dev/ttyACM0:0");
 ```
 
 ## 📁 Directory Structure
@@ -207,7 +241,7 @@ ghand-sdk-cpp/
 │   └── internal/     # Internal state machine & config
 ├── config/           # Product configuration (JSON)
 ├── examples/         # Tutorial and demo programs
-├── third_party/      # Bundled dependencies (SOEM, ZLG CAN, etc.)
+├── deps/             # Release-package prebuilt dependencies
 └── lib/              # Precompiled libraries
 ```
 

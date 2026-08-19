@@ -58,18 +58,10 @@ std::vector<JointId> ControlledJoints(const ProductConfig& config) {
 }
 
 size_t EthercatRxpdoSize(const ProductConfig& config) {
-  if (config.ethercat_output_size > 0) {
-    return static_cast<size_t>(config.ethercat_output_size);
+  if (config.product_type == ProductType::L1) {
+    return config.joint_limits.size() * 6;
   }
   return config.joint_limits.size() * kEthercatJointDataSize + 2;
-}
-
-bool IsL1EthercatRpdo(const ProductConfig& config) {
-  return config.ethercat_rpdo_layout == "per_joint_mode_3reg";
-}
-
-bool IsL1EthercatTpdo(const ProductConfig& config) {
-  return config.ethercat_tpdo_layout == "l1_extended";
 }
 
 }  // namespace
@@ -87,7 +79,7 @@ EtherCATComm* EtherCATComm::foe_instance_ = nullptr;
 static std::atomic<bool> print_debug_info{false};
 
 EtherCATComm::EtherCATComm(const ProductConfig& config)
-    : soem_(std::make_unique<SoemState>()), config_(config) {
+    : soem_(std::unique_ptr<SoemState>(new SoemState())), config_(config) {
   rxpdo_size_ = EthercatRxpdoSize(config_);
 }
 
@@ -150,6 +142,12 @@ std::map<std::string, std::string> EtherCATComm::SearchAdapters() {
   return adapter_names;
 }
 
+bool EtherCATComm::SetSlaveId(uint8_t slave_id) {
+  (void)slave_id;
+  GHAND_LOG_WARNING("SetSlaveId is not supported on EtherCAT");
+  return false;
+}
+
 int EtherCATComm::Connect(const std::string& device_name) {
   GHAND_LOG_INFO("EtherCAT connecting to: " << device_name);
 
@@ -165,7 +163,7 @@ int EtherCATComm::Connect(const std::string& device_name) {
 
   memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
   rxpdo_size_ = EthercatRxpdoSize(config_);
-  if (!IsL1EthercatRpdo(config_)) {
+  if (config_.product_type != ProductType::L1) {
     rxpdo_buffer_[1] = {0x01};
   }
 
@@ -238,7 +236,7 @@ int EtherCATComm::Disconnect() {
 
   memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
   rxpdo_size_ = EthercatRxpdoSize(config_);
-  if (!IsL1EthercatRpdo(config_)) {
+  if (config_.product_type != ProductType::L1) {
     rxpdo_buffer_[1] = {0x01};
   }
   if (soem_->ctx.slavecount > 0) {
@@ -665,6 +663,8 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
   info.tactile_sensor_version = ReadFirmwareVersion(0x03);
   info.motor_driver_version = ReadFirmwareVersion(0x04);
   info.firmware_package_version = ReadFirmwareVersion(0x05);
+  info.thumb_tactile_sensor_version = ReadFirmwareVersion(0x06);
+  info.finger_tactile_sensor_version = ReadFirmwareVersion(0x07);
 
   return info;
 }
@@ -703,7 +703,7 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
     joint_map[joint.id] = joint;
   }
 
-  if (IsL1EthercatRpdo(config_)) {
+  if (config_.product_type == ProductType::L1) {
     std::vector<JointId> controlled_joints = ControlledJoints(config_);
     std::vector<uint8_t> buffer;
     buffer.reserve(controlled_joints.size() * 6);
@@ -772,7 +772,7 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
 
 void EtherCATComm::Stop() {
   GHAND_LOG_INFO("Sending stop command");
-  if (IsL1EthercatRpdo(config_)) {
+  if (config_.product_type == ProductType::L1) {
     std::vector<JointId> controlled_joints = ControlledJoints(config_);
     std::vector<uint8_t> buffer;
     buffer.reserve(controlled_joints.size() * 6);
@@ -937,7 +937,7 @@ void EtherCATComm::ParseHandAndJoints(
   parsed_temperature->temperature = temperature;
 
   parsed_joints->reserve(config_.valid_joints.size());
-  if (IsL1EthercatTpdo(config_)) {
+  if (config_.product_type == ProductType::L1) {
     for (const auto& joint_id : config_.valid_joints) {
       if (*offset + 6 > size) break;
       Joint joint;
@@ -1002,7 +1002,7 @@ TactileData EtherCATComm::ParseTactileData(const uint8_t* data, size_t size,
   for (size_t i = 0; i < config_.tactile_regions.size(); ++i) {
     const auto& rc = config_.tactile_regions[i];
     RegionTactile region;
-    region.region_name = rc.name.c_str();
+    region.region_name = rc.id.c_str();
     region.state = (tactile_data.sensor_state & (1 << i)) != 0;
 
     if (*offset + 6 <= size) {
@@ -1078,10 +1078,7 @@ std::string EtherCATComm::ReadFirmwareVersion(uint8_t mcu_id) {
          std::to_string(patch);
 }
 
-bool EtherCATComm::QueryFirmwareUpdateResults(uint8_t* main_result,
-                                               uint8_t* pos_result,
-                                               uint8_t* tac_result,
-                                               uint8_t* motor_result) {
+bool EtherCATComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
   auto read_result = [this](uint8_t cmd, uint8_t* out) -> bool {
     int size = sizeof(std::uint8_t);
     if (SDOWrite(1, 0x2005, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
@@ -1105,10 +1102,12 @@ bool EtherCATComm::QueryFirmwareUpdateResults(uint8_t* main_result,
   };
 
   bool ok = true;
-  ok = read_result(0xA1, main_result) && ok;
-  ok = read_result(0xA2, pos_result) && ok;
-  ok = read_result(0xA3, tac_result) && ok;
-  ok = read_result(0xA4, motor_result) && ok;
+  ok = read_result(0xA1, &results->main) && ok;
+  ok = read_result(0xA2, &results->position_sensor) && ok;
+  ok = read_result(0xA3, &results->tactile_board) && ok;
+  ok = read_result(0xA4, &results->motor_driver) && ok;
+  ok = read_result(0xA5, &results->thumb_tactile) && ok;
+  ok = read_result(0xA6, &results->finger_tactile) && ok;
   return ok;
 }
 

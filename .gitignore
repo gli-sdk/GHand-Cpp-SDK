@@ -6,7 +6,6 @@
 # 构建产物
 /build/
 /build*/
-*.dll
 *.exe
 *.obj
 *.pdb
@@ -31,3 +30,5 @@ CLAUDE.md
 tests/
 .claudeignore
 vendor/dist/include/zlgcan/zcan.h
+.agents/
+.codex/

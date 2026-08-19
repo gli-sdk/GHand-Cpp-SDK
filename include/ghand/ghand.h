@@ -1,5 +1,7 @@
-#ifndef GHAND_H_
-#define GHAND_H_
+// Copyright 2025 Glitech.
+
+#ifndef INCLUDE_GHAND_GHAND_H_
+#define INCLUDE_GHAND_GHAND_H_
 
 #include <functional>
 #include <map>
@@ -69,6 +71,13 @@ class GHAND_API DexHand {
    * @brief Check if connected
    */
   bool IsConnected() const;
+
+  /**
+   * @brief Set RS485/CANFD slave ID on the connected device.
+   * @param slave_id New slave ID written to holding register 0x0000
+   * @return true on success; false if unsupported, disconnected, or rejected
+   */
+  bool SetSlaveId(uint8_t slave_id);
 
   // Device info
   /**
@@ -182,4 +191,4 @@ class GHAND_API DexHand {
 #pragma warning(pop)
 #endif
 
-#endif  // GHAND_H_
+#endif  // INCLUDE_GHAND_GHAND_H_

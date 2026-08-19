@@ -1,5 +1,7 @@
-#ifndef GHAND_LOGGING_H_
-#define GHAND_LOGGING_H_
+// Copyright 2025 Glitech.
+
+#ifndef INCLUDE_GHAND_LOGGING_H_
+#define INCLUDE_GHAND_LOGGING_H_
 
 #include <string>
 
@@ -17,4 +19,4 @@ GHAND_API void ConfigureFile(const std::string& filename,
 
 }  // namespace ghand
 
-#endif  // GHAND_LOGGING_H_
+#endif  // INCLUDE_GHAND_LOGGING_H_

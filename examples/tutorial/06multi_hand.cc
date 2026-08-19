@@ -16,7 +16,7 @@ void PrintHeader() {
 
 bool SearchAdapters(std::map<std::string, std::string>* adapters) {
   auto temp_hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                           ghand::CommType::CANFD);
+                                           ghand::CommType::ETHERCAT);
   if (!temp_hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     return false;
@@ -24,12 +24,12 @@ bool SearchAdapters(std::map<std::string, std::string>* adapters) {
 
   *adapters = temp_hand->SearchAdapters();
   if (adapters->empty()) {
-    std::cerr << "No available CANFD adapters found\n";
+    std::cerr << "No available adapters found\n";
     return false;
   }
 
   std::cout << "\nFound " << adapters->size()
-            << " available CANFD adapters:\n";
+            << " available adapters:\n";
   for (const auto& adapter : *adapters) {
     std::cout << "  - " << adapter.first << ": " << adapter.second << '\n';
   }
@@ -51,7 +51,7 @@ void ConnectHands(
     }
 
     auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                        ghand::CommType::CANFD);
+                                        ghand::CommType::ETHERCAT);
     if (hand->Connect(name)) {
       hands->push_back(std::move(hand));
       connected_adapter_bases.insert(adapter_base);
@@ -101,13 +101,13 @@ void RunSimultaneousControl(
     const std::vector<std::unique_ptr<ghand::DexHand>>& hands) {
   std::cout << "\n========== Demo 2: Simultaneous Control ==========\n";
   std::vector<ghand::JointCommand> reset_joints = {
-      {ghand::JointId::THUMB_PIP, 0.0f, 100, 100},
       {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
-      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, 0.0f, 100, 100},
       {ghand::JointId::FF_PIP, 0.0f, 100, 100},
       {ghand::JointId::FF_MCP, 0.0f, 100, 100},
-      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, 0.0f, 100, 100},
       {ghand::JointId::MF_PIP, 0.0f, 100, 100},
       {ghand::JointId::MF_MCP, 0.0f, 100, 100},
       {ghand::JointId::RF_PIP, 0.0f, 100, 100},

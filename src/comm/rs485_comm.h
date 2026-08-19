@@ -1,5 +1,7 @@
-#ifndef SRC_INTERNAL_RS485_COMM_H_
-#define SRC_INTERNAL_RS485_COMM_H_
+// Copyright 2025 Glitech.
+
+#ifndef SRC_COMM_RS485_COMM_H_
+#define SRC_COMM_RS485_COMM_H_
 
 #include <atomic>
 #include <cstdint>
@@ -45,6 +47,7 @@ class RS485Comm : public IComm {
   int Disconnect() override;
   bool IsConnected() const override { return connected_.load(); }
   std::map<std::string, std::string> SearchAdapters() override;
+  bool SetSlaveId(uint8_t slave_id) override;
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;
@@ -67,14 +70,14 @@ class RS485Comm : public IComm {
   FirmwareUpdateError BootUpdate(
       const std::string& filename,
       std::function<void(int)> progress) override;
-  bool QueryFirmwareUpdateResults(uint8_t* main_result, uint8_t* pos_result,
-                                  uint8_t* tac_result,
-                                  uint8_t* motor_result) override;
+  bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
  private:
   bool ProbeSlave(int sid, int attempt, const std::string& device_name);
   void CloseContext();
   bool WriteTactileControl(uint16_t command);
+  bool WaitHoldingResult(int addr, int timeout_ms = 2000,
+                         int interval_ms = 50);
   bool HasCallbacks();
   void EnsurePollStarted();
   void StopPoll();
@@ -109,4 +112,4 @@ class RS485Comm : public IComm {
 }  // namespace internal
 }  // namespace ghand
 
-#endif  // SRC_INTERNAL_RS485_COMM_H_
+#endif  // SRC_COMM_RS485_COMM_H_

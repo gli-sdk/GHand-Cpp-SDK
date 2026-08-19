@@ -1,5 +1,7 @@
-#ifndef GHAND_INTERNAL_ETHERCAT_COMM_H_
-#define GHAND_INTERNAL_ETHERCAT_COMM_H_
+// Copyright 2025 Glitech.
+
+#ifndef SRC_COMM_ETHERCAT_COMM_H_
+#define SRC_COMM_ETHERCAT_COMM_H_
 
 #include <atomic>
 #include <cstddef>
@@ -35,6 +37,7 @@ class EtherCATComm : public IComm {
   int Disconnect() override;
   bool IsConnected() const override { return is_connected_; }
   std::map<std::string, std::string> SearchAdapters() override;
+  bool SetSlaveId(uint8_t slave_id) override;
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;
@@ -57,9 +60,7 @@ class EtherCATComm : public IComm {
   FirmwareUpdateError BootUpdate(
       const std::string& filename,
       std::function<void(int)> progress) override;
-  bool QueryFirmwareUpdateResults(uint8_t* main_result, uint8_t* pos_result,
-                                  uint8_t* tac_result,
-                                  uint8_t* motor_result) override;
+  bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
   // Low-level EtherCAT API (retained for internal use)
   int SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,
@@ -148,4 +149,4 @@ class EtherCATComm : public IComm {
 }  // namespace internal
 }  // namespace ghand
 
-#endif  // GHAND_INTERNAL_ETHERCAT_COMM_H_
+#endif  // SRC_COMM_ETHERCAT_COMM_H_

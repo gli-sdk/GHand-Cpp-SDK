@@ -1,5 +1,7 @@
-#ifndef GHAND_EXPORT_H_
-#define GHAND_EXPORT_H_
+// Copyright 2025 Glitech.
+
+#ifndef INCLUDE_GHAND_EXPORT_H_
+#define INCLUDE_GHAND_EXPORT_H_
 
 #ifdef _WIN32
 #ifdef GHAND_BUILD
@@ -11,4 +13,4 @@
 #define GHAND_API
 #endif
 
-#endif  // GHAND_EXPORT_H_
+#endif  // INCLUDE_GHAND_EXPORT_H_

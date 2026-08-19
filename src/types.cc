@@ -5,7 +5,7 @@
 namespace ghand {
 
 // ProductType
-std::string ToString(ProductType type) {
+const char* ToString(ProductType type) {
   switch (type) {
     case ProductType::G5:
       return "G5-13A23D-S01";
@@ -19,7 +19,7 @@ std::string ToString(ProductType type) {
 }
 
 // HandType
-std::string ToString(HandType type) {
+const char* ToString(HandType type) {
   switch (type) {
     case HandType::NONE:
       return "NONE";
@@ -33,25 +33,25 @@ std::string ToString(HandType type) {
 }
 
 // FingerType
-std::string ToString(FingerType finger) {
+const char* ToString(FingerType finger) {
   switch (finger) {
     case FingerType::THUMB:
       return "THUMB";
     case FingerType::FF:
-      return "INDEX";
+      return "FF";
     case FingerType::MF:
-      return "MIDDLE";
+      return "MF";
     case FingerType::RF:
-      return "RING";
+      return "RF";
     case FingerType::LF:
-      return "PINKY";
+      return "LF";
     default:
       return "UNKNOWN";
   }
 }
 
 // State
-std::string ToString(State state) {
+const char* ToString(State state) {
   switch (state) {
     case State::STOPPED:
       return "STOPPED";
@@ -67,7 +67,7 @@ std::string ToString(State state) {
 }
 
 // ErrorCode
-std::string ToString(ErrorCode error) {
+const char* ToString(ErrorCode error) {
   switch (error) {
     case ErrorCode::NORMAL:
       return "NORMAL";
@@ -87,12 +87,12 @@ std::string ToString(ErrorCode error) {
       return "MOTOR_COMM_ERROR";
     case ErrorCode::MOTOR_OVER_TEMP:
       return "MOTOR_OVER_TEMP";
-    case ErrorCode::MOTOR_DRIVER_OVER_TEMP:
-      return "MOTOR_DRIVER_OVER_TEMP";
     case ErrorCode::JOINT_CONFLICT:
       return "JOINT_CONFLICT";
     case ErrorCode::TIP_CONFLICT:
       return "TIP_CONFLICT";
+    case ErrorCode::JOINT_POSITION_ERROR:
+      return "JOINT_POSITION_ERROR";
     case ErrorCode::LOW_TEMP:
       return "LOW_TEMP";
     case ErrorCode::HIGH_TEMP:
@@ -101,12 +101,14 @@ std::string ToString(ErrorCode error) {
       return "LOW_VOLTAGE";
     case ErrorCode::HIGH_VOLTAGE:
       return "HIGH_VOLTAGE";
-    case ErrorCode::TACTILE_ERROR:
-      return "TACTILE_ERROR";
+    case ErrorCode::TACTILE_DISCONNECTED:
+      return "TACTILE_DISCONNECTED";
+    case ErrorCode::TACTILE_DATA_ERROR:
+      return "TACTILE_DATA_ERROR";
+    case ErrorCode::SELF_CHECK_ERROR:
+      return "SELF_CHECK_ERROR";
     case ErrorCode::PARAM_ERROR:
       return "PARAM_ERROR";
-    case ErrorCode::TIMEOUT:
-      return "TIMEOUT";
     case ErrorCode::UNKNOWN_ERROR:
       return "UNKNOWN_ERROR";
     default:
@@ -115,44 +117,44 @@ std::string ToString(ErrorCode error) {
 }
 
 // JointId
-std::string ToString(JointId id) {
+const char* ToString(JointId id) {
   switch (id) {
-    case JointId::THUMB_DIP:
-      return "THUMB_DIP";
-    case JointId::THUMB_PIP:
-      return "THUMB_PIP";
+    case JointId::THUMB_IP:
+      return "THUMB_IP";
     case JointId::THUMB_MCP:
       return "THUMB_MCP";
-    case JointId::THUMB_SWING:
-      return "THUMB_SWING";
-    case JointId::THUMB_ROTATION:
-      return "THUMB_ROTATION";
+    case JointId::THUMB_TMC_FE:
+      return "THUMB_TMC_FE";
+    case JointId::THUMB_TMC_AA:
+      return "THUMB_TMC_AA";
+    case JointId::THUMB_TMC_PS:
+      return "THUMB_TMC_PS";
     case JointId::FF_DIP:
-      return "INDEX_DIP";
+      return "FF_DIP";
     case JointId::FF_PIP:
-      return "INDEX_PIP";
+      return "FF_PIP";
     case JointId::FF_MCP:
-      return "INDEX_MCP";
-    case JointId::FF_SWING:
-      return "INDEX_SWING";
+      return "FF_MCP";
+    case JointId::FF_MCP_AA:
+      return "FF_MCP_AA";
     case JointId::MF_DIP:
-      return "MIDDLE_DIP";
+      return "MF_DIP";
     case JointId::MF_PIP:
-      return "MIDDLE_PIP";
+      return "MF_PIP";
     case JointId::MF_MCP:
       return "MIDDLE_MCP";
     case JointId::RF_DIP:
-      return "RING_DIP";
+      return "RF_DIP";
     case JointId::RF_PIP:
-      return "RING_PIP";
+      return "RF_PIP";
     case JointId::RF_MCP:
-      return "RING_MCP";
+      return "RF_MCP";
     case JointId::LF_DIP:
-      return "PINKY_DIP";
+      return "LF_DIP";
     case JointId::LF_PIP:
-      return "PINKY_PIP";
+      return "LF_PIP";
     case JointId::LF_MCP:
-      return "PINKY_MCP";
+      return "LF_MCP";
     default:
       return "UNKNOWN";
   }

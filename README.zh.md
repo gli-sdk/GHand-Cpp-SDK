@@ -56,7 +56,7 @@ GHand SDK C++ 是GHand灵巧手的 C++ 开发包，支持 EtherCAT 、CANFD 和 
 - Ubuntu 20.04 LTS 或更高版本
 - GCC 7.5+（支持 C++11）
 - CMake 3.5 或更高版本
-- libpcap-dev, libssl-dev
+- libssl-dev
 
 ## 🔧 依赖说明
 
@@ -65,20 +65,18 @@ GHand SDK C++ 是GHand灵巧手的 C++ 开发包，支持 EtherCAT 、CANFD 和 
 - 支持 C++11 的编译器
 
 ### 已集成的第三方库
-以下库已包含在 `third_party/` 目录中，会自动编译：
+以下库已包含在 `deps/` 目录中，CMake 会直接使用：
+Linux 下 `libmodbus.so`、`libmodbus.so.5` 和 `libmodbus.so.5.1.0` 已放在 `deps/lib/linux/`，用户不需要额外安装或编译 `libmodbus`。
 
 | 库 | 用途 | 许可证 |
 |----|------|--------|
-| [SOEM](https://github.com/OpenEtherCATsociety/SOEM) | EtherCAT 主站协议栈 | GPL-2.0 |
 | [nlohmann/json](https://github.com/nlohmann/json) | JSON 解析 | MIT |
-| [ZLG CAN](https://www.zlg.cn/) | CANFD 驱动（Windows） | 专有 |
-| WinPcap | 数据包捕获（Windows） | BSD |
+| [SOEM](https://github.com/OpenEtherCATsociety/SOEM) | EtherCAT 主站协议栈 | GPL-2.0 |
 | [libmodbus](https://github.com/stephane/libmodbus) | Modbus RTU/RS485 支持 | LGPL-2.1 |
+| WinPcap | Windows EtherCAT 数据包捕获 | BSD |
 
 ### 系统库（仅 Linux）
-- libpcap-dev
 - libssl-dev
-- libmodbus-dev
 - pthreads
 
 ## 📦 安装
@@ -91,17 +89,16 @@ GHand SDK C++ 是GHand灵巧手的 C++ 开发包，支持 EtherCAT 、CANFD 和 
 |------|------|
 | `include/ghand/` | 公共头文件 |
 | `lib/ghand.dll` / `libghand.so` | 动态链接库 |
-| `config/xiaoyao_hand.json` | 产品配置文件 |
+| `config/ghand5.json`, `config/ghandlite1.json` | 产品配置文件 |
 
 链接 `ghand` 库，并确保运行时能访问 JSON 配置文件。
 
 ### CMake 安装
 
 ```bash
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build .
-cmake --install . --prefix /path/to/install
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+cmake --install build --prefix /path/to/install
 ```
 
 然后在你的 `CMakeLists.txt` 中：
@@ -172,29 +169,63 @@ if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
 ### Windows
 
 ```bash
-mkdir build && cd build
-cmake ..
-cmake --build . --config Release
+cmake -S . -B build
+cmake --build build --config Release
 
 # 运行示例
-.\examples\Release\basic_connection.exe
+.\build\examples\Release\basic_connection.exe
 ```
 
-> **Windows RS485 使用提示：** 如果使用 RS485 通信，请将 `libmodbus.dll` 与 `ghand.dll` 放在同一目录（或系统 `PATH` 中的目录）。当 `third_party/lib/windows/` 中存在该 DLL 时，构建系统会自动复制。
+> **Windows RS485 使用提示：** 构建时会将 `deps/lib/windows/modbus.dll` 复制到 `ghand.dll` 所在目录。
 
 ### Linux
 
 ```bash
 # 安装依赖
-sudo apt install -y cmake build-essential pkg-config libpcap-dev libssl-dev libmodbus-dev
+sudo apt install -y cmake build-essential pkg-config libssl-dev
 
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
+mkdir -p build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
 
-# 运行示例（需要原始套接字权限）
-sudo setcap cap_net_raw,cap_net_admin+eip ./examples/tutorial/basic_connection
-./examples/tutorial/basic_connection
+# 第一步：为所有已编译示例授予原始套接字权限
+find build/examples -maxdepth 1 -type f -executable \
+  -exec sudo setcap cap_net_raw,cap_net_admin=eip {} \;
+
+# 第二步：运行 EtherCAT 示例
+./build/examples/basic_connection
+```
+
+### Linux RS485 / CANFD 运行
+
+RS485 和 CANFD 都走 USB 串口设备，不需要 `setcap`；只有 EtherCAT 需要原始套接字权限。
+
+```bash
+# 查看串口设备
+ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
+ls -l /dev/serial/by-id 2>/dev/null
+
+# 如果当前用户没有串口权限，加入 dialout 后重新登录
+sudo usermod -aG dialout $USER
+
+# 临时让当前终端会话生效，也可以直接重新登录
+newgrp dialout
+```
+
+RS485 调试时建议显式指定 USB-RS485 转接器，常见设备名是 `/dev/ttyUSB0` 或 `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`：
+
+```cpp
+auto rs485_hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                         ghand::CommType::RS485);
+rs485_hand->Connect("/dev/ttyUSB0");
+```
+
+CANFD 使用 ZQWL USB-CDC 适配器，通道号写在设备名后面，例如 `:0`：
+
+```cpp
+auto canfd_hand = ghand::DexHand::Create(ghand::ProductType::G5,
+                                         ghand::CommType::CANFD);
+canfd_hand->Connect("/dev/ttyACM0:0");
 ```
 
 ## 📁 目录结构
@@ -207,7 +238,7 @@ ghand-sdk-cpp/
 │   └── internal/     # 内部状态机与配置
 ├── config/           # 产品配置文件（JSON）
 ├── examples/         # 教程与示例程序
-├── third_party/      # 集成依赖库（SOEM、ZLG CAN 等）
+├── deps/             # 预编译依赖
 └── lib/              # 预编译库
 ```
 

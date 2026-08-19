@@ -25,6 +25,9 @@
 #include <cstdint>
 #include <cstring>
 #include <sstream>
+#include <utility>
+#include <string>
+#include <vector>
 
 #ifdef GHAND_NO_LIBMODBUS
 // Stub implementation when libmodbus is not available
@@ -52,6 +55,7 @@ inline int modbus_write_registers(modbus_t*, int, int, const uint16_t*) {
 #include "ghand/logging.h"
 #include "logging_macros.h"
 #include "modbus_codec.h"
+#include <map>
 
 namespace ghand {
 namespace internal {
@@ -109,11 +113,37 @@ std::string NormalizeWindowsComPort(const std::string& name) {
 
 namespace {
 
-void AddUniqueSlaveId(std::vector<int>* values, int sid) {
-  if (std::find(values->begin(), values->end(), sid) == values->end()) {
-    values->push_back(sid);
-  }
+void AddUniqueAdapter(std::map<std::string, std::string>* adapters,
+                      const std::string& path,
+                      const std::string& desc) {
+  if (path.empty() || adapters->find(path) != adapters->end()) return;
+  (*adapters)[path] = desc;
 }
+
+#ifndef _WIN32
+void AddLinuxSerialById(std::map<std::string, std::string>* adapters) {
+  const std::string dir_path = "/dev/serial/by-id";
+  DIR* dir = opendir(dir_path.c_str());
+  if (!dir) return;
+
+  struct dirent* entry = nullptr;
+  while ((entry = readdir(dir)) != nullptr) {
+    std::string name(entry->d_name);
+    if (name == "." || name == "..") continue;
+    AddUniqueAdapter(adapters, dir_path + "/" + name, name);
+  }
+  closedir(dir);
+}
+
+void LogLinuxSerialHint(const std::string& device_name) {
+  GHAND_LOG_ERROR("Failed to open RS485 serial port "
+                  << device_name
+                  << ". On Linux, verify the device exists and the user has "
+                     "permission, for example: ls -l "
+                  << device_name
+                  << "; sudo usermod -aG dialout $USER; then log in again.");
+}
+#endif
 
 }  // namespace
 
@@ -151,6 +181,7 @@ std::map<std::string, std::string> RS485Comm::SearchAdapters() {
     SetupDiDestroyDeviceInfoList(hDevInfo);
   }
 #else
+  AddLinuxSerialById(&adapters);
   const char* tty_dirs[] = {"/dev/"};
   for (const char* dir : tty_dirs) {
     DIR* d = opendir(dir);
@@ -159,9 +190,10 @@ std::map<std::string, std::string> RS485Comm::SearchAdapters() {
     while ((entry = readdir(d)) != nullptr) {
       std::string name(entry->d_name);
       if (name.find("ttyUSB") == 0 || name.find("ttyACM") == 0 ||
-          name.find("tty.SLAB") == 0 || name.find("tty.wch") == 0) {
+          name.find("ttyAMA") == 0 || name.find("tty.SLAB") == 0 ||
+          name.find("tty.wch") == 0) {
         std::string path = std::string(dir) + name;
-        adapters[path] = path;
+        AddUniqueAdapter(&adapters, path, path);
       }
     }
     closedir(d);
@@ -169,6 +201,17 @@ std::map<std::string, std::string> RS485Comm::SearchAdapters() {
 #endif
 
   return adapters;
+}
+
+bool RS485Comm::SetSlaveId(uint8_t slave_id) {
+  if (!IsConnected()) return false;
+  std::lock_guard<std::mutex> io_lock(io_mutex_);
+  modbus_set_slave(ctx_, slave_id_);
+  if (modbus_write_register(ctx_, 0x0000, slave_id) != 1) return false;
+  slave_id_ = slave_id;
+  GHAND_LOG_INFO("RS485 slave ID set to 0x"
+                 << std::hex << static_cast<int>(slave_id) << std::dec);
+  return true;
 }
 
 bool RS485Comm::ProbeSlave(int sid, int attempt,
@@ -235,7 +278,15 @@ int RS485Comm::Connect(const std::string& device_name) {
 #ifdef _WIN32
   std::string port_name = NormalizeWindowsComPort(device_name);
 #else
-  const std::string& port_name = device_name;
+  std::string port_name = device_name;
+  if (port_name.empty()) {
+    std::map<std::string, std::string> adapters = SearchAdapters();
+    if (adapters.empty()) {
+      GHAND_LOG_ERROR("No RS485 serial adapters found");
+      return -1;
+    }
+    port_name = adapters.begin()->first;
+  }
 #endif
 
   const int baud_rates[] = {1000000};
@@ -264,6 +315,9 @@ int RS485Comm::Connect(const std::string& device_name) {
           "modbus_connect failed on "
           << device_name << " at " << baud_rate
           << " baud: errno=" << err << ", " << modbus_strerror(err));
+#ifndef _WIN32
+      LogLinuxSerialHint(port_name);
+#endif
       modbus_free(ctx_);
       ctx_ = nullptr;
       continue;
@@ -338,6 +392,31 @@ DeviceInfo RS485Comm::GetDeviceInfo() {
   }
   info.serial_number = ParseSerialNumber(bytes.data(), bytes.size());
 
+  if (ReadInputRegistersBytes(0x1185, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.firmware_package_version = ParsePackedFirmwareVersion(raw);
+  }
+  if (ReadInputRegistersBytes(0x1186, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.position_sensor_version = ParsePackedFirmwareVersion(raw);
+  }
+  if (ReadInputRegistersBytes(0x1187, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.tactile_sensor_version = ParsePackedFirmwareVersion(raw);
+  }
+  if (ReadInputRegistersBytes(0x1188, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.motor_driver_version = ParsePackedFirmwareVersion(raw);
+  }
+  if (ReadInputRegistersBytes(0x1189, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.thumb_tactile_sensor_version = ParsePackedFirmwareVersion(raw);
+  }
+  if (ReadInputRegistersBytes(0x118A, 1, &bytes) && bytes.size() >= 2) {
+    uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+    info.finger_tactile_sensor_version = ParsePackedFirmwareVersion(raw);
+  }
+
   return info;
 }
 
@@ -384,7 +463,7 @@ bool RS485Comm::MoveJoints(const std::vector<JointCommand>& joints,
 
     auto regs = EncodeJointCommand(joint);
     std::vector<uint16_t> data;
-    if (config_.per_joint_mode_control) {
+    if (config_.product_type == ProductType::L1) {
       data.push_back((static_cast<uint16_t>(mode) << 8) & 0xFF00);
     }
     data.push_back(regs.first);
@@ -428,6 +507,10 @@ bool RS485Comm::ClearFault() {
   std::lock_guard<std::mutex> io_lock(io_mutex_);
   modbus_set_slave(ctx_, slave_id_);
   if (modbus_write_register(ctx_, 0x0001, 0x0100) != 1) return false;
+  if (!WaitHoldingResult(0x0001)) {
+    GHAND_LOG_ERROR("Fault clearance failed or timed out over RS485");
+    return false;
+  }
   GHAND_LOG_INFO("Fault cleared");
   return true;
 }
@@ -482,6 +565,22 @@ bool RS485Comm::WriteTactileControl(uint16_t command) {
   modbus_set_slave(ctx_, slave_id_);
   return modbus_write_register(ctx_, config_.tactile_control_register,
                                command) == 1;
+}
+
+bool RS485Comm::WaitHoldingResult(int addr, int timeout_ms, int interval_ms) {
+  auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+  while (std::chrono::steady_clock::now() < deadline) {
+    uint16_t reg = 0;
+    modbus_set_slave(ctx_, slave_id_);
+    if (modbus_read_registers(ctx_, addr, 1, &reg) == 1) {
+      uint8_t status = static_cast<uint8_t>(reg & 0x00FF);
+      if (status == 1) return true;
+      if (status == 2) return false;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
+  }
+  return false;
 }
 
 // Data retrieval
@@ -555,7 +654,7 @@ TactileData RS485Comm::GetTactileData() {
     int idx = static_cast<int>(i);
 
     RegionTactile rt;
-    rt.region_name = region.name.c_str();
+    rt.region_name = region.id.c_str();
     rt.state = (tactile_err.first & (1 << idx)) != 0;
     rt.resultant_force = ParseTactileResultant(regs, idx);
 
@@ -628,14 +727,8 @@ FirmwareUpdateError RS485Comm::BootUpdate(
   return FirmwareUpdateError::NOT_SUPPORTED;
 }
 
-bool RS485Comm::QueryFirmwareUpdateResults(uint8_t* main_result,
-                                            uint8_t* pos_result,
-                                            uint8_t* tac_result,
-                                            uint8_t* motor_result) {
-  (void)main_result;
-  (void)pos_result;
-  (void)tac_result;
-  (void)motor_result;
+bool RS485Comm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
+  (void)results;
   return false;
 }
 

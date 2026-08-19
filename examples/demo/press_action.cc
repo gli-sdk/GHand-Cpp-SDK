@@ -9,13 +9,13 @@
 // Thumb press pose
 std::vector<ghand::JointCommand> MakeThumbPress() {
   return {
-      {ghand::JointId::THUMB_PIP, 0.0f, 100, 100},
       {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_SWING, 30.0f, 100, 100},
-      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, 30.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, 0.0f, 100, 100},
       {ghand::JointId::FF_PIP, 75.0f, 100, 100},
       {ghand::JointId::FF_MCP, 70.0f, 100, 100},
-      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, 0.0f, 100, 100},
       {ghand::JointId::MF_PIP, 75.0f, 100, 100},
       {ghand::JointId::MF_MCP, 70.0f, 100, 100},
       {ghand::JointId::RF_PIP, 75.0f, 100, 100},
@@ -28,13 +28,13 @@ std::vector<ghand::JointCommand> MakeThumbPress() {
 // Index finger press pose
 std::vector<ghand::JointCommand> MakeIndexPress() {
   return {
-      {ghand::JointId::THUMB_PIP, 30.0f, 100, 100},
-      {ghand::JointId::THUMB_MCP, 20.0f, 100, 100},
-      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
-      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 30.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, 0.0f, 100, 100},
       {ghand::JointId::FF_PIP, 0.0f, 100, 100},
       {ghand::JointId::FF_MCP, 0.0f, 100, 100},
-      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, 0.0f, 100, 100},
       {ghand::JointId::MF_PIP, 75.0f, 100, 100},
       {ghand::JointId::MF_MCP, 70.0f, 100, 100},
       {ghand::JointId::RF_PIP, 75.0f, 100, 100},
@@ -47,13 +47,13 @@ std::vector<ghand::JointCommand> MakeIndexPress() {
 // Middle finger press pose
 std::vector<ghand::JointCommand> MakeMiddlePress() {
   return {
-      {ghand::JointId::THUMB_PIP, 60.0f, 100, 100},
-      {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
-      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 60.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, 0.0f, 100, 100},
       {ghand::JointId::FF_PIP, 75.0f, 100, 100},
       {ghand::JointId::FF_MCP, 70.0f, 100, 100},
-      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, 0.0f, 100, 100},
       {ghand::JointId::MF_PIP, 0.0f, 100, 100},
       {ghand::JointId::MF_MCP, 0.0f, 100, 100},
       {ghand::JointId::RF_PIP, 75.0f, 100, 100},
@@ -66,13 +66,13 @@ std::vector<ghand::JointCommand> MakeMiddlePress() {
 // Ring finger press pose
 std::vector<ghand::JointCommand> MakeRingPress() {
   return {
-      {ghand::JointId::THUMB_PIP, 66.0f, 100, 100},
-      {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
-      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 66.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, 0.0f, 100, 100},
       {ghand::JointId::FF_PIP, 75.0f, 100, 100},
       {ghand::JointId::FF_MCP, 70.0f, 100, 100},
-      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, 0.0f, 100, 100},
       {ghand::JointId::MF_PIP, 75.0f, 100, 100},
       {ghand::JointId::MF_MCP, 70.0f, 100, 100},
       {ghand::JointId::RF_PIP, 0.0f, 100, 100},
@@ -85,13 +85,13 @@ std::vector<ghand::JointCommand> MakeRingPress() {
 // Little finger press pose
 std::vector<ghand::JointCommand> MakeLittlePress() {
   return {
-      {ghand::JointId::THUMB_PIP, 66.0f, 100, 100},
-      {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
-      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, 66.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, 0.0f, 100, 100},
       {ghand::JointId::FF_PIP, 75.0f, 100, 100},
       {ghand::JointId::FF_MCP, 70.0f, 100, 100},
-      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, 0.0f, 100, 100},
       {ghand::JointId::MF_PIP, 75.0f, 100, 100},
       {ghand::JointId::MF_MCP, 70.0f, 100, 100},
       {ghand::JointId::RF_PIP, 75.0f, 100, 100},
@@ -104,13 +104,13 @@ std::vector<ghand::JointCommand> MakeLittlePress() {
 // Open hand pose
 std::vector<ghand::JointCommand> MakeOpenHand() {
   return {
-      {ghand::JointId::THUMB_PIP, 0.0f, 100, 100},
       {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_SWING, 20.0f, 100, 100},
-      {ghand::JointId::THUMB_ROTATION, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, 0.0f, 100, 100},
       {ghand::JointId::FF_PIP, 0.0f, 100, 100},
       {ghand::JointId::FF_MCP, 0.0f, 100, 100},
-      {ghand::JointId::FF_SWING, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, 0.0f, 100, 100},
       {ghand::JointId::MF_PIP, 0.0f, 100, 100},
       {ghand::JointId::MF_MCP, 0.0f, 100, 100},
       {ghand::JointId::RF_PIP, 0.0f, 100, 100},
@@ -138,7 +138,7 @@ bool HandZero(ghand::DexHand& hand) {
 
 std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::CANFD);
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     return nullptr;

@@ -1,5 +1,7 @@
-#ifndef GHAND_INTERNAL_FILE_LOCK_H_
-#define GHAND_INTERNAL_FILE_LOCK_H_
+// Copyright 2025 Glitech.
+
+#ifndef SRC_INTERNAL_FILE_LOCK_H_
+#define SRC_INTERNAL_FILE_LOCK_H_
 
 #include <string>
 
@@ -53,4 +55,4 @@ std::string GetAdapterLockPath(const std::string& adapter_name);
 }  // namespace internal
 }  // namespace ghand
 
-#endif  // GHAND_INTERNAL_FILE_LOCK_H_
+#endif  // SRC_INTERNAL_FILE_LOCK_H_

@@ -166,13 +166,16 @@ bool DexHand::ConnectToDevice(const std::string& device_name) {
           }
         }
         if (!name_matched) {
-          GHAND_LOG_WARNING("Device name mismatch: device reports \""
+          GHAND_LOG_ERROR("Device name mismatch: device reports \""
                       << dev_name << "\", config expects \"" << config_.name
                       << "\"");
+          comm_->Disconnect();
+          return false;
         }
       }
     }
-
+    GHAND_LOG_INFO("Successfully connected to device, device_name: "
+                   << device_name_);
     return true;
   }
   return false;
@@ -211,6 +214,15 @@ bool DexHand::Disconnect() {
 }
 
 bool DexHand::IsConnected() const { return comm_->IsConnected(); }
+
+bool DexHand::SetSlaveId(uint8_t slave_id) {
+  if (!IsConnected()) {
+    GHAND_LOG_ERROR("Cannot set slave ID: device not connected");
+    return false;
+  }
+  bool result = comm_->SetSlaveId(slave_id);
+  return result;
+}
 
 std::map<std::string, std::string> DexHand::SearchAdapters() const {
   return comm_->SearchAdapters();
@@ -323,27 +335,36 @@ FirmwareUpdateError DexHand::BootUpdate(
       std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
 
       if (Connect(device_name_)) {
-        uint8_t main_result = 0, pos_result = 0, tac_result = 0,
-                motor_result = 0;
-        if (!comm_->QueryFirmwareUpdateResults(
-                &main_result, &pos_result, &tac_result, &motor_result)) {
+        FirmwareUpdateResults results;
+        if (!comm_->QueryFirmwareUpdateResults(&results)) {
           return FirmwareUpdateError::QUERY_FAILED;
         }
 
         GHAND_LOG_INFO("Firmware update results - main: "
-                       << static_cast<int>(main_result)
-                       << ", pos: " << static_cast<int>(pos_result)
-                       << ", tac: " << static_cast<int>(tac_result)
-                       << ", motor: " << static_cast<int>(motor_result));
+                       << static_cast<int>(results.main)
+                       << ", pos: "
+                       << static_cast<int>(results.position_sensor)
+                       << ", tactile_mcu: "
+                       << static_cast<int>(results.tactile_board)
+                       << ", motor: "
+                       << static_cast<int>(results.motor_driver)
+                       << ", thumb_tactile: "
+                       << static_cast<int>(results.thumb_tactile)
+                       << ", finger_tactile: "
+                       << static_cast<int>(results.finger_tactile));
 
-        if (main_result != 1)
+        if (results.main != 1)
           return FirmwareUpdateError::MAIN_CONTROLLER_FAILED;
-        if (pos_result != 1)
+        if (results.position_sensor != 1)
           return FirmwareUpdateError::POSITION_SENSOR_FAILED;
-        if (tac_result != 1)
+        if (results.tactile_board != 1)
           return FirmwareUpdateError::TACTILE_SENSOR_FAILED;
-        if (motor_result != 1)
+        if (results.motor_driver != 1)
           return FirmwareUpdateError::MOTOR_DRIVER_FAILED;
+        if (results.thumb_tactile != 1)
+          return FirmwareUpdateError::TACTILE_SENSOR_FAILED;
+        if (results.finger_tactile != 1)
+          return FirmwareUpdateError::TACTILE_SENSOR_FAILED;
 
         if (!IsVersionNewer(
                 last_version,

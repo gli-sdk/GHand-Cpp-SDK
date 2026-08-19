@@ -4,14 +4,14 @@
 
 int main() {
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::CANFD);
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     return -1;
   }
 
-  // Try to auto-connect to the dexterous hand via CANFD
-  std::cout << "Connecting to dexterous hand via CANFD..." << '\n';
+  // Try to auto-connect to the dexterous hand
+  std::cout << "Connecting to dexterous hand..." << '\n';
   bool success = hand->AutoConnect();
 
   if (success) {
@@ -32,6 +32,10 @@ int main() {
               << device_info.position_sensor_version << '\n';
     std::cout << "Tactile sensor version: "
               << device_info.tactile_sensor_version << '\n';
+    std::cout << "Thumb tactile sensor version: "
+              << device_info.thumb_tactile_sensor_version << '\n';
+    std::cout << "Finger tactile sensor version: "
+              << device_info.finger_tactile_sensor_version << '\n';
     std::cout << "Firmware package version: "
               << device_info.firmware_package_version << '\n';
     std::cout << "Serial number: " << device_info.serial_number << '\n';

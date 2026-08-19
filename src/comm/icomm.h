@@ -1,5 +1,7 @@
-#ifndef SRC_INTERNAL_ICOMM_H_
-#define SRC_INTERNAL_ICOMM_H_
+// Copyright 2025 Glitech.
+
+#ifndef SRC_COMM_ICOMM_H_
+#define SRC_COMM_ICOMM_H_
 
 #include <cstdint>
 #include <functional>
@@ -15,6 +17,15 @@ namespace internal {
 using JointsCallback = std::function<void(const std::vector<Joint>&)>;
 using HandStateCallback = std::function<void(const HandState&)>;
 using TactileDataCallback = std::function<void(const TactileData&)>;
+
+struct FirmwareUpdateResults {
+  uint8_t main = 0;
+  uint8_t position_sensor = 0;
+  uint8_t tactile_board = 0;
+  uint8_t motor_driver = 0;
+  uint8_t thumb_tactile = 0;
+  uint8_t finger_tactile = 0;
+};
 
 /**
  * @brief Communication abstraction interface
@@ -33,6 +44,7 @@ class IComm {
   virtual int Disconnect() = 0;
   virtual bool IsConnected() const = 0;
   virtual std::map<std::string, std::string> SearchAdapters() = 0;
+  virtual bool SetSlaveId(uint8_t slave_id) = 0;
 
   // Device info
   virtual DeviceInfo GetDeviceInfo() = 0;
@@ -61,13 +73,10 @@ class IComm {
   virtual FirmwareUpdateError BootUpdate(
       const std::string& filename,
       std::function<void(int)> progress) = 0;
-  virtual bool QueryFirmwareUpdateResults(uint8_t* main_result,
-                                          uint8_t* pos_result,
-                                          uint8_t* tac_result,
-                                          uint8_t* motor_result) = 0;
+  virtual bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) = 0;
 };
 
 }  // namespace internal
 }  // namespace ghand
 
-#endif  // SRC_INTERNAL_ICOMM_H_
+#endif  // SRC_COMM_ICOMM_H_

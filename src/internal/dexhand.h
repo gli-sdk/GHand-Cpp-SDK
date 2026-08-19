@@ -1,3 +1,5 @@
+// Copyright 2025 Glitech.
+
 #ifndef SRC_INTERNAL_DEXHAND_H_
 #define SRC_INTERNAL_DEXHAND_H_
 
@@ -42,6 +44,7 @@ class DexHand {
   bool Connect(const std::string& device_name);
   bool Disconnect();
   bool IsConnected() const;
+  bool SetSlaveId(uint8_t slave_id);
 
   // Device info
   std::map<std::string, std::string> SearchAdapters() const;

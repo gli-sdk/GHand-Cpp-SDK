@@ -25,7 +25,7 @@ static uint8_t NearestCanfdLength(uint8_t len) {
 
 static bool IsIndexFingerControlJoint(JointId id) {
   return id == JointId::FF_PIP || id == JointId::FF_MCP ||
-         id == JointId::FF_SWING;
+         id == JointId::FF_MCP_AA;
 }
 
 static void AppendEncodedJoint(const JointCommand& joint,
@@ -56,12 +56,6 @@ static std::vector<uint8_t> BuildCanfdRegisterPayload(
     registers.push_back(value);
   }
   return RegistersToBytes(registers);
-}
-
-static void AddUniqueDst(std::vector<uint8_t>* values, uint8_t dst) {
-  if (std::find(values->begin(), values->end(), dst) == values->end()) {
-    values->push_back(dst);
-  }
 }
 
 static void AddUniquePayload(std::vector<std::vector<uint8_t>>* values,
@@ -100,7 +94,7 @@ static std::vector<std::vector<uint8_t>> BuildConnectionPayloads(
 }
 
 CANFDComm::CANFDComm(const ProductConfig& config)
-    : driver_(CreateZLGDriver()), dst_id_(config.slave_id), config_(config) {}
+    : driver_(CreateCANFDDriver()), config_(config) {}
 
 CANFDComm::~CANFDComm() { Disconnect(); }
 
@@ -307,6 +301,23 @@ bool CANFDComm::WriteSingleRegister(int addr, uint16_t value, int timeout_ms) {
   return WriteRegisters(addr, data, timeout_ms);
 }
 
+bool CANFDComm::WaitHoldingResult(int addr, int timeout_ms, int interval_ms) {
+  auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+  while (std::chrono::steady_clock::now() < deadline) {
+    std::vector<uint8_t> bytes;
+    if (ReadRegisters(addr, 1, &bytes, 0x03) && bytes.size() >= 2) {
+      uint16_t reg =
+          (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
+      uint8_t status = static_cast<uint8_t>(reg & 0x00FF);
+      if (status == 1) return true;
+      if (status == 2) return false;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
+  }
+  return false;
+}
+
 // Connection management
 
 bool CANFDComm::NodeIdDetection(int timeout_ms) {
@@ -334,10 +345,7 @@ bool CANFDComm::NodeIdDetection(int timeout_ms) {
 }
 
 bool CANFDComm::EstablishConnection(int timeout_ms) {
-  std::vector<uint8_t> dst_ids;
-  AddUniqueDst(&dst_ids, config_.slave_id);
-  AddUniqueDst(&dst_ids, 0x31);
-  AddUniqueDst(&dst_ids, 0x32);
+  const uint8_t dst_ids[] = {0x31, 0x32};
 
   auto payloads = BuildConnectionPayloads(config_, false);
   for (const auto& data : payloads) {
@@ -402,10 +410,7 @@ int CANFDComm::Connect(const std::string& device_name) {
     return -2;
   }
 
-  std::vector<uint8_t> dst_ids;
-  AddUniqueDst(&dst_ids, config_.slave_id);
-  AddUniqueDst(&dst_ids, 0x31);
-  AddUniqueDst(&dst_ids, 0x32);
+  const uint8_t dst_ids[] = {0x31, 0x32};
   auto payloads = BuildConnectionPayloads(config_, true);
   for (uint8_t dst : dst_ids) {
     for (const auto& data : payloads) {
@@ -471,6 +476,15 @@ std::map<std::string, std::string> CANFDComm::SearchAdapters() {
   return {};
 }
 
+bool CANFDComm::SetSlaveId(uint8_t slave_id) {
+  if (!IsConnected()) return false;
+  if (!WriteSingleRegister(0x0000, slave_id)) return false;
+  dst_id_ = slave_id;
+  GHAND_LOG_INFO("CANFD slave ID set to 0x"
+                 << std::hex << static_cast<int>(slave_id) << std::dec);
+  return true;
+}
+
 // Device info
 
 bool CANFDComm::ReadInputBytes(int addr, int count,
@@ -482,6 +496,18 @@ bool CANFDComm::ReadInputBytes(int addr, int count,
 DeviceInfo CANFDComm::GetDeviceInfo() {
   DeviceInfo info;
   std::vector<uint8_t> bytes;
+  auto read_version = [this](int addr, const char* name) -> std::string {
+    std::vector<uint8_t> version_bytes;
+    if (!ReadInputBytes(addr, 1, &version_bytes) ||
+        version_bytes.size() < 2) {
+      GHAND_LOG_WARNING("Failed to read " << name << " version over CANFD");
+      return "";
+    }
+    uint16_t raw =
+        (static_cast<uint16_t>(version_bytes[0]) << 8) | version_bytes[1];
+    return ParsePackedFirmwareVersion(raw);
+  };
+
   if (!ReadInputBytes(0x1000, 8, &bytes)) {
     GHAND_LOG_ERROR("Failed to read device name over CANFD");
     return info;
@@ -505,6 +531,15 @@ DeviceInfo CANFDComm::GetDeviceInfo() {
     return info;
   }
   info.serial_number = ParseSerialNumber(bytes.data(), bytes.size());
+
+  info.firmware_package_version = read_version(0x1185, "firmware package");
+  info.position_sensor_version = read_version(0x1186, "position sensor");
+  info.tactile_sensor_version = read_version(0x1187, "tactile MCU");
+  info.motor_driver_version = read_version(0x1188, "motor driver");
+  info.thumb_tactile_sensor_version =
+      read_version(0x1189, "thumb tactile sensor");
+  info.finger_tactile_sensor_version =
+      read_version(0x118A, "finger tactile sensor");
   return info;
 }
 
@@ -531,7 +566,7 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
     if (!WriteSingleRegister(config_.mode_register, mode_value)) return false;
   }
 
-  if (config_.per_joint_mode_control) {
+  if (config_.product_type == ProductType::L1) {
     const auto& control_map = config_.joint_control_registers.empty()
                                   ? kHoldingRegMap
                                   : config_.joint_control_registers;
@@ -554,7 +589,7 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
   const JointCommand* ff_swing = nullptr;
   for (const auto& joint : joints) {
     command_cache_[joint.id] = joint;
-    if (joint.id == JointId::FF_SWING) {
+    if (joint.id == JointId::FF_MCP_AA) {
       ff_swing = &joint;
     }
   }
@@ -575,7 +610,7 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
     std::vector<JointCommand> index_group;
     index_group.push_back(get_cached_or_default(JointId::FF_PIP));
     index_group.push_back(get_cached_or_default(JointId::FF_MCP));
-    index_group.push_back(get_cached_or_default(JointId::FF_SWING));
+    index_group.push_back(get_cached_or_default(JointId::FF_MCP_AA));
 
     auto it = kHoldingRegMap.find(JointId::FF_PIP);
     if (it == kHoldingRegMap.end()) return false;
@@ -624,6 +659,10 @@ void CANFDComm::Stop() {
 bool CANFDComm::ClearFault() {
   if (!IsConnected()) return false;
   if (!WriteSingleRegister(0x0001, 0x0100)) return false;
+  if (!WaitHoldingResult(0x0001)) {
+    GHAND_LOG_ERROR("Fault clearance failed or timed out over CANFD");
+    return false;
+  }
   GHAND_LOG_INFO("Fault cleared");
   return true;
 }
@@ -733,7 +772,7 @@ TactileData CANFDComm::GetTactileData() {
   for (size_t i = 0; i < config_.tactile_regions.size(); ++i) {
     const auto& region = config_.tactile_regions[i];
     RegionTactile rt;
-    rt.region_name = region.name.c_str();
+    rt.region_name = region.id.c_str();
     rt.state = (tactile_err.first & (1 << static_cast<int>(i))) != 0;
     rt.resultant_force =
         ParseTactileResultant(regs.data(), static_cast<int>(i));
@@ -825,14 +864,8 @@ FirmwareUpdateError CANFDComm::BootUpdate(const std::string& filename,
   return FirmwareUpdateError::NOT_SUPPORTED;
 }
 
-bool CANFDComm::QueryFirmwareUpdateResults(uint8_t* main_result,
-                                            uint8_t* pos_result,
-                                            uint8_t* tac_result,
-                                            uint8_t* motor_result) {
-  (void)main_result;
-  (void)pos_result;
-  (void)tac_result;
-  (void)motor_result;
+bool CANFDComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
+  (void)results;
   return false;
 }
 

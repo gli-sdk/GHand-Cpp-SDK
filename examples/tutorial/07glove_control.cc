@@ -236,12 +236,12 @@ void ConfigureReceiveTimeout(SOCKET sock) {
 
 std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
   auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                      ghand::CommType::CANFD);
+                                      ghand::CommType::ETHERCAT);
   if (!hand) {
     std::cerr << "Failed to create DexHand" << '\n';
     return nullptr;
   }
-  std::cout << "\nConnecting to dexterous hand via CANFD..." << '\n';
+  std::cout << "\nConnecting to dexterous hand..." << '\n';
   if (!hand->AutoConnect()) {
     std::cerr << "Error: Unable to connect to dexterous hand!" << '\n';
     return nullptr;
@@ -255,23 +255,23 @@ std::vector<ghand::JointCommand> BuildJointCommands(const HandData& hand) {
   const int speed = 100;
   const int torque = 100;
   return {
-      {ghand::JointId::THUMB_PIP,
-       ClipAngle(hand.thumb.pip_bend, 0, 75), speed, torque},
       {ghand::JointId::THUMB_MCP,
+       ClipAngle(hand.thumb.pip_bend, 0, 75), speed, torque},
+      {ghand::JointId::THUMB_TMC_FE,
        ClipAngle(hand.thumb.mcp_bend - 40, 0, 55), speed, torque},
-      {ghand::JointId::THUMB_SWING,
+      {ghand::JointId::THUMB_TMC_AA,
        ClipAngle(-(hand.thumb.mcp_roll + hand.thumb.pip_roll +
                    hand.thumb.dip_roll) -
                      85,
                  0, 90),
        speed, torque},
-      {ghand::JointId::THUMB_ROTATION,
+      {ghand::JointId::THUMB_TMC_PS,
        ClipAngle(-hand.thumb.dip_sway, -30, 60), speed, torque},
       {ghand::JointId::FF_PIP,
        ClipAngle(hand.index.pip_bend, 0, 75), speed, torque},
       {ghand::JointId::FF_MCP,
        ClipAngle(hand.index.mcp_bend, 0, 70), speed, torque},
-      {ghand::JointId::FF_SWING,
+      {ghand::JointId::FF_MCP_AA,
        ClipAngle(hand.index.mcp_sway + hand.index.pip_sway, -15, 15),
        speed, torque},
       {ghand::JointId::MF_PIP,

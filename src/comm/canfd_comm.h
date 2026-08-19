@@ -1,5 +1,7 @@
-#ifndef SRC_INTERNAL_CANFD_COMM_H_
-#define SRC_INTERNAL_CANFD_COMM_H_
+// Copyright 2025 Glitech.
+
+#ifndef SRC_COMM_CANFD_COMM_H_
+#define SRC_COMM_CANFD_COMM_H_
 
 #include <atomic>
 #include <cstdint>
@@ -39,6 +41,7 @@ class CANFDComm : public IComm {
   int Disconnect() override;
   bool IsConnected() const override { return connected_.load(); }
   std::map<std::string, std::string> SearchAdapters() override;
+  bool SetSlaveId(uint8_t slave_id) override;
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;
@@ -61,9 +64,7 @@ class CANFDComm : public IComm {
   FirmwareUpdateError BootUpdate(
       const std::string& filename,
       std::function<void(int)> progress) override;
-  bool QueryFirmwareUpdateResults(uint8_t* main_result, uint8_t* pos_result,
-                                  uint8_t* tac_result,
-                                  uint8_t* motor_result) override;
+  bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
  private:
   // CANFD arbitration helpers (Python SDK compatible)
@@ -85,6 +86,8 @@ class CANFDComm : public IComm {
                       int timeout_ms = 5000);
 
   bool WriteSingleRegister(int addr, uint16_t value, int timeout_ms = 500);
+  bool WaitHoldingResult(int addr, int timeout_ms = 2000,
+                         int interval_ms = 50);
 
   bool NodeIdDetection(int timeout_ms = 500);
   bool EstablishConnection(int timeout_ms = 500);
@@ -126,4 +129,4 @@ class CANFDComm : public IComm {
 }  // namespace internal
 }  // namespace ghand
 
-#endif  // SRC_INTERNAL_CANFD_COMM_H_
+#endif  // SRC_COMM_CANFD_COMM_H_
