@@ -1,0 +1,17 @@
+libmodbus Notice
+=================
+
+Name: libmodbus
+Version used by this SDK: 3.1.12
+Project: https://github.com/stephane/libmodbus
+License: LGPL-2.1-or-later
+
+GHand C++ SDK links to libmodbus dynamically for RS485/Modbus RTU support.
+The libmodbus headers bundled under deps/include/modbus carry the upstream
+SPDX-License-Identifier: LGPL-2.1-or-later notices.
+
+When distributing GHand C++ SDK binaries that include libmodbus binaries
+(such as modbus.dll or libmodbus.so.5.1.0), provide the corresponding
+libmodbus 3.1.12 source code, including any local modifications if present.
+Users must not be prevented from replacing the dynamically linked libmodbus
+binary with an ABI-compatible modified version.

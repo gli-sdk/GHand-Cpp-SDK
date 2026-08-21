@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "product_config_loader.h"
 
 #ifdef _WIN32
@@ -13,6 +16,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <vector>
 
@@ -26,15 +30,28 @@ namespace internal {
 
 std::string ProductTypeToFileName(ProductType type) {
   switch (type) {
-    case ProductType::G5:
+    case ProductType::GHand5:
       return "ghand5.json";
-    case ProductType::L1:
+    case ProductType::GHandLite1:
       return "ghandlite1.json";
     case ProductType::AUTO:
       return "";  // AUTO mode defers config loading
     default:
       return "";
   }
+}
+
+ProductType ProductTypeFromFilePath(const std::string& path) {
+  std::string lower = path;
+  std::transform(lower.begin(), lower.end(), lower.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  if (lower.find("ghandlite1") != std::string::npos) {
+    return ProductType::GHandLite1;
+  }
+  if (lower.find("ghand5") != std::string::npos) {
+    return ProductType::GHand5;
+  }
+  return ProductType::AUTO;
 }
 
 std::string StripComments(const std::string& content) {
@@ -244,7 +261,7 @@ std::vector<std::string> JsonStringArray(const nlohmann::json& j,
   return values;
 }
 
-void ApplyG5ModbusProfile(ProductConfig* config) {
+void ApplyGHand5ModbusProfile(ProductConfig* config) {
   config->joint_input_registers.clear();
   for (int id = 0; id < static_cast<int>(JointId::NUM_JOINTS); ++id) {
     config->joint_input_registers[static_cast<JointId>(id)] =
@@ -278,7 +295,7 @@ void ApplyG5ModbusProfile(ProductConfig* config) {
   config->canfd_connection_delete_values = {0x0000, 0x0000};
 }
 
-void ApplyL1ModbusProfile(ProductConfig* config) {
+void ApplyGHandLite1ModbusProfile(ProductConfig* config) {
   config->joint_input_registers = {
       {JointId::THUMB_MCP, 0x1023},
       {JointId::THUMB_TMC_FE, 0x1026},
@@ -322,12 +339,12 @@ void ApplyProtocolDefaults(ProductType product, ProductConfig* config) {
   if (config == nullptr) return;
   config->product_type = product;
   switch (product) {
-    case ProductType::L1:
-      ApplyL1ModbusProfile(config);
+    case ProductType::GHandLite1:
+      ApplyGHandLite1ModbusProfile(config);
       break;
-    case ProductType::G5:
+    case ProductType::GHand5:
     default:
-      ApplyG5ModbusProfile(config);
+      ApplyGHand5ModbusProfile(config);
       break;
   }
 }
@@ -383,6 +400,79 @@ ProductConfig ParseProductConfigJson(const nlohmann::json& j,
   return config;
 }
 
+bool ValidateProductConfig(const ProductConfig& config,
+                           const std::string& source) {
+  bool valid = true;
+  auto fail = [&](const std::string& message) {
+    GHAND_LOG_ERROR("Invalid product config " << source << ": " << message);
+    valid = false;
+  };
+
+  if (config.name.empty()) {
+    fail("missing name");
+  }
+  if (config.model.empty()) {
+    fail("missing model");
+  }
+  if (config.valid_joints.empty()) {
+    fail("missing joints");
+  }
+  if (config.joint_limits.empty()) {
+    fail("missing controllable joint limits");
+  }
+
+  std::set<JointId> seen_joints;
+  for (JointId joint_id : config.valid_joints) {
+    if (joint_id == JointId::NUM_JOINTS) {
+      fail("contains invalid joint id");
+      continue;
+    }
+    if (!seen_joints.insert(joint_id).second) {
+      fail(std::string("duplicate joint: ") + ToString(joint_id));
+    }
+  }
+
+  for (const auto& limits : config.joint_limits) {
+    if (seen_joints.find(limits.first) == seen_joints.end()) {
+      fail(std::string("limit defined for non-listed joint: ") +
+           ToString(limits.first));
+    }
+    if (limits.second.first > limits.second.second) {
+      fail(std::string("invalid joint limit range: ") +
+           ToString(limits.first));
+    }
+  }
+
+  if (config.has_tactile && config.tactile_regions.empty()) {
+    fail("has_tactile is true but tactile_regions is empty");
+  }
+  for (const auto& region : config.tactile_regions) {
+    if (region.id.empty()) {
+      fail("tactile region missing id");
+    }
+    if (region.sensor_count <= 0) {
+      fail("tactile region sensor_count must be positive");
+    }
+  }
+
+  if (config.canfd_connection_timer_count < 0 ||
+      config.canfd_connection_delete_count < 0) {
+    fail("CANFD connection register counts must be non-negative");
+  }
+  if (!config.canfd_connection_timer_values.empty() &&
+      config.canfd_connection_timer_values.size() !=
+          static_cast<size_t>(config.canfd_connection_timer_count)) {
+    fail("CANFD connection timer value count mismatch");
+  }
+  if (!config.canfd_connection_delete_values.empty() &&
+      config.canfd_connection_delete_values.size() !=
+          static_cast<size_t>(config.canfd_connection_delete_count)) {
+    fail("CANFD connection delete value count mismatch");
+  }
+
+  return valid;
+}
+
 std::vector<std::string> ListJsonFiles(const std::string& search_dir) {
   std::vector<std::string> files;
 #ifdef _WIN32
@@ -432,7 +522,7 @@ bool TryLoadMatchingConfig(const std::string& file_path,
     }
   }
   if (!matched) return false;
-  *config = ParseProductConfigJson(j, ProductType::AUTO);
+  *config = ParseProductConfigJson(j, ProductTypeFromFilePath(file_path));
   return true;
 }
 
@@ -468,9 +558,7 @@ ProductConfig LoadProductConfig(ProductType product) {
   }
 
   config = ParseProductConfigJson(j, product);
-  if (config.name.empty() || config.valid_joints.empty()) {
-    GHAND_LOG_ERROR("Product config missing required fields in "
-                    << found_path);
+  if (!ValidateProductConfig(config, found_path)) {
     return ProductConfig();
   }
 
@@ -498,6 +586,9 @@ ProductConfig FindConfigByName(const std::string& device_name) {
     for (const auto& file_path : ListJsonFiles(search_dir)) {
       ProductConfig config;
       if (!TryLoadMatchingConfig(file_path, device_name, &config)) {
+        continue;
+      }
+      if (!ValidateProductConfig(config, file_path)) {
         continue;
       }
       GHAND_LOG_INFO("Auto-detected product config: "

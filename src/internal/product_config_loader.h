@@ -1,4 +1,5 @@
-// Copyright 2025 Glitech.
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef SRC_INTERNAL_PRODUCT_CONFIG_LOADER_H_
 #define SRC_INTERNAL_PRODUCT_CONFIG_LOADER_H_

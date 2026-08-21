@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "ghand/logging.h"
 
 #include <chrono>
@@ -20,7 +23,6 @@ class Logger {
                   LogLevel level = LogLevel::DEBUG);
   void Log(LogLevel level, const char* file, int line,
            const std::string& message);
-  std::ostringstream& GetStream(LogLevel level, const char* file, int line);
 
  private:
   Logger();
@@ -39,10 +41,6 @@ class Logger {
   std::unique_ptr<std::ofstream> file_stream_;
   LogLevel file_level_;
   std::mutex mutex_;
-  std::unique_ptr<std::ostringstream> stream_buffer_;
-  LogLevel current_level_;
-  std::string current_file_;
-  int current_line_;
 };
 
 // Logger class implementation
@@ -51,14 +49,11 @@ Logger::Logger()
     : console_level_(LogLevel::WARNING),
       file_stream_(nullptr),
       file_level_(LogLevel::DEBUG),
-      mutex_(),
-      stream_buffer_(new std::ostringstream()),
-      current_level_(LogLevel::INFO),
-      current_file_(),
-      current_line_(0) {}
+      mutex_() {}
 
 Logger::~Logger() {
   if (file_stream_ && file_stream_->is_open()) {
+    file_stream_->flush();
     file_stream_->close();
   }
 }
@@ -69,15 +64,6 @@ Logger& Logger::GetInstance() {
 }
 
 void Logger::SetConsoleLevel(LogLevel level) {
-  // Only INFO and DEBUG levels are allowed
-  if (level != LogLevel::INFO && level != LogLevel::DEBUG) {
-    std::cerr
-        << "[ERROR] Invalid console log level. Only INFO and DEBUG are "
-           "allowed."
-        << '\n';
-    return;
-  }
-
   std::lock_guard<std::mutex> lock(mutex_);
   console_level_ = level;
 }
@@ -87,6 +73,7 @@ void Logger::SetFileLog(const std::string& filename, LogLevel level) {
 
   // Close existing file stream
   if (file_stream_ && file_stream_->is_open()) {
+    file_stream_->flush();
     file_stream_->close();
   }
 
@@ -115,19 +102,10 @@ void Logger::Log(LogLevel level, const char* file, int line,
   if (file_stream_ && file_stream_->is_open() && level >= file_level_) {
     std::string msg = FormatMessage(level, file, line, message, true);
     *file_stream_ << msg << '\n';
-    file_stream_->flush();
+    if (level >= LogLevel::ERR) {
+      file_stream_->flush();
+    }
   }
-}
-
-std::ostringstream& Logger::GetStream(LogLevel level, const char* file,
-                                      int line) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  current_level_ = level;
-  current_file_ = file;
-  current_line_ = line;
-  stream_buffer_->str("");
-  stream_buffer_->clear();
-  return *stream_buffer_;
 }
 
 std::string Logger::FormatTime(bool iso_format) const {

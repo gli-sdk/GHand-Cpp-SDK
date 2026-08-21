@@ -1,4 +1,4 @@
-#include <chrono>
+﻿#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -206,11 +206,11 @@ std::vector<ghand::JointCommand> CreateJointsFromGesture(
   return joints;
 }
 
-std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
-  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+std::unique_ptr<ghand::GHand> CreateConnectedHand() {
+  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                      ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << '\n';
+    std::cerr << "Failed to create GHand" << '\n';
     return nullptr;
   }
 
@@ -238,7 +238,7 @@ bool WaitWithErrorCheck(int wait_ms, int check_interval_ms) {
   return false;
 }
 
-bool ExecuteGesture(ghand::DexHand& hand, GestureType gesture,
+bool ExecuteGesture(ghand::GHand& hand, GestureType gesture,
                     int gesture_wait_ms, int check_interval_ms) {
   if (HasError()) return true;
 
@@ -251,7 +251,7 @@ bool ExecuteGesture(ghand::DexHand& hand, GestureType gesture,
   return WaitWithErrorCheck(gesture_wait_ms, check_interval_ms);
 }
 
-bool RunGestureCycle(ghand::DexHand& hand,
+bool RunGestureCycle(ghand::GHand& hand,
                      const std::vector<GestureType>& gestures,
                      int cycle,
                      int gesture_wait_ms,
@@ -272,7 +272,7 @@ bool RunGestureCycle(ghand::DexHand& hand,
   return WaitWithErrorCheck(cycle_delay_ms, check_interval_ms);
 }
 
-bool RunGestureDemo(ghand::DexHand& hand) {
+bool RunGestureDemo(ghand::GHand& hand) {
   const std::vector<GestureType> gestures = {
       GestureType::OPEN_HAND, GestureType::FIST,     GestureType::OK,
       GestureType::THUMBS_UP, GestureType::SIX_SIGN,
@@ -294,7 +294,7 @@ bool RunGestureDemo(ghand::DexHand& hand) {
   }
 }
 
-void HandleDetectedError(ghand::DexHand& hand) {
+void HandleDetectedError(ghand::GHand& hand) {
   PrintError();
   std::cerr << "\nStopping all motion and clearing fault..." << '\n';
   hand.Stop();

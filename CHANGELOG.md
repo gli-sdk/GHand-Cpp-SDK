@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Licensing
+- Changed the GHand C++ SDK distribution license to GPL-3.0-only to align with the GPLv3 licensing option used by the statically linked SOEM 2.0.0 stack.
+- Added complete third-party notices and license texts.
+- Corrected SOEM license metadata from GPL-2.0 to GPLv3 / Commercial dual license.
+- Documented libmodbus 3.1.12 as LGPL-2.1-or-later and retained dynamic linking.
+- Added WinPcap and nlohmann/json notices.
+
 ## [2.2.0] - 2026-08-17
 
 ### Added

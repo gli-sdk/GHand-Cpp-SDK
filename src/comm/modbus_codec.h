@@ -1,4 +1,5 @@
-// Copyright 2025 Glitech.
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef SRC_COMM_MODBUS_CODEC_H_
 #define SRC_COMM_MODBUS_CODEC_H_

@@ -1,4 +1,5 @@
-// Copyright 2025 Glitech.
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef SRC_COMM_CANFD_COMM_H_
 #define SRC_COMM_CANFD_COMM_H_
@@ -45,6 +46,7 @@ class CANFDComm : public IComm {
   void UpdateConfig(const ProductConfig& config) override;
   bool SetSlaveId(uint8_t slave_id) override;
   bool SetBaudrateConfig(uint8_t baudrate_gear) override;
+  Diagnostics GetDiagnostics() const override;
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;
@@ -115,6 +117,12 @@ class CANFDComm : public IComm {
   std::thread poll_thread_;
   std::atomic<bool> poll_running_{false};
   std::atomic<bool> poll_stop_{false};
+  std::atomic<uint64_t> tx_packets_{0};
+  std::atomic<uint64_t> rx_packets_{0};
+  std::atomic<uint64_t> tx_errors_{0};
+  std::atomic<uint64_t> rx_errors_{0};
+  std::atomic<uint64_t> timeouts_{0};
+  std::atomic<uint64_t> callback_errors_{0};
 
   ProductConfig config_;
 
@@ -125,7 +133,7 @@ class CANFDComm : public IComm {
   bool joints_poll_enabled_ = false;
   bool hand_state_poll_enabled_ = false;
   bool tactile_poll_enabled_ = false;
-  std::mutex cb_mutex_;
+  mutable std::mutex cb_mutex_;
 };
 
 }  // namespace internal

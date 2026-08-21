@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "ghand/types.h"
 
 #include <sstream>
@@ -7,11 +10,11 @@ namespace ghand {
 // ProductType
 const char* ToString(ProductType type) {
   switch (type) {
-    case ProductType::G5:
-      return "G5-13A23D-S01";
+    case ProductType::GHand5:
+      return "G5-13A18D-S01";
     case ProductType::AUTO:
       return "AUTO";
-    case ProductType::L1:
+    case ProductType::GHandLite1:
       return "L1-Hand-V1";
     default:
       return "UNKNOWN";
@@ -111,6 +114,46 @@ const char* ToString(ErrorCode error) {
       return "PARAM_ERROR";
     case ErrorCode::UNKNOWN_ERROR:
       return "UNKNOWN_ERROR";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+const char* ToString(CommType type) {
+  switch (type) {
+    case CommType::ETHERCAT:
+      return "ethercat";
+    case CommType::CANFD:
+      return "canfd";
+    case CommType::RS485:
+      return "rs485";
+    default:
+      return "unknown";
+  }
+}
+
+const char* ToString(SdkError error) {
+  switch (error) {
+    case SdkError::OK:
+      return "OK";
+    case SdkError::NOT_CONNECTED:
+      return "NOT_CONNECTED";
+    case SdkError::INVALID_ARGUMENT:
+      return "INVALID_ARGUMENT";
+    case SdkError::NOT_SUPPORTED:
+      return "NOT_SUPPORTED";
+    case SdkError::TIMEOUT:
+      return "TIMEOUT";
+    case SdkError::TRANSPORT_ERROR:
+      return "TRANSPORT_ERROR";
+    case SdkError::PROTOCOL_ERROR:
+      return "PROTOCOL_ERROR";
+    case SdkError::CONFIG_ERROR:
+      return "CONFIG_ERROR";
+    case SdkError::DEVICE_REJECTED:
+      return "DEVICE_REJECTED";
+    case SdkError::INTERNAL_ERROR:
+      return "INTERNAL_ERROR";
     default:
       return "UNKNOWN";
   }

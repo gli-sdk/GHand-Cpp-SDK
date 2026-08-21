@@ -1,4 +1,4 @@
-#ifdef _WIN32
+﻿#ifdef _WIN32
 #include <windows.h>
 #endif
 
@@ -47,12 +47,12 @@ std::vector<ghand::JointCommand> MakeOpenHand() {
   };
 }
 
-bool Knock(ghand::DexHand& hand) {
+bool Knock(ghand::GHand& hand) {
   auto joints = MakeKnockPose();
   return hand.MoveJoints(joints);
 }
 
-bool HandZero(ghand::DexHand& hand) {
+bool HandZero(ghand::GHand& hand) {
   auto joints = MakeOpenHand();
   return hand.MoveJoints(joints);
 }
@@ -63,10 +63,10 @@ int main() {
 #endif
   std::cout << "***** Xiaoyao Dexterous Hand SDK - Knock Demo *****\n"
             << '\n';
-  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << '\n';
+    std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
   bool connected = hand->Connect("auto");

@@ -1,12 +1,14 @@
-// Copyright 2025 Glitech.
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
 
-#ifndef SRC_INTERNAL_DEXHAND_H_
-#define SRC_INTERNAL_DEXHAND_H_
+#ifndef SRC_INTERNAL_GHAND_IMPL_H_
+#define SRC_INTERNAL_GHAND_IMPL_H_
 
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -17,25 +19,25 @@ namespace ghand {
 namespace internal {
 
 class IComm;
-class DexHandCallbackManager;
+class GHandCallbackManager;
 
 /**
- * @brief DexHand internal implementation class
+ * @brief GHand internal implementation class
  *
- * This class contains all implementation details of DexHand, separated from
+ * This class contains all implementation details of GHand, separated from
  * the public API via the Pimpl idiom.
  * User code should not access this class directly; it is intended for SDK
  * internal use only.
  */
-class DexHand {
+class GHandImpl {
  public:
-  explicit DexHand(ProductType product_type, CommType comm_type);
-  ~DexHand();
+  explicit GHandImpl(ProductType product_type, CommType comm_type);
+  ~GHandImpl();
 
-  DexHand(const DexHand&) = delete;
-  DexHand& operator=(const DexHand&) = delete;
-  DexHand(DexHand&&) = delete;
-  DexHand& operator=(DexHand&&) = delete;
+  GHandImpl(const GHandImpl&) = delete;
+  GHandImpl& operator=(const GHandImpl&) = delete;
+  GHandImpl(GHandImpl&&) = delete;
+  GHandImpl& operator=(GHandImpl&&) = delete;
 
   bool IsValid() const { return comm_ != nullptr; }
 
@@ -48,6 +50,8 @@ class DexHand {
   bool IsConnected() const;
   bool SetSlaveId(uint8_t slave_id);
   bool SetBaudrateConfig(uint8_t baudrate_gear);
+  OperationResult GetLastResult() const;
+  Diagnostics GetDiagnostics() const;
 
   // Device info
   std::map<std::string, std::string> SearchAdapters() const;
@@ -84,22 +88,25 @@ class DexHand {
  private:
   bool ConnectToDevice(const std::string& device_name, uint8_t slave_id,
                        uint8_t baudrate_gear);
+  void SetLastResult(SdkError code, const std::string& message);
   void SetupCallbacks();
   void ClampJointAngle(JointCommand& joint);
   void ClampJointVelocity(JointCommand& joint);
   void ClampJointTorque(JointCommand& joint);
 
   std::unique_ptr<IComm> comm_;
-  std::unique_ptr<DexHandCallbackManager> callback_manager_;
+  std::unique_ptr<GHandCallbackManager> callback_manager_;
 
   ControlMode control_mode_;
   CommType comm_type_;
   ProductType product_type_;
   std::string device_name_;
   ProductConfig config_;
+  mutable std::mutex last_result_mutex_;
+  OperationResult last_result_;
 };
 
 }  // namespace internal
 }  // namespace ghand
 
-#endif  // SRC_INTERNAL_DEXHAND_H_
+#endif  // SRC_INTERNAL_GHAND_IMPL_H_

@@ -1,4 +1,5 @@
-// Copyright 2025 Glitech.
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef SRC_COMM_CANFD_DRIVER_H_
 #define SRC_COMM_CANFD_DRIVER_H_

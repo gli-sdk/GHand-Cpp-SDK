@@ -1,10 +1,10 @@
 # GHand SDK C++
 [![Version](https://img.shields.io/badge/version-v2.2.0-blue.svg)](include/ghand/version.h)
-[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 [![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
-[![CMake](https://img.shields.io/badge/CMake-3.5+-green.svg)](https://cmake.org/)
+[![CMake](https://img.shields.io/badge/CMake-3.16+-green.svg)](https://cmake.org/)
 
 [中文](README.zh.md)
 
@@ -50,18 +50,18 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 #### Windows
 - Windows 7 or higher
 - Visual Studio 2017 or higher
-- CMake 3.5 or higher
+- CMake 3.16 or higher
 
 #### Linux
 - Ubuntu 20.04 LTS or higher
 - GCC 7.5+ (C++11 support)
-- CMake 3.5 or higher
+- CMake 3.16 or higher
 - libssl-dev
 
 ## 🔧 Dependencies
 
 ### Required Tools
-- CMake 3.5 or higher
+- CMake 3.16 or higher
 - C++11 compatible compiler
 
 ### Release Dependencies
@@ -69,12 +69,12 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 Source builds use the prebuilt dependencies under `deps/`. The repository and release packages keep this layout, and CMake only searches `deps/`.
 On Linux, `libmodbus.so`, `libmodbus.so.5`, and `libmodbus.so.5.1.0` are shipped under `deps/lib/linux/`; users do not need to install or build `libmodbus` separately.
 
-| Library | Purpose | License |
-|---------|---------|---------|
-| [nlohmann/json](https://github.com/nlohmann/json) | JSON parsing | MIT |
-| [SOEM](https://github.com/OpenEtherCATsociety/SOEM) | EtherCAT master stack | GPL-2.0 |
-| [libmodbus](https://github.com/stephane/libmodbus) | Modbus RTU/RS485 support | LGPL-2.1 |
-| WinPcap | Packet capture (Windows EtherCAT) | BSD |
+| Library | Version | Purpose | License | Usage in GHand |
+|---------|---------|---------|---------|----------------|
+| [SOEM](https://github.com/OpenEtherCATsociety/SOEM) | 2.0.0 | EtherCAT master stack | GPL-3.0 / Commercial dual license | GPL-3.0 option is used by this open-source distribution |
+| [libmodbus](https://github.com/stephane/libmodbus) | 3.1.12 | Modbus RTU/RS485 support | LGPL-2.1-or-later | Dynamically linked |
+| [nlohmann/json](https://github.com/nlohmann/json) | bundled header | JSON parsing | MIT | Header-only |
+| WinPcap | Developer Pack components | Packet capture (Windows EtherCAT) | WinPcap BSD-style license and incorporated notices | Headers and import libraries |
 
 ### System Libraries (Linux only)
 - libssl-dev
@@ -110,6 +110,13 @@ target_link_libraries(your_target PRIVATE ${GHAND_LIB})
 target_include_directories(your_target PRIVATE /path/to/install/include)
 ```
 
+The install also exports a CMake package target:
+
+```cmake
+find_package(GHandSDK CONFIG REQUIRED)
+target_link_libraries(your_target PRIVATE GHand::ghand)
+```
+
 ## 🚀 Quick Start
 
 ```cpp
@@ -117,11 +124,11 @@ target_include_directories(your_target PRIVATE /path/to/install/include)
 
 int main() {
     // Explicit product type
-    auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+    auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                        ghand::CommType::ETHERCAT);
 
     // Or auto-detect (matches config by device name after connection)
-    // auto hand = ghand::DexHand::Create(ghand::ProductType::AUTO,
+    // auto hand = ghand::GHand::Create(ghand::ProductType::AUTO,
     //                                    ghand::CommType::ETHERCAT);
 
     if (!hand || !hand->Connect("auto")) {
@@ -155,7 +162,7 @@ int main() {
 ### RS485 Example
 
 ```cpp
-auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                    ghand::CommType::RS485);
 auto adapters = hand->SearchAdapters();
 if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
@@ -218,7 +225,7 @@ newgrp dialout
 For RS485 debugging, specify the USB-RS485 adapter explicitly. Common device names are `/dev/ttyUSB0` or `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`:
 
 ```cpp
-auto rs485_hand = ghand::DexHand::Create(ghand::ProductType::G5,
+auto rs485_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                          ghand::CommType::RS485);
 rs485_hand->Connect("/dev/ttyUSB0");
 ```
@@ -226,7 +233,7 @@ rs485_hand->Connect("/dev/ttyUSB0");
 For CANFD, use the ZQWL USB-CDC adapter and append the channel number to the device name, for example `:0`:
 
 ```cpp
-auto canfd_hand = ghand::DexHand::Create(ghand::ProductType::G5,
+auto canfd_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                          ghand::CommType::CANFD);
 canfd_hand->Connect("/dev/ttyACM0:0");
 ```
@@ -298,6 +305,15 @@ See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes.
 
 ## 📄 License
 
-GHand SDK C++ is proprietary software of Glitech. See [LICENSE](LICENSE).
+GHand C++ SDK is distributed under the GNU General Public License Version 3
+(GPL-3.0-only).
 
-Copyright © 2025 Glitech. All rights reserved.
+The EtherCAT backend uses SOEM 2.0.0. SOEM 2.0.0 is dual-licensed under
+GPLv3 or a commercial license. This open-source distribution uses SOEM under
+the GPLv3 option.
+
+Third-party components remain subject to their respective licenses. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the `LICENSES/` directory
+for details.
+
+Copyright (c) 2026 GLITech.

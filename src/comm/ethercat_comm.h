@@ -1,4 +1,5 @@
-// Copyright 2025 Glitech.
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef SRC_COMM_ETHERCAT_COMM_H_
 #define SRC_COMM_ETHERCAT_COMM_H_
@@ -41,6 +42,7 @@ class EtherCATComm : public IComm {
   void UpdateConfig(const ProductConfig& config) override;
   bool SetSlaveId(uint8_t slave_id) override;
   bool SetBaudrateConfig(uint8_t baudrate_gear) override;
+  Diagnostics GetDiagnostics() const override;
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;
@@ -94,6 +96,14 @@ class EtherCATComm : public IComm {
   int currentgroup_ = 0;
   int cycle_ = 0;
   int64_t cycletime_ = 10000000;
+  std::atomic<uint64_t> tx_packets_{0};
+  std::atomic<uint64_t> rx_packets_{0};
+  std::atomic<uint64_t> tx_errors_{0};
+  std::atomic<uint64_t> rx_errors_{0};
+  std::atomic<uint64_t> reconnects_{0};
+  std::atomic<uint64_t> received_frames_{0};
+  std::atomic<uint64_t> dispatched_frames_{0};
+  std::atomic<uint64_t> callback_errors_{0};
 
   uint8_t rxpdo_buffer_[80] = {0};
   size_t rxpdo_size_ = 0;
@@ -110,7 +120,9 @@ class EtherCATComm : public IComm {
   JointsCallback joints_callback_;
   HandStateCallback hand_state_callback_;
   TactileDataCallback tactile_callback_;
-  std::mutex callback_mutex_;
+  // Protects callback registration/copy only.
+  // Never hold this mutex while invoking user callbacks.
+  mutable std::mutex callback_mutex_;
 
   ProductConfig config_;
 

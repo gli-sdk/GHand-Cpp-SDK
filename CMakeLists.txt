@@ -1,6 +1,7 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16)
 
 project(GHandSDK VERSION 2.2.0 LANGUAGES C CXX)
+include(CMakePackageConfigHelpers)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 11)
@@ -14,11 +15,6 @@ if(WIN32)
     # Set UTF-8 encoding to support Chinese strings
     if(MSVC)
         add_compile_options("/utf-8")
-        # Set runtime library to dynamic link (Multi-threaded DLL)
-        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD")
-        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MDd")
-        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MD")
-        set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MDd")
     endif()
 elseif(UNIX AND NOT APPLE)
     add_compile_definitions(__linux__)
@@ -93,6 +89,8 @@ if(WIN32)
 endif()
 
 # libmodbus (required for RS485)
+# libmodbus is LGPL-2.1-or-later. Keep it dynamically linked in the
+# official SDK distribution so users can replace the LGPL library binary.
 if(WIN32)
     set(LIBMODBUS_LIBRARY "${DEPS_LIB_DIR}/libmodbus.lib")
     set(LIBMODBUS_INCLUDE_DIR "${DEPS_INCLUDE_DIR}")
@@ -102,8 +100,12 @@ if(WIN32)
     set(LIBMODBUS_INCLUDE_DIRS ${LIBMODBUS_INCLUDE_DIR})
     set(LIBMODBUS_LIBRARIES ${LIBMODBUS_LIBRARY})
 else()
-    set(LIBMODBUS_LIBRARY "${DEPS_LIB_DIR}/libmodbus.so")
     set(LIBMODBUS_INCLUDE_DIR "${DEPS_INCLUDE_DIR}")
+    find_library(LIBMODBUS_LIBRARY
+        NAMES modbus libmodbus.so.5.1.0
+        PATHS "${DEPS_LIB_DIR}"
+        NO_DEFAULT_PATH
+    )
     if(NOT EXISTS "${LIBMODBUS_INCLUDE_DIR}/modbus/modbus.h" OR NOT EXISTS "${LIBMODBUS_LIBRARY}")
         message(FATAL_ERROR "libmodbus not found in deps")
     endif()
@@ -126,14 +128,15 @@ set(SOURCES
     src/comm/ethercat_comm.cc
     src/comm/modbus_codec.cc
     src/comm/rs485_comm.cc
-    src/internal/dexhand.cc
-    src/internal/dexhand_callback_manager.cc
+    src/internal/ghand_impl.cc
+    src/internal/ghand_callback_manager.cc
     src/internal/file_lock.cc
     src/internal/product_config_loader.cc
 )
 
 # Create shared library
 add_library(ghand SHARED ${SOURCES})
+add_library(GHand::ghand ALIAS ghand)
 target_compile_definitions(ghand PRIVATE GHAND_BUILD)
 
 target_include_directories(ghand
@@ -173,6 +176,12 @@ set_target_properties(ghand PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
 )
+
+if(MSVC)
+    set_property(TARGET ghand PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL"
+    )
+endif()
 
 # ========== Runtime DLLs ==========
 set(RUNTIME_DLLS)
@@ -231,14 +240,16 @@ add_subdirectory(examples)
 
 # ========== Install rules ==========
 install(TARGETS ghand
+    EXPORT GHandSDKTargets
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
 )
 
 # Install public headers
 install(DIRECTORY include/ghand
-    DESTINATION include/ghand
+    DESTINATION include
     FILES_MATCHING PATTERN "*.h"
 )
 
@@ -249,6 +260,39 @@ install(DIRECTORY config/
 )
 
 # Install documentation
-install(FILES README.md CHANGELOG.md
+install(FILES
+    README.md
+    README.zh.md
+    CHANGELOG.md
+    LICENSE
+    THIRD_PARTY_NOTICES.md
     DESTINATION .
+)
+
+install(DIRECTORY LICENSES/
+    DESTINATION LICENSES
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/GHandSDKConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GHandSDKConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/GHandSDKConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/GHandSDK
+)
+
+install(EXPORT GHandSDKTargets
+    NAMESPACE GHand::
+    FILE GHandSDKTargets.cmake
+    DESTINATION lib/cmake/GHandSDK
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/GHandSDKConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/GHandSDKConfigVersion.cmake"
+    DESTINATION lib/cmake/GHandSDK
 )

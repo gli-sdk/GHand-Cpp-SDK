@@ -1,4 +1,4 @@
-#include <algorithm>
+﻿#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cstdlib>
@@ -159,11 +159,11 @@ bool IsValidJointId(int id) {
   return false;
 }
 
-std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
-  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+std::unique_ptr<ghand::GHand> CreateConnectedHand() {
+  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << '\n';
+    std::cerr << "Failed to create GHand" << '\n';
     return nullptr;
   }
 
@@ -177,7 +177,7 @@ std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
   return hand;
 }
 
-void DisplayDeviceInfo(ghand::DexHand& hand) {
+void DisplayDeviceInfo(ghand::GHand& hand) {
   ghand::DeviceInfo info = hand.GetDeviceInfo();
   ghand::HandType hand_type = hand.GetHandType();
   std::cout << "\nDevice Information:" << '\n';
@@ -272,7 +272,7 @@ void DisplayJointFeedback(const std::vector<ghand::Joint>& last_joints) {
   }
 }
 
-void SendAndDisplayFeedback(ghand::DexHand& hand,
+void SendAndDisplayFeedback(ghand::GHand& hand,
                             const std::vector<ghand::JointCommand>& joints,
                             bool joints_received,
                             const std::vector<ghand::Joint>& last_joints) {
@@ -289,7 +289,7 @@ void SendAndDisplayFeedback(ghand::DexHand& hand,
   }
 }
 
-void RunControlLoop(ghand::DexHand& hand,
+void RunControlLoop(ghand::GHand& hand,
                     const std::vector<ghand::Joint>& last_joints,
                     bool& joints_received) {
   while (true) {

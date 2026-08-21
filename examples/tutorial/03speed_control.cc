@@ -1,4 +1,4 @@
-#include <chrono>
+﻿#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <thread>
@@ -26,10 +26,10 @@ void PrintJointStates(const std::vector<ghand::Joint>& joints) {
 }
 
 int main() {
-  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << '\n';
+    std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
 

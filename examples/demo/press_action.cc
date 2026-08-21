@@ -1,4 +1,4 @@
-#include <chrono>
+﻿#include <chrono>
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -120,7 +120,7 @@ std::vector<ghand::JointCommand> MakeOpenHand() {
   };
 }
 
-bool Press(ghand::DexHand& hand) {
+bool Press(ghand::GHand& hand) {
   const std::vector<std::vector<ghand::JointCommand>> poses = {
       MakeThumbPress(), MakeIndexPress(), MakeMiddlePress(), MakeRingPress(),
       MakeLittlePress()};
@@ -131,16 +131,16 @@ bool Press(ghand::DexHand& hand) {
   return true;
 }
 
-bool HandZero(ghand::DexHand& hand) {
+bool HandZero(ghand::GHand& hand) {
   auto joints = MakeOpenHand();
   return hand.MoveJoints(joints);
 }
 
-std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
-  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+std::unique_ptr<ghand::GHand> CreateConnectedHand() {
+  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << '\n';
+    std::cerr << "Failed to create GHand" << '\n';
     return nullptr;
   }
   if (!hand->Connect("auto")) {
@@ -151,7 +151,7 @@ std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
   return hand;
 }
 
-void RunPressDemo(ghand::DexHand& hand) {
+void RunPressDemo(ghand::GHand& hand) {
   int gesture_cycle = 0;
   const int max_cycles = 0;
 

@@ -1,5 +1,8 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #define _USE_MATH_DEFINES
-#include "dexhand.h"
+#include "ghand_impl.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -16,7 +19,7 @@
 #include <map>
 
 #include "canfd_comm.h"
-#include "dexhand_callback_manager.h"
+#include "ghand_callback_manager.h"
 #include "ethercat_comm.h"
 #include "ghand/logging.h"
 #include "logging_macros.h"
@@ -63,11 +66,12 @@ bool IsVersionNewer(const std::string& old_ver, const std::string& new_ver) {
 namespace ghand {
 namespace internal {
 
-DexHand::DexHand(ProductType product_type, CommType comm_type)
+GHandImpl::GHandImpl(ProductType product_type, CommType comm_type)
     : control_mode_(ControlMode::POSITION),
       comm_type_(comm_type),
       product_type_(product_type),
-      device_name_("") {
+      device_name_(""),
+      last_result_(SdkError::OK, "", comm_type) {
   if (product_type == ProductType::AUTO) {
     config_ = ProductConfig();
   } else {
@@ -75,6 +79,7 @@ DexHand::DexHand(ProductType product_type, CommType comm_type)
     if (config_.name.empty()) {
       GHAND_LOG_ERROR("Failed to load product config for product type: "
                 << ToString(product_type));
+      SetLastResult(SdkError::CONFIG_ERROR, "failed to load product config");
       return;
     }
   }
@@ -91,18 +96,42 @@ DexHand::DexHand(ProductType product_type, CommType comm_type)
       break;
     default:
       GHAND_LOG_WARNING("Unsupported communication type");
+      SetLastResult(SdkError::NOT_SUPPORTED, "unsupported communication type");
       break;
   }
   callback_manager_ =
-      std::unique_ptr<DexHandCallbackManager>(new DexHandCallbackManager());
+      std::unique_ptr<GHandCallbackManager>(new GHandCallbackManager());
   if (product_type != ProductType::AUTO) {
     SetupCallbacks();
   }
 }
 
-DexHand::~DexHand() = default;
+GHandImpl::~GHandImpl() = default;
 
-void DexHand::SetupCallbacks() {
+void GHandImpl::SetLastResult(SdkError code, const std::string& message) {
+  std::lock_guard<std::mutex> lock(last_result_mutex_);
+  last_result_ = OperationResult(code, message, comm_type_);
+}
+
+OperationResult GHandImpl::GetLastResult() const {
+  std::lock_guard<std::mutex> lock(last_result_mutex_);
+  return last_result_;
+}
+
+Diagnostics GHandImpl::GetDiagnostics() const {
+  Diagnostics diagnostics = comm_->GetDiagnostics();
+  diagnostics.connection.connected = IsConnected();
+  diagnostics.connection.comm_type = comm_type_;
+  diagnostics.connection.device = device_name_;
+  diagnostics.identity.product = product_type_;
+
+  OperationResult last = GetLastResult();
+  diagnostics.error.last_sdk_error = last.code;
+  diagnostics.error.last_error_message = last.message;
+  return diagnostics;
+}
+
+void GHandImpl::SetupCallbacks() {
   comm_->SetJointsCallback([this](const std::vector<Joint>& joints) {
     callback_manager_->UpdateJoints(joints);
   });
@@ -114,20 +143,23 @@ void DexHand::SetupCallbacks() {
   });
 }
 
-bool DexHand::ConnectToDevice(const std::string& device_name,
+bool GHandImpl::ConnectToDevice(const std::string& device_name,
                               uint8_t slave_id,
                               uint8_t baudrate_gear) {
-  GHAND_LOG_INFO("Connecting to device: " << device_name
-                                          << " with slave ID 0x"
-                                          << std::hex
-                                          << static_cast<int>(slave_id)
-                                          << " with baudrate gear 0x"
-                                          << static_cast<int>(baudrate_gear)
-                                          << std::dec);
+  GHAND_LOG_INFO("op=connect comm=" << ToString(comm_type_)
+                                    << " device=" << device_name
+                                    << " slave_id=0x" << std::hex
+                                    << static_cast<int>(slave_id)
+                                    << " baudrate_gear=0x"
+                                    << static_cast<int>(baudrate_gear)
+                                    << std::dec);
   int result = comm_->Connect(device_name, slave_id, baudrate_gear);
   if (result == 0) {
     device_name_ = device_name;
-    GHAND_LOG_INFO("Successfully connected to device: " << device_name);
+    SetLastResult(SdkError::OK, "");
+    GHAND_LOG_INFO("op=connect comm=" << ToString(comm_type_)
+                                      << " result=ok device="
+                                      << device_name);
 
     // Post-connection verification / auto-detection
     std::string dev_name = comm_->GetDeviceInfo().device_name;
@@ -136,6 +168,8 @@ bool DexHand::ConnectToDevice(const std::string& device_name,
         config_ = FindConfigByName(dev_name);
         if (config_.name.empty()) {
           GHAND_LOG_ERROR("Auto-detection failed for device: " << dev_name);
+          SetLastResult(SdkError::CONFIG_ERROR,
+                        "auto-detection failed for device: " + dev_name);
           comm_->Disconnect();
           return false;
         }
@@ -162,23 +196,32 @@ bool DexHand::ConnectToDevice(const std::string& device_name,
           GHAND_LOG_ERROR("Device name mismatch: device reports \""
                       << dev_name << "\", config expects \"" << config_.name
                       << "\"");
+          SetLastResult(SdkError::DEVICE_REJECTED,
+                        "device name mismatch: " + dev_name);
           comm_->Disconnect();
           return false;
         }
       }
     }
-    GHAND_LOG_INFO("Successfully connected to device, device_name: "
-                   << device_name_);
+    GHAND_LOG_INFO("op=connect comm=" << ToString(comm_type_)
+                                      << " result=ok device_name="
+                                      << device_name_);
     return true;
   }
+  SetLastResult(SdkError::TRANSPORT_ERROR,
+                "connect failed with transport result " +
+                    std::to_string(result));
+  GHAND_LOG_ERROR("op=connect comm=" << ToString(comm_type_)
+                                     << " result=transport_error code="
+                                     << result);
   return false;
 }
 
-bool DexHand::AutoConnect() {
+bool GHandImpl::AutoConnect() {
   return AutoConnect(kDefaultSlaveId, kDefaultBaudrateGear);
 }
 
-bool DexHand::AutoConnect(uint8_t slave_id, uint8_t baudrate_gear) {
+bool GHandImpl::AutoConnect(uint8_t slave_id, uint8_t baudrate_gear) {
   std::map<std::string, std::string> adapter_names = SearchAdapters();
   for (const auto& adapter_pair : adapter_names) {
     if (ConnectToDevice(adapter_pair.first, slave_id, baudrate_gear)) {
@@ -188,7 +231,7 @@ bool DexHand::AutoConnect(uint8_t slave_id, uint8_t baudrate_gear) {
   return false;
 }
 
-bool DexHand::Connect(const std::string& device_name, uint8_t slave_id,
+bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
                       uint8_t baudrate_gear) {
   if (device_name == "auto") {
     return AutoConnect(slave_id, baudrate_gear);
@@ -196,41 +239,52 @@ bool DexHand::Connect(const std::string& device_name, uint8_t slave_id,
   return ConnectToDevice(device_name, slave_id, baudrate_gear);
 }
 
-bool DexHand::Disconnect() {
-  GHAND_LOG_INFO("Disconnecting from device");
+bool GHandImpl::Disconnect() {
+  GHAND_LOG_INFO("op=disconnect comm=" << ToString(comm_type_));
 
   Stop();
   int result = comm_->Disconnect();
 
   if (result == 0) {
-    GHAND_LOG_INFO("Successfully disconnected from device");
+    SetLastResult(SdkError::OK, "");
+    GHAND_LOG_INFO("op=disconnect comm=" << ToString(comm_type_)
+                                         << " result=ok");
   } else {
-    GHAND_LOG_ERROR("Failed to disconnect from device");
+    SetLastResult(SdkError::TRANSPORT_ERROR, "disconnect failed");
+    GHAND_LOG_ERROR("op=disconnect comm=" << ToString(comm_type_)
+                                          << " result=transport_error");
   }
 
   return (result == 0);
 }
 
-bool DexHand::IsConnected() const { return comm_->IsConnected(); }
+bool GHandImpl::IsConnected() const { return comm_->IsConnected(); }
 
-bool DexHand::SetSlaveId(uint8_t slave_id) {
+bool GHandImpl::SetSlaveId(uint8_t slave_id) {
   if (!IsConnected()) {
     GHAND_LOG_ERROR("Cannot set slave ID: device not connected");
+    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
     return false;
   }
   bool result = comm_->SetSlaveId(slave_id);
+  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                result ? "" : "device rejected slave ID change");
   return result;
 }
 
-bool DexHand::SetBaudrateConfig(uint8_t baudrate_gear) {
+bool GHandImpl::SetBaudrateConfig(uint8_t baudrate_gear) {
   if (!IsConnected()) {
     GHAND_LOG_ERROR("Cannot set baudrate config: device not connected");
+    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
     return false;
   }
-  return comm_->SetBaudrateConfig(baudrate_gear);
+  bool result = comm_->SetBaudrateConfig(baudrate_gear);
+  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                result ? "" : "device rejected baudrate configuration");
+  return result;
 }
 
-std::map<std::string, std::string> DexHand::SearchAdapters() const {
+std::map<std::string, std::string> GHandImpl::SearchAdapters() const {
   auto adapters = comm_->SearchAdapters();
   for (const auto& adapter : adapters) {
     GHAND_LOG_DEBUG("Found adapter: " << adapter.first);
@@ -238,22 +292,24 @@ std::map<std::string, std::string> DexHand::SearchAdapters() const {
   return adapters;
 }
 
-HandType DexHand::GetHandType() const { return comm_->GetHandType(); }
+HandType GHandImpl::GetHandType() const { return comm_->GetHandType(); }
 
-DeviceInfo DexHand::GetDeviceInfo() const { return comm_->GetDeviceInfo(); }
+DeviceInfo GHandImpl::GetDeviceInfo() const { return comm_->GetDeviceInfo(); }
 
-void DexHand::SetControlMode(ControlMode mode) { control_mode_ = mode; }
+void GHandImpl::SetControlMode(ControlMode mode) { control_mode_ = mode; }
 
-bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
+bool GHandImpl::MoveJoints(const std::vector<JointCommand>& joints) {
   // Check device connection status
   if (!IsConnected()) {
     GHAND_LOG_ERROR("Cannot move joints: device not connected");
+    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
     return false;
   }
 
   // Check if command is empty
   if (joints.empty()) {
     GHAND_LOG_WARNING("MoveJoints called with empty joint list");
+    SetLastResult(SdkError::INVALID_ARGUMENT, "joint command list is empty");
     return false;
   }
 
@@ -278,57 +334,93 @@ bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
     }
   }
 
-  return comm_->MoveJoints(ordered_joints, control_mode_);
+  if (ordered_joints.empty()) {
+    SetLastResult(SdkError::INVALID_ARGUMENT,
+                  "joint command list contains no controllable joints");
+    return false;
+  }
+
+  bool result = comm_->MoveJoints(ordered_joints, control_mode_);
+  SetLastResult(result ? SdkError::OK : SdkError::TRANSPORT_ERROR,
+                result ? "" : "move joints command failed");
+  return result;
 }
 
-void DexHand::Stop() {
-  GHAND_LOG_INFO("Sending stop command");
+void GHandImpl::Stop() {
+  GHAND_LOG_INFO("op=stop comm=" << ToString(comm_type_));
   comm_->Stop();
 }
 
-bool DexHand::ClearFault() {
-  GHAND_LOG_INFO("Clearing device fault");
-  return comm_->ClearFault();
+bool GHandImpl::ClearFault() {
+  GHAND_LOG_INFO("op=clear_fault comm=" << ToString(comm_type_));
+  bool result = comm_->ClearFault();
+  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                result ? "" : "clear fault failed");
+  GHAND_LOG_INFO("op=clear_fault comm=" << ToString(comm_type_)
+                                        << " result="
+                                        << (result ? "ok" : "failed"));
+  return result;
 }
 
-bool DexHand::InitJoint() {
-  GHAND_LOG_INFO("Initializing joint positions");
-  return comm_->InitJoint();
+bool GHandImpl::InitJoint() {
+  GHAND_LOG_INFO("op=init_joint comm=" << ToString(comm_type_));
+  bool result = comm_->InitJoint();
+  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                result ? "" : "joint initialization failed");
+  GHAND_LOG_INFO("op=init_joint comm=" << ToString(comm_type_)
+                                       << " result="
+                                       << (result ? "ok" : "failed"));
+  return result;
 }
 
-bool DexHand::OpenTactile() { return comm_->OpenTactile(); }
+bool GHandImpl::OpenTactile() {
+  bool result = comm_->OpenTactile();
+  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                result ? "" : "open tactile failed");
+  return result;
+}
 
-bool DexHand::CloseTactile() { return comm_->CloseTactile(); }
+bool GHandImpl::CloseTactile() {
+  bool result = comm_->CloseTactile();
+  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                result ? "" : "close tactile failed");
+  return result;
+}
 
-bool DexHand::ZeroTactile() { return comm_->ZeroTactile(); }
+bool GHandImpl::ZeroTactile() {
+  bool result = comm_->ZeroTactile();
+  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                result ? "" : "zero tactile failed");
+  return result;
+}
 
-void DexHand::SetJointsCallback(
+void GHandImpl::SetJointsCallback(
     std::function<void(const std::vector<Joint>&)> cb) {
   callback_manager_->SetJointsCallback(cb);
 }
 
-void DexHand::SetHandStateCallback(std::function<void(const HandState&)> cb) {
+void GHandImpl::SetHandStateCallback(std::function<void(const HandState&)> cb) {
   callback_manager_->SetHandStateCallback(cb);
 }
 
-void DexHand::SetTactileDataCallback(
+void GHandImpl::SetTactileDataCallback(
     std::function<void(const TactileData&)> cb) {
   callback_manager_->SetTactileDataCallback(cb);
 }
 
-HandState DexHand::GetHandData() const {
+HandState GHandImpl::GetHandData() const {
   return callback_manager_->GetHandData();
 }
 
-std::vector<Joint> DexHand::GetJointsData() const {
+std::vector<Joint> GHandImpl::GetJointsData() const {
   return callback_manager_->GetJointsData();
 }
 
-TactileData DexHand::GetTactileData() const {
+TactileData GHandImpl::GetTactileData() const {
   return callback_manager_->GetTactileData();
 }
 
-FirmwareUpdateError DexHand::BootUpdate(
+FirmwareUpdateError GHandImpl::BootUpdate(
                         const std::string& filename,
                         std::function<void(int)> progress_callback) {
   GHAND_LOG_INFO("Starting firmware update: " << filename);
@@ -400,7 +492,7 @@ FirmwareUpdateError DexHand::BootUpdate(
   }
 }
 
-void DexHand::ClampJointAngle(JointCommand& joint) {
+void GHandImpl::ClampJointAngle(JointCommand& joint) {
   auto it = config_.joint_limits.find(joint.id);
   if (it == config_.joint_limits.end()) {
     return;  // No limit found (e.g., DIP joint)
@@ -421,7 +513,7 @@ void DexHand::ClampJointAngle(JointCommand& joint) {
   }
 }
 
-void DexHand::ClampJointVelocity(JointCommand& joint) {
+void GHandImpl::ClampJointVelocity(JointCommand& joint) {
   if (control_mode_ == ControlMode::POSITION) {
     // Position mode: velocity range 0-100, negative values take absolute
     // value, absolute value > 100 clamped to 100.
@@ -473,7 +565,7 @@ void DexHand::ClampJointVelocity(JointCommand& joint) {
   }
 }
 
-void DexHand::ClampJointTorque(JointCommand& joint) {
+void GHandImpl::ClampJointTorque(JointCommand& joint) {
   int original = static_cast<int>(joint.torque);
   int torque = original;
 

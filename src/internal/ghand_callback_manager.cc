@@ -1,4 +1,7 @@
-#include "dexhand_callback_manager.h"
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
+#include "ghand_callback_manager.h"
 
 #include <chrono>
 #include <cmath>
@@ -20,7 +23,7 @@ const Joint* FindJointById(const std::vector<Joint>& joints, JointId id) {
 }
 }  // namespace
 
-DexHandCallbackManager::DexHandCallbackManager() {
+GHandCallbackManager::GHandCallbackManager() {
   // Initialize cached data
   last_joints_.clear();
   last_state_ = HandState{State::STOPPED, ErrorCode::NORMAL, 0};
@@ -28,23 +31,23 @@ DexHandCallbackManager::DexHandCallbackManager() {
   last_temp_callback_time_ = std::chrono::steady_clock::now();
 }
 
-void DexHandCallbackManager::SetJointsCallback(JointsCallback callback) {
+void GHandCallbackManager::SetJointsCallback(JointsCallback callback) {
   std::lock_guard<std::mutex> lock(data_mutex_);
   joints_callback_ = callback;
 }
 
-void DexHandCallbackManager::SetHandStateCallback(HandStateCallback callback) {
+void GHandCallbackManager::SetHandStateCallback(HandStateCallback callback) {
   std::lock_guard<std::mutex> lock(data_mutex_);
   hand_state_callback_ = callback;
 }
 
-void DexHandCallbackManager::SetTactileDataCallback(
+void GHandCallbackManager::SetTactileDataCallback(
     TactileDataCallback callback) {
   std::lock_guard<std::mutex> lock(data_mutex_);
   tactile_data_callback_ = callback;
 }
 
-void DexHandCallbackManager::UpdateJoints(const std::vector<Joint>& joints) {
+void GHandCallbackManager::UpdateJoints(const std::vector<Joint>& joints) {
   JointsCallback callback;
   std::vector<Joint> payload;
   {
@@ -66,7 +69,7 @@ void DexHandCallbackManager::UpdateJoints(const std::vector<Joint>& joints) {
   }
 }
 
-void DexHandCallbackManager::UpdateTemperature(const HandState& temperature) {
+void GHandCallbackManager::UpdateTemperature(const HandState& temperature) {
   HandStateCallback callback;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
@@ -81,7 +84,7 @@ void DexHandCallbackManager::UpdateTemperature(const HandState& temperature) {
   }
 }
 
-void DexHandCallbackManager::UpdateTactileData(const TactileData& data) {
+void GHandCallbackManager::UpdateTactileData(const TactileData& data) {
   TactileDataCallback callback;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
@@ -96,22 +99,22 @@ void DexHandCallbackManager::UpdateTactileData(const TactileData& data) {
 
 // Polling access
 
-HandState DexHandCallbackManager::GetHandData() const {
+HandState GHandCallbackManager::GetHandData() const {
   std::lock_guard<std::mutex> lock(data_mutex_);
   return last_state_;
 }
 
-std::vector<Joint> DexHandCallbackManager::GetJointsData() const {
+std::vector<Joint> GHandCallbackManager::GetJointsData() const {
   std::lock_guard<std::mutex> lock(data_mutex_);
   return last_joints_;
 }
 
-TactileData DexHandCallbackManager::GetTactileData() const {
+TactileData GHandCallbackManager::GetTactileData() const {
   std::lock_guard<std::mutex> lock(data_mutex_);
   return last_tactile_data_;
 }
 
-bool DexHandCallbackManager::HasJointDataChanged(
+bool GHandCallbackManager::HasJointDataChanged(
     const std::vector<Joint>& joints) {
   // First delivery
   if (last_delivered_joints_.empty()) {
@@ -148,9 +151,9 @@ bool DexHandCallbackManager::HasJointDataChanged(
   return false;
 }
 
-bool DexHandCallbackManager::HasTemperatureChanged(
+bool GHandCallbackManager::HasTemperatureChanged(
     const HandState& temperature) {
-  // 1. State or error changes → trigger immediately
+  // 1. State or error changes 鈫?trigger immediately
   if (temperature.state != last_state_.state ||
       temperature.error != last_state_.error) {
     GHAND_LOG_DEBUG(
@@ -158,7 +161,7 @@ bool DexHandCallbackManager::HasTemperatureChanged(
     return true;
   }
 
-  // 2. Temperature change triggers (>1°C)
+  // 2. Temperature change triggers (>1掳C)
   int temp_diff = std::abs(temperature.temperature - last_state_.temperature);
   if (temp_diff > kTemperatureThreshold) {
     return true;

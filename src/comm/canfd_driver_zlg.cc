@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "canfd_driver.h"
 
 #ifdef _WIN32
@@ -8,8 +11,12 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <winioctl.h>
 #include <setupapi.h>
 #include <devguid.h>
+#if defined(__MINGW32__) && !defined(_PHYSICAL_ADDRESS)
+typedef LARGE_INTEGER PHYSICAL_ADDRESS;
+#endif
 #include <ntddser.h>
 #pragma comment(lib, "setupapi.lib")
 #else

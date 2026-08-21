@@ -1,4 +1,4 @@
-#include <chrono>
+﻿#include <chrono>
 #include <iostream>
 #include <thread>
 #include <vector>
@@ -180,12 +180,12 @@ std::vector<ghand::JointCommand> MakeOK() {
 
 // Action execution functions.
 
-bool HandZero(ghand::DexHand& hand) {
+bool HandZero(ghand::GHand& hand) {
   auto joints = MakeOpenHand();
   return hand.MoveJoints(joints);
 }
 
-bool ThumbTouch(ghand::DexHand& hand) {
+bool ThumbTouch(ghand::GHand& hand) {
   const std::vector<std::vector<ghand::JointCommand>> poses = {
       MakeThumbTouchLittle(), MakeThumbTouchRing(), MakeThumbTouchMiddle(),
       MakeThumbTouchIndex()};
@@ -196,13 +196,13 @@ bool ThumbTouch(ghand::DexHand& hand) {
   return HandZero(hand);
 }
 
-bool FistThenOpen(ghand::DexHand& hand) {
+bool FistThenOpen(ghand::GHand& hand) {
   if (!hand.MoveJoints(MakeFist())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
   return HandZero(hand);
 }
 
-bool SeqOpenFinger(ghand::DexHand& hand) {
+bool SeqOpenFinger(ghand::GHand& hand) {
   if (!hand.MoveJoints(MakeFist())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
   if (!hand.MoveJoints(MakeOpenIndexFinger())) return false;
@@ -212,14 +212,14 @@ bool SeqOpenFinger(ghand::DexHand& hand) {
   return HandZero(hand);
 }
 
-bool MakeOKGesture(ghand::DexHand& hand) {
+bool MakeOKGesture(ghand::GHand& hand) {
   if (!hand.MoveJoints(MakeOK())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
   return HandZero(hand);
 }
 
 // First action group.
-bool FirstAction(ghand::DexHand& hand) {
+bool FirstAction(ghand::GHand& hand) {
   if (!ThumbTouch(hand)) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
   for (int i = 0; i < 2; i++) {
@@ -230,7 +230,7 @@ bool FirstAction(ghand::DexHand& hand) {
 }
 
 // Second action group.
-bool SecondAction(ghand::DexHand& hand) {
+bool SecondAction(ghand::GHand& hand) {
   if (!SeqOpenFinger(hand)) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
   if (!MakeOKGesture(hand)) return false;
@@ -241,10 +241,10 @@ bool SecondAction(ghand::DexHand& hand) {
 int main() {
   std::cout << "***** Xiaoyao Dexterous Hand SDK - Gesture Dance Demo *****\n"
             << '\n';
-  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << '\n';
+    std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
   bool connected = hand->Connect("auto");

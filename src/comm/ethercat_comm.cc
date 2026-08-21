@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "ethercat_comm.h"
 
 #ifdef _WIN32
@@ -15,6 +18,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <exception>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -39,6 +43,16 @@ constexpr size_t kEthercatJointDataSize = 6;
 
 namespace {
 
+struct FileCloser {
+  void operator()(FILE* fp) const {
+    if (fp != nullptr) {
+      std::fclose(fp);
+    }
+  }
+};
+
+using FilePtr = std::unique_ptr<FILE, FileCloser>;
+
 std::string ByteArrayString(const std::uint8_t* data, size_t size) {
   std::string result;
   for (size_t i = 0; i < size && data[i] != 0; ++i) {
@@ -58,7 +72,7 @@ std::vector<JointId> ControlledJoints(const ProductConfig& config) {
 }
 
 size_t EthercatRxpdoSize(const ProductConfig& config) {
-  if (config.product_type == ProductType::L1) {
+  if (config.product_type == ProductType::GHandLite1) {
     return config.joint_limits.size() * 6;
   }
   return config.joint_limits.size() * kEthercatJointDataSize + 2;
@@ -158,6 +172,27 @@ bool EtherCATComm::SetBaudrateConfig(uint8_t baudrate_gear) {
   return false;
 }
 
+Diagnostics EtherCATComm::GetDiagnostics() const {
+  Diagnostics diagnostics;
+  diagnostics.connection.connected = IsConnected();
+  diagnostics.connection.comm_type = CommType::ETHERCAT;
+  diagnostics.transport.tx_packets = tx_packets_.load();
+  diagnostics.transport.rx_packets = rx_packets_.load();
+  diagnostics.transport.tx_errors = tx_errors_.load();
+  diagnostics.transport.rx_errors = rx_errors_.load();
+  diagnostics.transport.reconnects = reconnects_.load();
+  diagnostics.subscription.received_frames = received_frames_.load();
+  diagnostics.subscription.dispatched_frames = dispatched_frames_.load();
+  diagnostics.subscription.callback_errors = callback_errors_.load();
+  {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    diagnostics.subscription.active_subscriptions =
+        (joints_callback_ ? 1 : 0) + (hand_state_callback_ ? 1 : 0) +
+        (tactile_callback_ ? 1 : 0);
+  }
+  return diagnostics;
+}
+
 int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
                           uint8_t baudrate_gear) {
   (void)slave_id;
@@ -176,7 +211,7 @@ int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
 
   memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
   rxpdo_size_ = EthercatRxpdoSize(config_);
-  if (config_.product_type != ProductType::L1) {
+  if (config_.product_type != ProductType::GHandLite1) {
     rxpdo_buffer_[1] = {0x01};
   }
 
@@ -249,7 +284,7 @@ int EtherCATComm::Disconnect() {
 
   memset(rxpdo_buffer_, 0, sizeof(rxpdo_buffer_));
   rxpdo_size_ = EthercatRxpdoSize(config_);
-  if (config_.product_type != ProductType::L1) {
+  if (config_.product_type != ProductType::GHandLite1) {
     rxpdo_buffer_[1] = {0x01};
   }
   if (soem_->ctx.slavecount > 0) {
@@ -384,17 +419,21 @@ void EtherCATComm::Ecatthread() {
         wkc_ = ecx_receive_processdata(&soem_->ctx, EC_TIMEOUTRET);
 
         if (wkc_ >= expectedWKC_ && inOP_) {
+          rx_packets_++;
           uint8_t* inputs = soem_->ctx.slavelist[1].inputs;
           size_t pdo_size = soem_->ctx.slavelist[1].Ibytes;
 
           if (pdo_size > 0) {
             pdo_copy.assign(inputs, inputs + pdo_size);
           }
+        } else {
+          rx_errors_++;
         }
       }
 
       // Call callbacks outside the lock
       if (!pdo_copy.empty()) {
+        received_frames_++;
         ParseAndNotify(pdo_copy.data(), pdo_copy.size());
       }
 
@@ -409,7 +448,11 @@ void EtherCATComm::Ecatthread() {
         size_t copy_size = (std::min)(
             rxpdo_size_, static_cast<size_t>(soem_->ctx.slavelist[1].Obytes));
         memcpy(soem_->ctx.slavelist[1].outputs, rxpdo_buffer_, copy_size);
-        ecx_send_processdata(&soem_->ctx);
+        if (ecx_send_processdata(&soem_->ctx) > 0) {
+          tx_packets_++;
+        } else {
+          tx_errors_++;
+        }
       }
     }
   }
@@ -470,11 +513,13 @@ void EtherCATComm::Ecatcheck() {
               slave->islost = FALSE;
               threads_started_ = true;
               is_connected_ = true;
+              reconnects_++;
             }
           } else {
             slave->islost = FALSE;
             threads_started_ = true;
             is_connected_ = true;
+            reconnects_++;
           }
         }
       }
@@ -484,7 +529,7 @@ void EtherCATComm::Ecatcheck() {
 }
 
 bool EtherCATComm::InputBin(const char* fname, int* length) {
-  std::unique_ptr<FILE, decltype(&fclose)> fp(nullptr, &fclose);
+  FilePtr fp;
   int cc = 0, c;
 
 #ifdef _WIN32
@@ -716,7 +761,7 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
     joint_map[joint.id] = joint;
   }
 
-  if (config_.product_type == ProductType::L1) {
+  if (config_.product_type == ProductType::GHandLite1) {
     std::vector<JointId> controlled_joints = ControlledJoints(config_);
     std::vector<uint8_t> buffer;
     buffer.reserve(controlled_joints.size() * 6);
@@ -739,7 +784,6 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
       buffer.push_back(static_cast<uint8_t>(torque));
     }
 
-    GHAND_LOG_INFO("Sending PDO data");
     SendRxPDO(1, ECT_SDO_RXPDOASSIGN, static_cast<uint32_t>(buffer.size()),
               buffer.data());
     return true;
@@ -777,7 +821,6 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
     buffer[offset++] = torque;
   }
 
-  GHAND_LOG_INFO("Sending PDO data");
   SendRxPDO(1, ECT_SDO_RXPDOASSIGN, static_cast<uint32_t>(buffer.size()),
             buffer.data());
   return true;
@@ -785,7 +828,7 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
 
 void EtherCATComm::Stop() {
   GHAND_LOG_INFO("Sending stop command");
-  if (config_.product_type == ProductType::L1) {
+  if (config_.product_type == ProductType::GHandLite1) {
     std::vector<JointId> controlled_joints = ControlledJoints(config_);
     std::vector<uint8_t> buffer;
     buffer.reserve(controlled_joints.size() * 6);
@@ -950,7 +993,7 @@ void EtherCATComm::ParseHandAndJoints(
   parsed_temperature->temperature = temperature;
 
   parsed_joints->reserve(config_.valid_joints.size());
-  if (config_.product_type == ProductType::L1) {
+  if (config_.product_type == ProductType::GHandLite1) {
     for (const auto& joint_id : config_.valid_joints) {
       if (*offset + 6 > size) break;
       Joint joint;
@@ -1048,19 +1091,61 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
   ParseHandAndJoints(data, size, &offset, &parsed_joints,
                      &parsed_temperature);
 
-  std::lock_guard<std::mutex> lock(callback_mutex_);
-  if (joints_callback_) {
-    joints_callback_(parsed_joints);
+  JointsCallback joints_cb;
+  HandStateCallback hand_state_cb;
+  TactileDataCallback tactile_cb;
+  {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    joints_cb = joints_callback_;
+    hand_state_cb = hand_state_callback_;
+    tactile_cb = tactile_callback_;
   }
-  if (hand_state_callback_) {
-    hand_state_callback_(parsed_temperature);
+
+  bool dispatched = false;
+  try {
+    if (joints_cb) {
+      joints_cb(parsed_joints);
+      dispatched = true;
+    }
+  } catch (const std::exception& e) {
+    callback_errors_++;
+    GHAND_LOG_ERROR("EtherCAT joints callback failed: " << e.what());
+  } catch (...) {
+    callback_errors_++;
+    GHAND_LOG_ERROR("EtherCAT joints callback failed with unknown exception");
+  }
+
+  try {
+    if (hand_state_cb) {
+      hand_state_cb(parsed_temperature);
+      dispatched = true;
+    }
+  } catch (const std::exception& e) {
+    callback_errors_++;
+    GHAND_LOG_ERROR("EtherCAT hand-state callback failed: " << e.what());
+  } catch (...) {
+    callback_errors_++;
+    GHAND_LOG_ERROR("EtherCAT hand-state callback failed with unknown exception");
   }
 
   if (config_.has_tactile && offset < size) {
     TactileData tactile_data = ParseTactileData(data, size, &offset);
-    if (tactile_callback_) {
-      tactile_callback_(tactile_data);
+    try {
+      if (tactile_cb) {
+        tactile_cb(tactile_data);
+        dispatched = true;
+      }
+    } catch (const std::exception& e) {
+      callback_errors_++;
+      GHAND_LOG_ERROR("EtherCAT tactile callback failed: " << e.what());
+    } catch (...) {
+      callback_errors_++;
+      GHAND_LOG_ERROR("EtherCAT tactile callback failed with unknown exception");
     }
+  }
+
+  if (dispatched) {
+    dispatched_frames_++;
   }
 }
 

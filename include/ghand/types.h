@@ -1,4 +1,5 @@
-// Copyright 2025 Glitech.
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef INCLUDE_GHAND_TYPES_H_
 #define INCLUDE_GHAND_TYPES_H_
@@ -100,6 +101,116 @@ enum class ErrorCode : uint8_t {
  */
 GHAND_API const char* ToString(ErrorCode error);  // NOLINT(runtime/string)
 
+// Communication type definitions
+enum class CommType : uint8_t { ETHERCAT, CANFD, RS485 };
+
+GHAND_API const char* ToString(CommType type);  // NOLINT(runtime/string)
+
+// Product type definitions
+enum class ProductType : uint8_t {AUTO, GHand5,  GHandLite1 };
+
+/**
+ * @brief Get string representation of product type (for debug/logging)
+ * @warning Do not call in real-time control loops (string processing overhead)
+ */
+GHAND_API const char* ToString(ProductType type);  // NOLINT(runtime/string)
+
+enum class SdkError : uint8_t {
+  OK = 0,
+  NOT_CONNECTED,
+  INVALID_ARGUMENT,
+  NOT_SUPPORTED,
+  TIMEOUT,
+  TRANSPORT_ERROR,
+  PROTOCOL_ERROR,
+  CONFIG_ERROR,
+  DEVICE_REJECTED,
+  INTERNAL_ERROR
+};
+
+GHAND_API const char* ToString(SdkError error);  // NOLINT(runtime/string)
+
+struct OperationResult {
+  SdkError code;
+  std::string message;
+  CommType comm;
+
+  OperationResult()
+      : code(SdkError::OK), message(), comm(CommType::ETHERCAT) {}
+  OperationResult(SdkError error_code, const std::string& error_message,
+                  CommType comm_type)
+      : code(error_code), message(error_message), comm(comm_type) {}
+};
+
+struct ConnectionDiagnostics {
+  bool connected;
+  CommType comm_type;
+  std::string device;
+
+  ConnectionDiagnostics()
+      : connected(false), comm_type(CommType::ETHERCAT), device() {}
+};
+
+struct IdentityDiagnostics {
+  ProductType product;
+  HandType hand_type;
+  std::string firmware_version;
+
+  IdentityDiagnostics()
+      : product(ProductType::AUTO), hand_type(HandType::NONE),
+        firmware_version() {}
+};
+
+struct TransportDiagnostics {
+  uint64_t tx_packets;
+  uint64_t rx_packets;
+  uint64_t tx_errors;
+  uint64_t rx_errors;
+  uint64_t timeouts;
+  uint64_t retries;
+  uint64_t reconnects;
+
+  TransportDiagnostics()
+      : tx_packets(0),
+        rx_packets(0),
+        tx_errors(0),
+        rx_errors(0),
+        timeouts(0),
+        retries(0),
+        reconnects(0) {}
+};
+
+struct SubscriptionDiagnostics {
+  uint64_t active_subscriptions;
+  uint64_t received_frames;
+  uint64_t dispatched_frames;
+  uint64_t dropped_frames;
+  uint64_t callback_errors;
+
+  SubscriptionDiagnostics()
+      : active_subscriptions(0),
+        received_frames(0),
+        dispatched_frames(0),
+        dropped_frames(0),
+        callback_errors(0) {}
+};
+
+struct ErrorDiagnostics {
+  SdkError last_sdk_error;
+  std::string last_error_message;
+
+  ErrorDiagnostics()
+      : last_sdk_error(SdkError::OK), last_error_message() {}
+};
+
+struct Diagnostics {
+  ConnectionDiagnostics connection;
+  IdentityDiagnostics identity;
+  TransportDiagnostics transport;
+  SubscriptionDiagnostics subscription;
+  ErrorDiagnostics error;
+};
+
 enum class JointId : uint8_t {
   THUMB_IP,
   THUMB_MCP,
@@ -127,18 +238,6 @@ enum class JointId : uint8_t {
  * @warning Do not call in real-time control loops (string processing overhead)
  */
 GHAND_API const char* ToString(JointId id);  // NOLINT(runtime/string)
-
-// Product type definitions
-enum class ProductType : uint8_t { G5, AUTO, L1 };
-
-/**
- * @brief Get string representation of product type (for debug/logging)
- * @warning Do not call in real-time control loops (string processing overhead)
- */
-GHAND_API const char* ToString(ProductType type);  // NOLINT(runtime/string)
-
-// Communication type definitions
-enum class CommType : uint8_t { ETHERCAT, CANFD, RS485 };
 
 // Control mode definitions
 enum class ControlMode : uint8_t { POSITION = 0, TORQUE = 1, SPEED = 2 };

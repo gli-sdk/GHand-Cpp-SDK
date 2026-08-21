@@ -1,90 +1,108 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "ghand/ghand.h"
 
-#include "internal/dexhand.h"
+#include "internal/ghand_impl.h"
 
 namespace ghand {
 
-// Factory function
-std::unique_ptr<DexHand> DexHand::Create(ProductType pt, CommType ct) {
-  auto hand = std::unique_ptr<DexHand>(new DexHand(pt, ct));
+std::unique_ptr<GHand> GHand::Create(ProductType pt, CommType ct) {
+  auto hand = std::unique_ptr<GHand>(new GHand(pt, ct));
   if (!hand->impl_->IsValid()) {
     return nullptr;
   }
   return hand;
 }
 
-// Constructor / Destructor
-DexHand::DexHand(ProductType pt, CommType ct)
-    : impl_(new internal::DexHand(pt, ct)) {}
-DexHand::~DexHand() {}
+GHand::GHand(ProductType pt, CommType ct)
+    : impl_(new internal::GHandImpl(pt, ct)) {}
 
-// Forward all calls
-bool DexHand::AutoConnect() { return impl_->AutoConnect(); }
+GHand::~GHand() {}
 
-bool DexHand::Connect(const std::string& device_name, uint8_t slave_id,
-                      uint8_t baudrate_gear) {
+bool GHand::AutoConnect() { return impl_->AutoConnect(); }
+
+bool GHand::Connect(const std::string& device_name, uint8_t slave_id,
+                    uint8_t baudrate_gear) {
   return impl_->Connect(device_name, slave_id, baudrate_gear);
 }
 
-bool DexHand::Disconnect() { return impl_->Disconnect(); }
+bool GHand::Disconnect() { return impl_->Disconnect(); }
 
-bool DexHand::IsConnected() const { return impl_->IsConnected(); }
+bool GHand::IsConnected() const { return impl_->IsConnected(); }
 
-bool DexHand::SetSlaveId(uint8_t slave_id) {
+bool GHand::SetSlaveId(uint8_t slave_id) {
   return impl_->SetSlaveId(slave_id);
 }
 
-bool DexHand::SetBaudrateConfig(uint8_t baudrate_gear) {
+bool GHand::SetBaudrateConfig(uint8_t baudrate_gear) {
   return impl_->SetBaudrateConfig(baudrate_gear);
 }
 
-std::map<std::string, std::string> DexHand::SearchAdapters() {
+OperationResult GHand::GetLastResult() const {
+  return impl_->GetLastResult();
+}
+
+SdkError GHand::GetLastError() const {
+  return impl_->GetLastResult().code;
+}
+
+std::string GHand::GetLastErrorMessage() const {
+  return impl_->GetLastResult().message;
+}
+
+Diagnostics GHand::GetDiagnostics() const {
+  return impl_->GetDiagnostics();
+}
+
+std::map<std::string, std::string> GHand::SearchAdapters() {
   return impl_->SearchAdapters();
 }
 
-HandType DexHand::GetHandType() { return impl_->GetHandType(); }
+HandType GHand::GetHandType() { return impl_->GetHandType(); }
 
-DeviceInfo DexHand::GetDeviceInfo() { return impl_->GetDeviceInfo(); }
+DeviceInfo GHand::GetDeviceInfo() { return impl_->GetDeviceInfo(); }
 
-void DexHand::SetControlMode(ControlMode mode) { impl_->SetControlMode(mode); }
+void GHand::SetControlMode(ControlMode mode) { impl_->SetControlMode(mode); }
 
-bool DexHand::MoveJoints(const std::vector<JointCommand>& joints) {
+bool GHand::MoveJoints(const std::vector<JointCommand>& joints) {
   return impl_->MoveJoints(joints);
 }
 
-void DexHand::Stop() { impl_->Stop(); }
+void GHand::Stop() { impl_->Stop(); }
 
-bool DexHand::ClearFault() { return impl_->ClearFault(); }
+bool GHand::ClearFault() { return impl_->ClearFault(); }
 
-bool DexHand::InitJoint() { return impl_->InitJoint(); }
+bool GHand::InitJoint() { return impl_->InitJoint(); }
 
-bool DexHand::OpenTactile() { return impl_->OpenTactile(); }
+bool GHand::OpenTactile() { return impl_->OpenTactile(); }
 
-bool DexHand::CloseTactile() { return impl_->CloseTactile(); }
+bool GHand::CloseTactile() { return impl_->CloseTactile(); }
 
-bool DexHand::ZeroTactile() { return impl_->ZeroTactile(); }
+bool GHand::ZeroTactile() { return impl_->ZeroTactile(); }
 
-void DexHand::SetJointsCallback(JointsCallback cb) {
+void GHand::SetJointsCallback(JointsCallback cb) {
   impl_->SetJointsCallback(cb);
 }
 
-void DexHand::SetHandStateCallback(HandStateCallback cb) {
+void GHand::SetHandStateCallback(HandStateCallback cb) {
   impl_->SetHandStateCallback(cb);
 }
 
-void DexHand::SetTactileDataCallback(TactileDataCallback cb) {
+void GHand::SetTactileDataCallback(TactileDataCallback cb) {
   impl_->SetTactileDataCallback(cb);
 }
 
-HandState DexHand::GetHandData() { return impl_->GetHandData(); }
+HandState GHand::GetHandData() { return impl_->GetHandData(); }
 
-std::vector<Joint> DexHand::GetJointsData() { return impl_->GetJointsData(); }
+std::vector<Joint> GHand::GetJointsData() { return impl_->GetJointsData(); }
 
-TactileData DexHand::GetTactileData() { return impl_->GetTactileData(); }
+TactileData GHand::GetTactileData() { return impl_->GetTactileData(); }
 
-FirmwareUpdateError DexHand::BootUpdate(
+FirmwareUpdateError GHand::BootUpdate(
     const std::string& filename,
     std::function<void(int)> progress_callback) {
   return impl_->BootUpdate(filename, progress_callback);
 }
+
 }  // namespace ghand

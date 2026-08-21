@@ -1,4 +1,5 @@
-// Copyright 2025 Glitech.
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef INCLUDE_GHAND_GHAND_H_
 #define INCLUDE_GHAND_GHAND_H_
@@ -17,7 +18,7 @@ namespace ghand {
 
 // Forward declaration of internal implementation class
 namespace internal {
-class DexHand;
+class GHandImpl;
 }  // namespace internal
 
 // Callback type definitions
@@ -26,7 +27,7 @@ using HandStateCallback = std::function<void(const HandState&)>;
 using TactileDataCallback = std::function<void(const TactileData&)>;
 
 /**
- * @brief GHand DexHand robotic hand control interface
+ * @brief GHand robotic hand control interface
  *
  * This is the sole public API class, providing full control of the robotic
  * hand.
@@ -35,23 +36,23 @@ using TactileDataCallback = std::function<void(const TactileData&)>;
 #pragma warning(push)
 #pragma warning(disable : 4251)
 #endif
-class GHAND_API DexHand {
+class GHAND_API GHand {
  public:
-  static std::unique_ptr<DexHand> Create(
+  static std::unique_ptr<GHand> Create(
       ProductType product_type = ProductType::AUTO,
       CommType comm_type = CommType::ETHERCAT);
-  ~DexHand();
+  ~GHand();
 
-  // DexHand owns device state and is not copyable or movable.
-  DexHand(const DexHand&) = delete;
-  DexHand& operator=(const DexHand&) = delete;
-  DexHand(DexHand&&) = delete;
-  DexHand& operator=(DexHand&&) = delete;
+  // GHand owns device state and is not copyable or movable.
+  GHand(const GHand&) = delete;
+  GHand& operator=(const GHand&) = delete;
+  GHand(GHand&&) = delete;
+  GHand& operator=(GHand&&) = delete;
 
   // Connection management
   /**
    * @brief Auto-connect to device
-   * @return true on success
+   * @return true on success; call GetLastResult() when false
    */
   bool AutoConnect();
 
@@ -61,7 +62,7 @@ class GHAND_API DexHand {
    * @param slave_id RS485/CANFD slave ID used for this connection; 0 scans
    *     default IDs 0x31 and 0x32
    * @param baudrate_gear RS485/CANFD baud-rate gear used for this connection
-   * @return true on success
+   * @return true on success; call GetLastResult() when false
    */
   bool Connect(const std::string& device_name = "auto",
                uint8_t slave_id = 0,
@@ -80,7 +81,7 @@ class GHAND_API DexHand {
   /**
    * @brief Set RS485/CANFD slave ID on the connected device.
    * @param slave_id New slave ID written to holding register 0x0000
-   * @return true on success; false if unsupported, disconnected, or rejected
+   * @return true on success; call GetLastResult() when false
    */
   bool SetSlaveId(uint8_t slave_id);
 
@@ -91,9 +92,36 @@ class GHAND_API DexHand {
    * takes effect after the next power-up.
    *
    * @param baudrate_gear Protocol baud-rate gear written to the device
-   * @return true on success; false if unsupported, disconnected, or rejected
+   * @return true on success; call GetLastResult() when false
    */
   bool SetBaudrateConfig(uint8_t baudrate_gear);
+
+  /**
+   * @brief Return the most recent SDK operation result.
+   *
+   * This is a compatibility extension for bool-returning APIs. The result is
+   * updated by core connection and control operations and is safe to query from
+   * user callbacks.
+   */
+  OperationResult GetLastResult() const;
+
+  /**
+   * @brief Return the most recent SDK error code.
+   */
+  SdkError GetLastError() const;
+
+  /**
+   * @brief Return the most recent SDK error message.
+   */
+  std::string GetLastErrorMessage() const;
+
+  /**
+   * @brief Return a structured SDK state snapshot for diagnostics.
+   *
+   * Diagnostics are machine-readable state and do not depend on log parsing.
+   * Transport counters are reserved for protocol-level instrumentation.
+   */
+  Diagnostics GetDiagnostics() const;
 
   // Device info
   /**
@@ -121,7 +149,7 @@ class GHAND_API DexHand {
   /**
    * @brief Control joint movement
    * @param joints Joint command list, angle in degrees (deg)
-   * @return true on success
+   * @return true on success; call GetLastResult() when false
    */
   bool MoveJoints(const std::vector<JointCommand>& joints);
 
@@ -197,8 +225,8 @@ class GHAND_API DexHand {
       std::function<void(int)> progress_callback);
 
  private:
-  DexHand(ProductType product_type, CommType comm_type);
-  std::unique_ptr<internal::DexHand> impl_;
+  GHand(ProductType product_type, CommType comm_type);
+  std::unique_ptr<internal::GHandImpl> impl_;
 };
 
 }  // namespace ghand

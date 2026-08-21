@@ -1,7 +1,8 @@
-// Copyright 2025 Glitech.
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
 
-#ifndef SRC_INTERNAL_DEXHAND_CALLBACK_MANAGER_H_
-#define SRC_INTERNAL_DEXHAND_CALLBACK_MANAGER_H_
+#ifndef SRC_INTERNAL_GHAND_CALLBACK_MANAGER_H_
+#define SRC_INTERNAL_GHAND_CALLBACK_MANAGER_H_
 
 #include <chrono>
 #include <functional>
@@ -14,7 +15,7 @@ namespace ghand {
 namespace internal {
 
 /**
- * @brief DexHand callback manager internal implementation class
+ * @brief GHand callback manager internal implementation class
  *
  * Responsibilities:
  * 1. Manage registration of various data callbacks
@@ -23,27 +24,27 @@ namespace internal {
  * 4. Ensure data freshness (forced update every 100 ms)
  * 5. Cache the latest data to support polled access
  */
-class DexHandCallbackManager {
+class GHandCallbackManager {
  public:
   // Callback type definitions
   using JointsCallback = std::function<void(const std::vector<Joint>&)>;
   using HandStateCallback = std::function<void(const HandState&)>;
   using TactileDataCallback = std::function<void(const TactileData&)>;
 
-  DexHandCallbackManager();
-  ~DexHandCallbackManager() = default;
+  GHandCallbackManager();
+  ~GHandCallbackManager() = default;
 
-  DexHandCallbackManager(const DexHandCallbackManager&) = delete;
-  DexHandCallbackManager& operator=(const DexHandCallbackManager&) = delete;
-  DexHandCallbackManager(DexHandCallbackManager&&) = delete;
-  DexHandCallbackManager& operator=(DexHandCallbackManager&&) = delete;
+  GHandCallbackManager(const GHandCallbackManager&) = delete;
+  GHandCallbackManager& operator=(const GHandCallbackManager&) = delete;
+  GHandCallbackManager(GHandCallbackManager&&) = delete;
+  GHandCallbackManager& operator=(GHandCallbackManager&&) = delete;
 
   // Callback registration methods
   void SetJointsCallback(JointsCallback callback);
   void SetHandStateCallback(HandStateCallback callback);
   void SetTactileDataCallback(TactileDataCallback callback);
 
-  // Data update methods (called by DexHand)
+  // Data update methods (called by GHand)
   void UpdateJoints(const std::vector<Joint>& joints);
   void UpdateTemperature(const HandState& temperature);
   void UpdateTactileData(const TactileData& data);
@@ -83,4 +84,4 @@ class DexHandCallbackManager {
 }  // namespace internal
 }  // namespace ghand
 
-#endif  // SRC_INTERNAL_DEXHAND_CALLBACK_MANAGER_H_
+#endif  // SRC_INTERNAL_GHAND_CALLBACK_MANAGER_H_

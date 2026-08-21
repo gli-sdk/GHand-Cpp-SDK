@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "file_lock.h"
 
 #ifdef _WIN32
@@ -31,7 +34,7 @@
 #include <sstream>
 
 #ifndef _WIN32
-#include <openssl/md5.h>
+#include <openssl/evp.h>
 #endif
 
 #include "ghand/logging.h"
@@ -49,7 +52,7 @@ namespace {
  *
  * Platform-specific implementation:
  * - Windows: Uses Cryptographic API (CryptHashData)
- * - Linux: Uses OpenSSL MD5() function
+ * - Linux: Uses OpenSSL EVP digest API
  *
  * @param input Input string
  * @return 32-character hexadecimal MD5 hash string, empty string on failure
@@ -106,15 +109,29 @@ std::string MD5Hash(const std::string& input) {
   return ss.str();
 
 #else
-  // Linux implementation: uses OpenSSL
-  unsigned char digest[16];
+  // Linux implementation: uses OpenSSL EVP API.
+  unsigned char digest[EVP_MAX_MD_SIZE];
+  unsigned int digest_len = 0;
 
-  MD5(reinterpret_cast<const unsigned char*>(input.data()), input.length(),
-      digest);
+  EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+  if (ctx == nullptr) {
+    GHAND_LOG_DEBUG("Failed to create EVP MD context");
+    return "";
+  }
+
+  const bool ok =
+      EVP_DigestInit_ex(ctx, EVP_md5(), nullptr) == 1 &&
+      EVP_DigestUpdate(ctx, input.data(), input.length()) == 1 &&
+      EVP_DigestFinal_ex(ctx, digest, &digest_len) == 1;
+  EVP_MD_CTX_free(ctx);
+  if (!ok || digest_len != 16) {
+    GHAND_LOG_DEBUG("Failed to generate MD5 digest");
+    return "";
+  }
 
   // Convert to hexadecimal string
   std::stringstream ss;
-  for (int i = 0; i < 16; i++) {
+  for (unsigned int i = 0; i < digest_len; i++) {
     ss << std::hex << std::setw(2) << std::setfill('0')
        << static_cast<int>(digest[i]);
   }

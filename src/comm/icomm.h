@@ -1,4 +1,5 @@
-// Copyright 2025 Glitech.
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef SRC_COMM_ICOMM_H_
 #define SRC_COMM_ICOMM_H_
@@ -49,6 +50,7 @@ class IComm {
   virtual void UpdateConfig(const ProductConfig& config) = 0;
   virtual bool SetSlaveId(uint8_t slave_id) = 0;
   virtual bool SetBaudrateConfig(uint8_t baudrate_gear) = 0;
+  virtual Diagnostics GetDiagnostics() const { return Diagnostics(); }
 
   // Device info
   virtual DeviceInfo GetDeviceInfo() = 0;

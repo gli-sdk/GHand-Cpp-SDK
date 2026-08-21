@@ -1,8 +1,12 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "canfd_comm.h"
 
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <exception>
 #include <iomanip>
 #include <sstream>
 #include <thread>
@@ -142,7 +146,10 @@ void CANFDComm::UnpackArbitration(uint32_t can_id, int* src_id, int* dst_id,
 // Frame I/O
 
 bool CANFDComm::SendFrame(uint32_t can_id, const uint8_t* data, uint8_t len) {
-  if (!driver_) return false;
+  if (!driver_) {
+    tx_errors_++;
+    return false;
+  }
 
   canfd::Frame frame;
   frame.id = can_id;
@@ -151,12 +158,20 @@ bool CANFDComm::SendFrame(uint32_t can_id, const uint8_t* data, uint8_t len) {
   frame.is_fd = true;
   frame.is_extended = true;
 
-  return driver_->Send(frame) == 0;
+  if (driver_->Send(frame) == 0) {
+    tx_packets_++;
+    return true;
+  }
+  tx_errors_++;
+  return false;
 }
 
 bool CANFDComm::RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len,
                           int timeout_ms) {
-  if (!driver_) return false;
+  if (!driver_) {
+    rx_errors_++;
+    return false;
+  }
 
   canfd::Frame frame;
   if (driver_->Receive(&frame, timeout_ms) != 0) return false;
@@ -166,6 +181,7 @@ bool CANFDComm::RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len,
   if (copy_len > 64) copy_len = 64;
   memcpy(data, frame.data, copy_len);
   *len = copy_len;
+  rx_packets_++;
   return true;
 }
 
@@ -195,7 +211,10 @@ bool CANFDComm::ReadRegisters(int addr, int count,
     int elapsed_ms = static_cast<int>(
         std::chrono::duration_cast<std::chrono::milliseconds>(elapsed)
             .count());
-    if (elapsed_ms >= timeout_ms) return false;
+    if (elapsed_ms >= timeout_ms) {
+      timeouts_++;
+      return false;
+    }
 
     uint32_t resp_id = 0;
     uint8_t resp_data[64];
@@ -212,7 +231,10 @@ bool CANFDComm::ReadRegisters(int addr, int count,
     if (r_ack != 1 || r_dst != src_id_ || r_src != slave_id_) continue;
 
     // Exception response?
-    if (r_fc == (0x80 | func_code)) return false;
+    if (r_fc == (0x80 | func_code)) {
+      rx_errors_++;
+      return false;
+    }
     if (r_fc != func_code) continue;
 
     // Single-frame response
@@ -293,7 +315,10 @@ bool CANFDComm::WriteRegisters(int addr, const std::vector<uint8_t>& data,
     int elapsed_ms = static_cast<int>(
         std::chrono::duration_cast<std::chrono::milliseconds>(elapsed)
             .count());
-    if (elapsed_ms >= timeout_ms) return false;
+    if (elapsed_ms >= timeout_ms) {
+      timeouts_++;
+      return false;
+    }
 
     uint32_t resp_id = 0;
     uint8_t resp_data[64];
@@ -307,7 +332,10 @@ bool CANFDComm::WriteRegisters(int addr, const std::vector<uint8_t>& data,
                        &r_end, nullptr, nullptr);
 
     if (r_ack != 1 || r_dst != src_id_ || r_src != slave_id_) continue;
-    if (r_fc == (0x80 | func_code)) return false;
+    if (r_fc == (0x80 | func_code)) {
+      rx_errors_++;
+      return false;
+    }
     if (r_fc == func_code && r_start == 1 && r_end == 1) return true;
   }
 }
@@ -526,6 +554,25 @@ bool CANFDComm::SetBaudrateConfig(uint8_t baudrate_gear) {
   return true;
 }
 
+Diagnostics CANFDComm::GetDiagnostics() const {
+  Diagnostics diagnostics;
+  diagnostics.connection.connected = IsConnected();
+  diagnostics.connection.comm_type = CommType::CANFD;
+  diagnostics.transport.tx_packets = tx_packets_.load();
+  diagnostics.transport.rx_packets = rx_packets_.load();
+  diagnostics.transport.tx_errors = tx_errors_.load();
+  diagnostics.transport.rx_errors = rx_errors_.load();
+  diagnostics.transport.timeouts = timeouts_.load();
+  diagnostics.subscription.callback_errors = callback_errors_.load();
+  {
+    std::lock_guard<std::mutex> lock(cb_mutex_);
+    diagnostics.subscription.active_subscriptions =
+        (joints_cb_ ? 1 : 0) + (hand_state_cb_ ? 1 : 0) +
+        (tactile_cb_ ? 1 : 0);
+  }
+  return diagnostics;
+}
+
 // Device info
 
 bool CANFDComm::ReadInputBytes(int addr, int count,
@@ -607,7 +654,7 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
     if (!WriteSingleRegister(config_.mode_register, mode_value)) return false;
   }
 
-  if (config_.product_type == ProductType::L1) {
+  if (config_.product_type == ProductType::GHandLite1) {
     const auto& control_map = config_.joint_control_registers.empty()
                                   ? kHoldingRegMap
                                   : config_.joint_control_registers;
@@ -943,10 +990,37 @@ void CANFDComm::PollLoop() {
       last_tactile_time = now;
     }
 
-    if (joints_poll_enabled && joints_cb) joints_cb(joints);
-    if (hand_state_poll_enabled && hand_state_cb) hand_state_cb(hand_state);
-    if (tactile_poll_enabled && tactile_cb && has_tactile_data) {
-      tactile_cb(tactile_data);
+    try {
+      if (joints_poll_enabled && joints_cb) joints_cb(joints);
+    } catch (const std::exception& e) {
+      callback_errors_++;
+      GHAND_LOG_ERROR("CANFD joints callback failed: " << e.what());
+    } catch (...) {
+      callback_errors_++;
+      GHAND_LOG_ERROR("CANFD joints callback failed with unknown exception");
+    }
+
+    try {
+      if (hand_state_poll_enabled && hand_state_cb) hand_state_cb(hand_state);
+    } catch (const std::exception& e) {
+      callback_errors_++;
+      GHAND_LOG_ERROR("CANFD hand-state callback failed: " << e.what());
+    } catch (...) {
+      callback_errors_++;
+      GHAND_LOG_ERROR(
+          "CANFD hand-state callback failed with unknown exception");
+    }
+
+    try {
+      if (tactile_poll_enabled && tactile_cb && has_tactile_data) {
+        tactile_cb(tactile_data);
+      }
+    } catch (const std::exception& e) {
+      callback_errors_++;
+      GHAND_LOG_ERROR("CANFD tactile callback failed: " << e.what());
+    } catch (...) {
+      callback_errors_++;
+      GHAND_LOG_ERROR("CANFD tactile callback failed with unknown exception");
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));

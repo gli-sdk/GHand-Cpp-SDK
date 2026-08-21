@@ -1,4 +1,4 @@
-// Define these macros before including Windows headers to avoid
+﻿// Define these macros before including Windows headers to avoid
 // winsock.h/winsock2.h conflicts.
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -234,11 +234,11 @@ void ConfigureReceiveTimeout(SOCKET sock) {
 #endif
 }
 
-std::unique_ptr<ghand::DexHand> CreateConnectedHand() {
-  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+std::unique_ptr<ghand::GHand> CreateConnectedHand() {
+  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << '\n';
+    std::cerr << "Failed to create GHand" << '\n';
     return nullptr;
   }
   std::cout << "\nConnecting to dexterous hand..." << '\n';
@@ -304,7 +304,7 @@ ReceiveStatus ReceivePacket(SOCKET sock, char* buffer, int buffer_size,
   return ReceiveStatus::FAILURE;
 }
 
-void ProcessPacket(char* buffer, int recv_len, ghand::DexHand& hand,
+void ProcessPacket(char* buffer, int recv_len, ghand::GHand& hand,
                    int* data_count, bool joints_received,
                    const std::vector<ghand::Joint>& last_joints) {
   buffer[recv_len] = '\0';
@@ -327,7 +327,7 @@ void ProcessPacket(char* buffer, int recv_len, ghand::DexHand& hand,
   }
 }
 
-void ReceiveLoop(SOCKET sock, ghand::DexHand& hand) {
+void ReceiveLoop(SOCKET sock, ghand::GHand& hand) {
   std::cout << "\nStarting to receive glove data and control dexterous hand..."
             << '\n';
   std::cout << "Press Ctrl+C to exit program\n" << '\n';

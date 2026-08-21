@@ -1,4 +1,5 @@
-// Copyright 2025 Glitech.
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef SRC_COMM_RS485_COMM_H_
 #define SRC_COMM_RS485_COMM_H_
@@ -51,6 +52,7 @@ class RS485Comm : public IComm {
   void UpdateConfig(const ProductConfig& config) override;
   bool SetSlaveId(uint8_t slave_id) override;
   bool SetBaudrateConfig(uint8_t baudrate_gear) override;
+  Diagnostics GetDiagnostics() const override;
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;
@@ -78,6 +80,10 @@ class RS485Comm : public IComm {
  private:
   bool ProbeSlave(int sid, int attempt, const std::string& device_name);
   void CloseContext();
+  int ReadInputRegistersCounted(int addr, int count, uint16_t* dest);
+  int ReadHoldingRegistersCounted(int addr, int count, uint16_t* dest);
+  int WriteRegisterCounted(int addr, uint16_t value);
+  int WriteRegistersCounted(int addr, int count, const uint16_t* data);
   bool WriteTactileControl(uint16_t command);
   bool WaitHoldingResult(int addr, int timeout_ms = 2000,
                          int interval_ms = 50);
@@ -99,6 +105,12 @@ class RS485Comm : public IComm {
   std::thread poll_thread_;
   std::atomic<bool> poll_running_{false};
   std::atomic<bool> poll_stop_{false};
+  std::atomic<uint64_t> tx_packets_{0};
+  std::atomic<uint64_t> rx_packets_{0};
+  std::atomic<uint64_t> tx_errors_{0};
+  std::atomic<uint64_t> rx_errors_{0};
+  std::atomic<uint64_t> timeouts_{0};
+  std::atomic<uint64_t> callback_errors_{0};
 
   ProductConfig config_;
 
@@ -108,7 +120,7 @@ class RS485Comm : public IComm {
   TactileDataCallback tactile_cb_;
   bool tactile_open_ = false;
   bool tactile_poll_enabled_ = false;
-  std::mutex cb_mutex_;
+  mutable std::mutex cb_mutex_;
   std::mutex io_mutex_;
 };
 

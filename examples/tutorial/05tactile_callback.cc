@@ -1,4 +1,4 @@
-#ifdef _WIN32
+﻿#ifdef _WIN32
 #include <windows.h>
 #endif
 
@@ -79,7 +79,7 @@ void PrintTactileData(const ghand::TactileData& data, bool* first_print) {
   std::cout << std::flush;
 }
 
-void RegisterTactileCallback(ghand::DexHand* hand) {
+void RegisterTactileCallback(ghand::GHand* hand) {
   bool first_print = true;
   hand->SetTactileDataCallback(
       [first_print](const ghand::TactileData& data) mutable {
@@ -87,7 +87,7 @@ void RegisterTactileCallback(ghand::DexHand* hand) {
       });
 }
 
-void RunTactileDemo(ghand::DexHand* hand) {
+void RunTactileDemo(ghand::GHand* hand) {
   std::cout << "Connecting to dexterous hand..." << '\n';
   if (!hand->AutoConnect()) {
     std::cout << "Failed to connect to the dexterous hand!" << '\n';
@@ -117,9 +117,9 @@ int main() {
   EnableAnsiColors();
 
   auto hand =
-      ghand::DexHand::Create(ghand::ProductType::G5, ghand::CommType::ETHERCAT);
+      ghand::GHand::Create(ghand::ProductType::GHand5, ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << '\n';
+    std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
 

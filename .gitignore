@@ -1,34 +1,47 @@
-# IDE
-.vscode
-.claude/
-.clang-format
-
-# 构建产物
+# Build directories
 /build/
 /build*/
-*.exe
+/cmake-build-*/
+/out/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+install_manifest.txt
+
+# Compiler and linker outputs
 *.obj
+*.o
 *.pdb
+*.ilk
+*.exp
+*.exe
+*.dll
+*.so
+*.so.*
+*.a
+*.lib
 
+# Keep SDK release dependencies under version control.
+!deps/lib/**/*.dll
+!deps/lib/**/*.so
+!deps/lib/**/*.so.*
+!deps/lib/**/*.a
+!deps/lib/**/*.lib
 
-
-# 文档
-openspec/
-IMPLEMENTATION_COMPLETE.md
-CRITICAL_FIX.md
-LOCK_MUTEX_TEST.md
-docs/MIGRATION_GUIDE.md
-README.md
-openspec/config.yaml
-CHANGELOG.md
-openspec/specs/software-licensing/spec.md
-docs/LOGGING.md
-docs/LINUX.md
-xiaoyao-sdk-cpp/
-docs/CPP_SDK_USER_GUIDE.md
-CLAUDE.md
-tests/
-.claudeignore
-vendor/dist/include/zlgcan/zcan.h
+# IDE and local agent state
+.vscode/
+.idea/
+.claude/
 .agents/
 .codex/
+.claudeignore
+
+# Local packages and generated archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz

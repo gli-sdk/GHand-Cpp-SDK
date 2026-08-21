@@ -1,4 +1,4 @@
-#include <chrono>
+﻿#include <chrono>
 #include <iostream>
 #include <thread>
 #include <vector>
@@ -43,12 +43,12 @@ std::vector<ghand::JointCommand> MakeOpenHand() {
   };
 }
 
-bool Grab(ghand::DexHand& hand) {
+bool Grab(ghand::GHand& hand) {
   auto joints = MakeGrabPose();
   return hand.MoveJoints(joints);
 }
 
-bool HandZero(ghand::DexHand& hand) {
+bool HandZero(ghand::GHand& hand) {
   auto joints = MakeOpenHand();
   return hand.MoveJoints(joints);
 }
@@ -56,10 +56,10 @@ bool HandZero(ghand::DexHand& hand) {
 int main() {
   std::cout << "***** Xiaoyao Dexterous Hand SDK - Grabbing Demo *****\n"
             << '\n';
-  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
+  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << '\n';
+    std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
   bool connected = hand->Connect("auto");
