@@ -54,6 +54,7 @@ if(UNIX AND NOT APPLE)
     find_package(Threads REQUIRED)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(OPENSSL REQUIRED openssl)
+    pkg_check_modules(LIBMODBUS REQUIRED IMPORTED_TARGET libmodbus)
 endif()
 
 # SOEM (required for EtherCAT)
@@ -100,17 +101,8 @@ if(WIN32)
     set(LIBMODBUS_INCLUDE_DIRS ${LIBMODBUS_INCLUDE_DIR})
     set(LIBMODBUS_LIBRARIES ${LIBMODBUS_LIBRARY})
 else()
-    set(LIBMODBUS_INCLUDE_DIR "${DEPS_INCLUDE_DIR}")
-    find_library(LIBMODBUS_LIBRARY
-        NAMES modbus libmodbus.so.5.1.0
-        PATHS "${DEPS_LIB_DIR}"
-        NO_DEFAULT_PATH
-    )
-    if(NOT EXISTS "${LIBMODBUS_INCLUDE_DIR}/modbus/modbus.h" OR NOT EXISTS "${LIBMODBUS_LIBRARY}")
-        message(FATAL_ERROR "libmodbus not found in deps")
-    endif()
-    set(LIBMODBUS_INCLUDE_DIRS ${LIBMODBUS_INCLUDE_DIR})
-    set(LIBMODBUS_LIBRARIES ${LIBMODBUS_LIBRARY})
+    set(LIBMODBUS_INCLUDE_DIRS)
+    set(LIBMODBUS_LIBRARIES PkgConfig::LIBMODBUS)
 endif()
 set(LIBMODBUS_FOUND TRUE)
 
@@ -267,6 +259,11 @@ install(FILES
     LICENSE
     THIRD_PARTY_NOTICES.md
     DESTINATION .
+)
+
+install(FILES
+    deps/SOEM_BUILD_INFO.md
+    DESTINATION deps
 )
 
 install(DIRECTORY LICENSES/

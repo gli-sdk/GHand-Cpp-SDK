@@ -57,6 +57,7 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 - GCC 7.5+ (C++11 support)
 - CMake 3.16 or higher
 - libssl-dev
+- libmodbus-dev
 
 ## 🔧 Dependencies
 
@@ -66,8 +67,11 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 
 ### Release Dependencies
 
-Source builds use the prebuilt dependencies under `deps/`. The repository and release packages keep this layout, and CMake only searches `deps/`.
-On Linux, `libmodbus.so`, `libmodbus.so.5`, and `libmodbus.so.5.1.0` are shipped under `deps/lib/linux/`; users do not need to install or build `libmodbus` separately.
+Source builds use the bundled SOEM and header-only dependencies under `deps/`.
+Linux builds use the system `libmodbus` development package discovered through
+pkg-config; `libmodbus.so*` is not bundled in the source repository. Windows
+builds use the libmodbus import library/DLL supplied in the Windows release
+dependency set.
 
 | Library | Version | Purpose | License | Usage in GHand |
 |---------|---------|---------|---------|----------------|
@@ -78,6 +82,8 @@ On Linux, `libmodbus.so`, `libmodbus.so.5`, and `libmodbus.so.5.1.0` are shipped
 
 ### System Libraries (Linux only)
 - libssl-dev
+- libmodbus-dev
+- pkg-config
 - pthreads
 
 ## 📦 Installation
@@ -192,7 +198,7 @@ cmake --build build --config Release
 
 ```bash
 # Install dependencies
-sudo apt install -y cmake build-essential pkg-config libssl-dev
+sudo apt install -y cmake build-essential pkg-config libssl-dev libmodbus-dev
 
 mkdir -p build
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -238,19 +244,25 @@ auto canfd_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
 canfd_hand->Connect("/dev/ttyACM0:0");
 ```
 
-`Connect()` accepts optional RS485/CANFD slave ID and baud-rate gear parameters:
+`Connect()` accepts optional RS485/CANFD slave ID and typed baud-rate or bit
+timing parameters:
 
 ```cpp
-// slave_id = 0 scans the default IDs 0x31 and 0x32.
-hand->Connect("auto", 0, 0x05);
+// RS485: slave_id = 0 scans the default IDs 0x31 and 0x32.
+hand->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
 
-// Use an explicit slave ID and baud-rate gear for this connection.
-hand->Connect("COM17:0", 0x31, 0x05);
+// CAN-FD: use a predefined bit timing profile.
+hand->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
 ```
 
 `SetSlaveId()` writes a new RS485/CANFD slave ID to holding register `0x0000`.
-`SetBaudrateConfig()` writes the baud-rate gear to holding register `0x002C`;
-the device stores it and applies it after the next power-up.
+`SetBaudrateConfig()` writes the enum-mapped protocol gear to holding register
+`0x002C`; the device stores it and applies it after the next power-up.
+
+```cpp
+hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_1000000);
+hand->SetBaudrateConfig(ghand::CANFDBitTiming::TIMING_1M_5M);
+```
 
 RS485 baud-rate gears:
 

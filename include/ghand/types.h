@@ -106,6 +106,42 @@ enum class CommType : uint8_t { ETHERCAT, CANFD, RS485 };
 
 GHAND_API const char* ToString(CommType type);  // NOLINT(runtime/string)
 
+/**
+ * @brief Predefined RS485 baud rates.
+ *
+ * Each value maps directly to the baud-rate gear defined by the GHand device
+ * protocol.
+ */
+enum class RS485BaudRate : uint8_t {
+  RATE_57600 = 0x00,
+  RATE_115200 = 0x01,
+  RATE_230400 = 0x02,
+  RATE_460800 = 0x03,
+  RATE_921600 = 0x04,
+  RATE_1000000 = 0x05,
+};
+
+/**
+ * @brief Predefined CAN FD bit timing profiles.
+ *
+ * Naming format: TIMING_<arbitration bitrate>_<data bitrate>.
+ * Sample points are fixed by the GHand device protocol for each profile.
+ */
+enum class CANFDBitTiming : uint8_t {
+  // Arbitration: 500 Kbps @ 80%; data: 1 Mbps @ 75%.
+  TIMING_500K_1M = 0x00,
+  // Arbitration: 500 Kbps @ 80%; data: 2 Mbps @ 80%.
+  TIMING_500K_2M = 0x01,
+  // Arbitration: 500 Kbps @ 80%; data: 4 Mbps @ 80%.
+  TIMING_500K_4M = 0x02,
+  // Arbitration: 500 Kbps @ 80%; data: 5 Mbps @ 75%.
+  TIMING_500K_5M = 0x03,
+  // Arbitration: 1 Mbps @ 75%; data: 4 Mbps @ 80%.
+  TIMING_1M_4M = 0x04,
+  // Arbitration: 1 Mbps @ 75%; data: 5 Mbps @ 75%.
+  TIMING_1M_5M = 0x05,
+};
+
 // Product type definitions
 enum class ProductType : uint8_t {AUTO, GHand5,  GHandLite1 };
 

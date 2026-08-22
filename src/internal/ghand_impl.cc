@@ -239,6 +239,28 @@ bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
   return ConnectToDevice(device_name, slave_id, baudrate_gear);
 }
 
+bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
+                        RS485BaudRate baud_rate) {
+  if (comm_type_ != CommType::RS485) {
+    GHAND_LOG_ERROR("RS485BaudRate requires RS485 communication");
+    SetLastResult(SdkError::INVALID_ARGUMENT,
+                  "RS485BaudRate requires RS485 communication");
+    return false;
+  }
+  return Connect(device_name, slave_id, static_cast<uint8_t>(baud_rate));
+}
+
+bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
+                        CANFDBitTiming timing) {
+  if (comm_type_ != CommType::CANFD) {
+    GHAND_LOG_ERROR("CANFDBitTiming requires CANFD communication");
+    SetLastResult(SdkError::INVALID_ARGUMENT,
+                  "CANFDBitTiming requires CANFD communication");
+    return false;
+  }
+  return Connect(device_name, slave_id, static_cast<uint8_t>(timing));
+}
+
 bool GHandImpl::Disconnect() {
   GHAND_LOG_INFO("op=disconnect comm=" << ToString(comm_type_));
 
@@ -272,13 +294,37 @@ bool GHandImpl::SetSlaveId(uint8_t slave_id) {
   return result;
 }
 
-bool GHandImpl::SetBaudrateConfig(uint8_t baudrate_gear) {
+bool GHandImpl::SetBaudrateConfig(RS485BaudRate baud_rate) {
+  if (comm_type_ != CommType::RS485) {
+    GHAND_LOG_ERROR("RS485BaudRate requires RS485 communication");
+    SetLastResult(SdkError::INVALID_ARGUMENT,
+                  "RS485BaudRate requires RS485 communication");
+    return false;
+  }
   if (!IsConnected()) {
     GHAND_LOG_ERROR("Cannot set baudrate config: device not connected");
     SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
     return false;
   }
-  bool result = comm_->SetBaudrateConfig(baudrate_gear);
+  bool result = comm_->SetBaudrateConfig(static_cast<uint8_t>(baud_rate));
+  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                result ? "" : "device rejected baudrate configuration");
+  return result;
+}
+
+bool GHandImpl::SetBaudrateConfig(CANFDBitTiming timing) {
+  if (comm_type_ != CommType::CANFD) {
+    GHAND_LOG_ERROR("CANFDBitTiming requires CANFD communication");
+    SetLastResult(SdkError::INVALID_ARGUMENT,
+                  "CANFDBitTiming requires CANFD communication");
+    return false;
+  }
+  if (!IsConnected()) {
+    GHAND_LOG_ERROR("Cannot set baudrate config: device not connected");
+    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
+    return false;
+  }
+  bool result = comm_->SetBaudrateConfig(static_cast<uint8_t>(timing));
   SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
                 result ? "" : "device rejected baudrate configuration");
   return result;

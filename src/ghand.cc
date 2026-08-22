@@ -22,9 +22,18 @@ GHand::~GHand() {}
 
 bool GHand::AutoConnect() { return impl_->AutoConnect(); }
 
+bool GHand::Connect(const std::string& device_name, uint8_t slave_id) {
+  return impl_->Connect(device_name, slave_id);
+}
+
 bool GHand::Connect(const std::string& device_name, uint8_t slave_id,
-                    uint8_t baudrate_gear) {
-  return impl_->Connect(device_name, slave_id, baudrate_gear);
+                    RS485BaudRate baud_rate) {
+  return impl_->Connect(device_name, slave_id, baud_rate);
+}
+
+bool GHand::Connect(const std::string& device_name, uint8_t slave_id,
+                    CANFDBitTiming timing) {
+  return impl_->Connect(device_name, slave_id, timing);
 }
 
 bool GHand::Disconnect() { return impl_->Disconnect(); }
@@ -35,8 +44,12 @@ bool GHand::SetSlaveId(uint8_t slave_id) {
   return impl_->SetSlaveId(slave_id);
 }
 
-bool GHand::SetBaudrateConfig(uint8_t baudrate_gear) {
-  return impl_->SetBaudrateConfig(baudrate_gear);
+bool GHand::SetBaudrateConfig(RS485BaudRate baud_rate) {
+  return impl_->SetBaudrateConfig(baud_rate);
+}
+
+bool GHand::SetBaudrateConfig(CANFDBitTiming timing) {
+  return impl_->SetBaudrateConfig(timing);
 }
 
 OperationResult GHand::GetLastResult() const {

@@ -242,13 +242,6 @@ int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
 
   ecx_configdc(&soem_->ctx);
 
-  for (int si = 1; si <= soem_->ctx.slavecount; si++) {
-    ec_slavet* slave = &soem_->ctx.slavelist[si];
-    if (slave->CoEdetails > 0) {
-      ecx_slavembxcyclic(&soem_->ctx, si);
-    }
-  }
-
   uint16_t safe_op_state =
       ecx_statecheck(&soem_->ctx, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
 

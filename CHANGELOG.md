@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented libmodbus 3.1.12 as LGPL-2.1-or-later and retained dynamic linking.
 - Added WinPcap and nlohmann/json notices.
 
+### Changed
+- Switched Linux libmodbus handling from bundled `deps/lib/linux/libmodbus.so*` binaries to the system `libmodbus-dev` package discovered through pkg-config.
+- Added `deps/SOEM_BUILD_INFO.md` to record SOEM v2.0.0 provenance and release rebuild requirements.
+- Refreshed bundled SOEM headers and rebuilt the Windows `soem.lib` from official SOEM v2.0.0 commit `304d1c05eab77dc0d426f1a5cf09c8cc7dc03713`.
+- Updated README dependency guidance for Linux system libmodbus and Windows binary distribution notes.
+- Updated `.gitignore` so Linux libmodbus shared objects are not accidentally reintroduced while the intended bundled SOEM and Windows dependency binaries remain trackable.
+- Added `RS485BaudRate` and `CANFDBitTiming` public enums and replaced raw baud-rate gear parameters in the public C++ API.
+
 ## [2.2.0] - 2026-08-17
 
 ### Added

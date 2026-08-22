@@ -61,12 +61,32 @@ class GHAND_API GHand {
    * @param device_name Device name ("auto" for auto-discovery)
    * @param slave_id RS485/CANFD slave ID used for this connection; 0 scans
    *     default IDs 0x31 and 0x32
-   * @param baudrate_gear RS485/CANFD baud-rate gear used for this connection
    * @return true on success; call GetLastResult() when false
    */
   bool Connect(const std::string& device_name = "auto",
-               uint8_t slave_id = 0,
-               uint8_t baudrate_gear = 0x05);
+               uint8_t slave_id = 0);
+
+  /**
+   * @brief Connect to an RS485 device using a typed baud-rate selection.
+   * @param device_name Device name ("auto" for auto-discovery)
+   * @param slave_id RS485 slave ID used for this connection; 0 scans default
+   *     IDs 0x31 and 0x32
+   * @param baud_rate RS485 baud rate used for this connection
+   * @return true on success; call GetLastResult() when false
+   */
+  bool Connect(const std::string& device_name, uint8_t slave_id,
+               RS485BaudRate baud_rate);
+
+  /**
+   * @brief Connect to a CAN-FD device using a typed bit-timing profile.
+   * @param device_name Device name ("auto" for auto-discovery)
+   * @param slave_id CAN-FD slave ID used for this connection; 0 scans default
+   *     IDs 0x31 and 0x32
+   * @param timing CAN-FD bit timing profile used for this connection
+   * @return true on success; call GetLastResult() when false
+   */
+  bool Connect(const std::string& device_name, uint8_t slave_id,
+               CANFDBitTiming timing);
 
   /**
    * @brief Disconnect
@@ -86,15 +106,26 @@ class GHAND_API GHand {
   bool SetSlaveId(uint8_t slave_id);
 
   /**
-   * @brief Set RS485/CANFD baud-rate gear on the connected device.
+   * @brief Set RS485 baud-rate on the connected device.
    *
-   * The value is written to holding register 0x002C, saved by the device, and
-   * takes effect after the next power-up.
+   * The mapped protocol gear is written to holding register 0x002C, saved by
+   * the device, and takes effect after the next power-up.
    *
-   * @param baudrate_gear Protocol baud-rate gear written to the device
+   * @param baud_rate RS485 baud rate
    * @return true on success; call GetLastResult() when false
    */
-  bool SetBaudrateConfig(uint8_t baudrate_gear);
+  bool SetBaudrateConfig(RS485BaudRate baud_rate);
+
+  /**
+   * @brief Set CAN-FD bit timing on the connected device.
+   *
+   * The mapped protocol gear is written to holding register 0x002C, saved by
+   * the device, and takes effect after the next power-up.
+   *
+   * @param timing CAN-FD bit timing profile
+   * @return true on success; call GetLastResult() when false
+   */
+  bool SetBaudrateConfig(CANFDBitTiming timing);
 
   /**
    * @brief Return the most recent SDK operation result.

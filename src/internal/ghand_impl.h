@@ -46,10 +46,15 @@ class GHandImpl {
   bool AutoConnect(uint8_t slave_id, uint8_t baudrate_gear);
   bool Connect(const std::string& device_name, uint8_t slave_id = 0,
                uint8_t baudrate_gear = 0x05);
+  bool Connect(const std::string& device_name, uint8_t slave_id,
+               RS485BaudRate baud_rate);
+  bool Connect(const std::string& device_name, uint8_t slave_id,
+               CANFDBitTiming timing);
   bool Disconnect();
   bool IsConnected() const;
   bool SetSlaveId(uint8_t slave_id);
-  bool SetBaudrateConfig(uint8_t baudrate_gear);
+  bool SetBaudrateConfig(RS485BaudRate baud_rate);
+  bool SetBaudrateConfig(CANFDBitTiming timing);
   OperationResult GetLastResult() const;
   Diagnostics GetDiagnostics() const;
 

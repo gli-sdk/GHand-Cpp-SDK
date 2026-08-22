@@ -153,7 +153,7 @@ bool GHandCallbackManager::HasJointDataChanged(
 
 bool GHandCallbackManager::HasTemperatureChanged(
     const HandState& temperature) {
-  // 1. State or error changes 鈫?trigger immediately
+  // 1. State or error changes trigger immediately
   if (temperature.state != last_state_.state ||
       temperature.error != last_state_.error) {
     GHAND_LOG_DEBUG(
@@ -161,7 +161,7 @@ bool GHandCallbackManager::HasTemperatureChanged(
     return true;
   }
 
-  // 2. Temperature change triggers (>1掳C)
+  // 2. Temperature change triggers (>1degC)
   int temp_diff = std::abs(temperature.temperature - last_state_.temperature);
   if (temp_diff > kTemperatureThreshold) {
     return true;
