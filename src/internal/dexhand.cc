@@ -318,6 +318,14 @@ TactileData DexHand::GetTactileData() const {
   return callback_manager_->GetTactileData();
 }
 
+SelfTestErrorInfo DexHand::GetSelfTestErrorInfo() const {
+  if (!IsConnected()) {
+    GHAND_LOG_ERROR("GetSelfTestErrorInfo called while disconnected");
+    return SelfTestErrorInfo{};
+  }
+  return comm_->GetSelfTestErrorInfo();
+}
+
 FirmwareUpdateError DexHand::BootUpdate(
                         const std::string& filename,
                         std::function<void(int)> progress_callback) {

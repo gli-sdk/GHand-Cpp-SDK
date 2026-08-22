@@ -253,6 +253,116 @@ inline bool HasError(const Joint& j) {
 GHAND_API std::string ToString(const HandState& hs);
 GHAND_API std::string ToString(const Joint& joint);
 
+// ============================================================================
+// Self-test error query (object dictionary 0x2008)
+// ============================================================================
+
+/**
+ * @brief A0 self-test summary bit mask. Multiple bits may be set simultaneously.
+ */
+enum class SelfTestError : uint8_t {
+  None              = 0x00,
+  Motor             = 0x01,
+  Zeroing           = 0x04,
+  Fan               = 0x08,
+  TemperatureSensor = 0x10,
+  TactileSensor     = 0x20,
+  PositionSensor    = 0x40,
+  Version           = 0x80,
+};
+
+inline uint8_t operator&(uint8_t lhs, SelfTestError rhs) {
+  return lhs & static_cast<uint8_t>(rhs);
+}
+
+inline bool HasSelfTestError(uint8_t summary, SelfTestError bit) {
+  return (summary & static_cast<uint8_t>(bit)) != 0;
+}
+
+/**
+ * @brief A1 version-mismatch bit mask.
+ */
+enum class VersionCheckError : uint8_t {
+  None           = 0x00,
+  MotorDriver    = 0x20,
+  TactileSensor  = 0x40,
+  PositionSensor = 0x80,
+};
+
+/**
+ * @brief A3 tactile-sensor error bit mask (per motor channel).
+ */
+enum class TactileCheckError : uint8_t {
+  None                    = 0x00,
+  ThumbTipDisconnected    = 0x01,
+  FfTipDisconnected       = 0x02,
+  MfTipDisconnected       = 0x04,
+  RfTipDisconnected       = 0x08,
+  LfTipDisconnected       = 0x10,
+  CommunicationFailed     = 0x80,
+};
+
+/**
+ * @brief A6 zeroing error (single-value enum, per motor channel).
+ */
+enum class ZeroingCheckError : uint8_t {
+  None                   = 0x00,
+  MotorAbnormal          = 0x01,
+  FullStrokeCheckFailed  = 0x02,
+  ZeroingTimeout         = 0x03,
+};
+
+/**
+ * @brief A8 motor-check error (per motor channel).
+ */
+enum class MotorCheckError : uint8_t {
+  None                    = 0x00,
+  HardwareOverCurrent     = 0x01,
+  SoftwareOverCurrent     = 0x02,
+  BusOverCurrent          = 0x03,
+  HardwareOverVoltage     = 0x04,
+  HardwareUnderVoltage    = 0x05,
+  PhaseLoss               = 0x06,
+  Stall                   = 0x07,
+  HardwareOverTemperature = 0x08,
+  CommunicationLost       = 0x09,
+  SoftwareOverVoltage     = 0x0A,
+  SoftwareUnderVoltage    = 0x0B,
+  SoftwareOverTemperature = 0x0C,
+  PositionSensorError     = 0x0D,
+};
+
+/**
+ * @brief Diagnostic error entry for a single 13-channel motor slot.
+ *
+ * ``motor_index`` is the raw index (0..12) into the protocol error array.
+ * ``joint_id`` is the resolved JointId when the product configuration owns a
+ * joint at that slot, or ``JointId::NUM_JOINTS`` if the slot is not mapped.
+ * ``error_code`` is the category-specific raw error value.
+ */
+struct MotorDiagnosticError {
+  uint8_t motor_index;
+  JointId joint_id;
+  uint8_t error_code;
+};
+
+/**
+ * @brief Structured result of a self-test error query.
+ *
+ * Only categories actually flagged by ``summary`` will have their fields
+ * populated; the rest remain at their default values.
+ */
+struct SelfTestErrorInfo {
+  uint8_t summary = 0;              // Raw A0 bit mask
+  uint8_t version = 0;              // Raw A1 bit mask
+  std::vector<MotorDiagnosticError> position_sensor;
+  std::vector<MotorDiagnosticError> tactile_sensor;
+  uint8_t temperature = 0;          // Raw A4 value
+  uint8_t fan = 0;                  // Raw A5 value
+  std::vector<MotorDiagnosticError> zeroing;
+  std::vector<MotorDiagnosticError> motor;
+};
+
 }  // namespace ghand
 
 #endif  // INCLUDE_GHAND_TYPES_H_

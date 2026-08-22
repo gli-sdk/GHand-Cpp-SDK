@@ -77,6 +77,10 @@ std::vector<Joint> DexHand::GetJointsData() { return impl_->GetJointsData(); }
 
 TactileData DexHand::GetTactileData() { return impl_->GetTactileData(); }
 
+SelfTestErrorInfo DexHand::GetSelfTestErrorInfo() {
+  return impl_->GetSelfTestErrorInfo();
+}
+
 FirmwareUpdateError DexHand::BootUpdate(
     const std::string& filename,
     std::function<void(int)> progress_callback) {

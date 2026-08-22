@@ -8,6 +8,7 @@
 #include "ghand/logging.h"
 #include "logging_macros.h"
 #include "modbus_codec.h"
+#include "self_test_workflow.h"
 
 namespace ghand {
 namespace internal {
@@ -672,6 +673,27 @@ bool CANFDComm::InitJoint() {
   if (!WriteSingleRegister(0x0002, 0x0001)) return false;
   GHAND_LOG_INFO("Joint initialization completed");
   return true;
+}
+
+SelfTestErrorInfo CANFDComm::GetSelfTestErrorInfo() {
+  if (!IsConnected()) return SelfTestErrorInfo{};
+
+  SelfTestRegisterIO io;
+  io.read_registers =
+      [this](uint16_t address, int count) -> std::vector<uint8_t> {
+    std::vector<uint8_t> bytes;
+    if (!ReadRegisters(address, count, &bytes, 0x03)) {
+      return {};
+    }
+    if (static_cast<int>(bytes.size()) < count * 2) {
+      return {};
+    }
+    return bytes;
+  };
+  io.write_register = [this](uint16_t address, uint16_t value) -> bool {
+    return WriteSingleRegister(address, value);
+  };
+  return BuildSelfTestErrorInfo(config_, io);
 }
 
 // Tactile sensor

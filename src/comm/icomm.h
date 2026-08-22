@@ -74,6 +74,10 @@ class IComm {
       const std::string& filename,
       std::function<void(int)> progress) = 0;
   virtual bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) = 0;
+
+  // Self-test error query (object dictionary 0x2008). Default implementation
+  // returns an empty result for backends that do not support the query.
+  virtual SelfTestErrorInfo GetSelfTestErrorInfo() { return SelfTestErrorInfo{}; }
 };
 
 }  // namespace internal

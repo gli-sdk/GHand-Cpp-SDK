@@ -66,6 +66,8 @@ class CANFDComm : public IComm {
       std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
+  SelfTestErrorInfo GetSelfTestErrorInfo() override;
+
  private:
   // CANFD arbitration helpers (Python SDK compatible)
   static uint32_t PackArbitration(int src_id, int dst_id, int ack,
