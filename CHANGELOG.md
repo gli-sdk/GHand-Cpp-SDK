@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-08-24
+
 ### Licensing
 - Changed the GHand C++ SDK distribution license to GPL-3.0-only to align with the GPLv3 licensing option used by the statically linked SOEM 2.0.0 stack.
 - Added complete third-party notices and license texts.
