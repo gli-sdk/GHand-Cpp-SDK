@@ -77,6 +77,8 @@ class RS485Comm : public IComm {
       std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
+  SelfTestErrorInfo GetSelfTestErrorInfo() override;
+
  private:
   bool ProbeSlave(int sid, int attempt, const std::string& device_name);
   void CloseContext();

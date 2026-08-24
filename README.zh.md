@@ -154,6 +154,10 @@ EtherCAT 需要 raw socket 权限。可以为示例程序授予能力：
 ```bash
 find build/examples -maxdepth 1 -type f -executable \
   -exec sudo setcap cap_net_raw,cap_net_admin+eip {} +
+  -exec sudo setcap cap_net_raw,cap_net_admin=eip {} \;
+
+# 第二步：运行 EtherCAT 示例
+./build/examples/basic_connection
 ```
 
 RS-485 和 CAN-FD 使用 USB 串口设备，不需要 raw socket 权限。如果当前用户无法打开串口，请加入 `dialout` 组后重新登录：

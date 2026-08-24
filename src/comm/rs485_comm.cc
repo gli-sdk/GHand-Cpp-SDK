@@ -63,6 +63,7 @@ inline int modbus_write_registers(modbus_t*, int, int, const uint16_t*) {
 #include "ghand/logging.h"
 #include "logging_macros.h"
 #include "modbus_codec.h"
+#include "self_test_workflow.h"
 #include <map>
 
 namespace ghand {
@@ -660,6 +661,36 @@ bool RS485Comm::InitJoint() {
   if (WriteRegisterCounted(0x0002, 0x0001) != 1) return false;
   GHAND_LOG_INFO("Joint initialization completed");
   return true;
+}
+
+SelfTestErrorInfo RS485Comm::GetSelfTestErrorInfo() {
+  if (!IsConnected()) return SelfTestErrorInfo{};
+
+  SelfTestRegisterIO io;
+  io.read_registers =
+      [this](uint16_t address, int count) -> std::vector<uint8_t> {
+    std::lock_guard<std::mutex> lock(io_mutex_);
+    if (ctx_ == nullptr) return {};
+    modbus_set_slave(ctx_, slave_id_);
+    std::vector<uint16_t> regs(count);
+    if (modbus_read_registers(ctx_, address, count, regs.data()) != count) {
+      return {};
+    }
+    std::vector<uint8_t> bytes;
+    bytes.reserve(count * 2);
+    for (uint16_t reg : regs) {
+      bytes.push_back(static_cast<uint8_t>((reg >> 8) & 0xFF));
+      bytes.push_back(static_cast<uint8_t>(reg & 0xFF));
+    }
+    return bytes;
+  };
+  io.write_register = [this](uint16_t address, uint16_t value) -> bool {
+    std::lock_guard<std::mutex> lock(io_mutex_);
+    if (ctx_ == nullptr) return false;
+    modbus_set_slave(ctx_, slave_id_);
+    return modbus_write_register(ctx_, address, value) == 1;
+  };
+  return BuildSelfTestErrorInfo(config_, io);
 }
 
 // Tactile sensor

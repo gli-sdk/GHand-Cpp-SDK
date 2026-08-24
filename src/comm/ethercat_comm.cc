@@ -15,6 +15,7 @@
 #endif
 
 #include <chrono>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -914,6 +915,190 @@ bool EtherCATComm::ZeroTactile() {
   int result = SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
   result = SDORead(1, 0x2004, 0x03, &size, &state, EC_TIMEOUTRXM);
   return result > 0;
+}
+
+// ===== Self-test error query (object dictionary 0x2008) =====
+
+namespace {
+
+constexpr uint16_t kSelfTestIndex = 0x2008;
+constexpr uint8_t kSelfTestSubCommand = 0x01;
+constexpr uint8_t kSelfTestSubState = 0x02;
+constexpr uint8_t kSelfTestSubErrorCode = 0x03;
+
+constexpr uint8_t kSelfTestStateSuccess = 2;
+constexpr uint8_t kSelfTestStateFailed = 3;
+
+constexpr int kSelfTestPollAttempts = 100;
+
+}  // namespace
+
+bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
+                                            std::array<uint8_t, 13>* codes) {
+  codes->fill(0);
+
+  int size = sizeof(uint8_t);
+  uint8_t cmd = command;
+  if (SDOWrite(1, kSelfTestIndex, kSelfTestSubCommand, size, &cmd,
+               EC_TIMEOUTRXM) <= 0) {
+    GHAND_LOG_ERROR("Self-test 0x%02X: SDO write failed", command);
+    return false;
+  }
+
+  uint8_t state = 0xFF;
+  int attempts = kSelfTestPollAttempts;
+  while (attempts--) {
+    int state_size = sizeof(uint8_t);
+    if (SDORead(1, kSelfTestIndex, kSelfTestSubState, &state_size, &state,
+                EC_TIMEOUTRXM) <= 0) {
+      GHAND_LOG_ERROR("Self-test 0x%02X: state read failed", command);
+      return false;
+    }
+    // State 只用于判断事务是否结束(2 或 3 都算结束);
+    // 查询成败由 SubIndex 0x04 Result 决定。
+    if (state == kSelfTestStateSuccess || state == kSelfTestStateFailed) {
+      break;
+    }
+  }
+  if (state != kSelfTestStateSuccess && state != kSelfTestStateFailed) {
+    GHAND_LOG_ERROR("Self-test 0x%02X: state poll timeout (state=%u)", command,
+                    state);
+    return false;
+  }
+
+  // Result 不判断,只读取 error_code 数据。
+  int codes_size = static_cast<int>(codes->size());
+  if (SDORead(1, kSelfTestIndex, kSelfTestSubErrorCode, &codes_size,
+              codes->data(), EC_TIMEOUTRXM) <= 0) {
+    GHAND_LOG_ERROR("Self-test 0x%02X: error_code read failed", command);
+    return false;
+  }
+  return true;
+}
+
+uint8_t EtherCATComm::GetSelfTestSummaryErrorCode() {
+  std::array<uint8_t, 13> codes{};
+  if (!ReadDiagnosticErrorCodes(0xA0, &codes)) {
+    return 0;
+  }
+  return codes[0];
+}
+
+uint8_t EtherCATComm::GetVersionCheckErrorCode() {
+  std::array<uint8_t, 13> codes{};
+  if (!ReadDiagnosticErrorCodes(0xA1, &codes)) {
+    return 0;
+  }
+  return codes[0];
+}
+
+std::array<uint8_t, 13> EtherCATComm::GetPositionSensorErrorCodes() {
+  std::array<uint8_t, 13> codes{};
+  ReadDiagnosticErrorCodes(0xA2, &codes);
+  return codes;
+}
+
+std::array<uint8_t, 13> EtherCATComm::GetTactileSensorErrorCodes() {
+  std::array<uint8_t, 13> codes{};
+  ReadDiagnosticErrorCodes(0xA3, &codes);
+  return codes;
+}
+
+uint8_t EtherCATComm::GetTemperatureSensorErrorCode() {
+  std::array<uint8_t, 13> codes{};
+  if (!ReadDiagnosticErrorCodes(0xA4, &codes)) {
+    return 0;
+  }
+  return codes[0];
+}
+
+uint8_t EtherCATComm::GetFanErrorCode() {
+  std::array<uint8_t, 13> codes{};
+  if (!ReadDiagnosticErrorCodes(0xA5, &codes)) {
+    return 0;
+  }
+  return codes[0];
+}
+
+std::array<uint8_t, 13> EtherCATComm::GetZeroingErrorCodes() {
+  std::array<uint8_t, 13> codes{};
+  ReadDiagnosticErrorCodes(0xA6, &codes);
+  return codes;
+}
+
+std::array<uint8_t, 13> EtherCATComm::GetMotorErrorCodes() {
+  std::array<uint8_t, 13> codes{};
+  ReadDiagnosticErrorCodes(0xA8, &codes);
+  return codes;
+}
+
+JointId EtherCATComm::MotorIndexToJoint(uint8_t motor_index) const {
+  size_t slot = 0;
+  for (JointId joint_id : config_.valid_joints) {
+    if (config_.joint_limits.find(joint_id) == config_.joint_limits.end()) {
+      continue;
+    }
+    if (slot == motor_index) {
+      return joint_id;
+    }
+    ++slot;
+  }
+  return JointId::NUM_JOINTS;
+}
+
+std::vector<MotorDiagnosticError> EtherCATComm::CollectMotorErrors(
+    const std::array<uint8_t, 13>& codes) const {
+  std::vector<MotorDiagnosticError> errors;
+  for (uint8_t i = 0; i < codes.size(); ++i) {
+    if (codes[i] == 0) {
+      continue;
+    }
+    errors.push_back({i, MotorIndexToJoint(i), codes[i]});
+  }
+  return errors;
+}
+
+SelfTestErrorInfo EtherCATComm::GetSelfTestErrorInfo() {
+  SelfTestErrorInfo info;
+
+  info.summary = GetSelfTestSummaryErrorCode();
+  if (info.summary == 0) {
+    return info;
+  }
+
+  if (HasSelfTestError(info.summary, SelfTestError::Version)) {
+    info.version = GetVersionCheckErrorCode();
+    GHAND_LOG_INFO("Self-test error: version mismatch (0x%02X)", info.version);
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::PositionSensor)) {
+    info.position_sensor = CollectMotorErrors(GetPositionSensorErrorCodes());
+    GHAND_LOG_INFO("Self-test error: position sensor (%zu motors)",
+                   info.position_sensor.size());
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::TactileSensor)) {
+    info.tactile_sensor = CollectMotorErrors(GetTactileSensorErrorCodes());
+    GHAND_LOG_INFO("Self-test error: tactile sensor (%zu motors)",
+                   info.tactile_sensor.size());
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::TemperatureSensor)) {
+    info.temperature = GetTemperatureSensorErrorCode();
+    GHAND_LOG_INFO("Self-test error: temperature (0x%02X)", info.temperature);
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::Fan)) {
+    info.fan = GetFanErrorCode();
+    GHAND_LOG_INFO("Self-test error: fan (0x%02X)", info.fan);
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::Zeroing)) {
+    info.zeroing = CollectMotorErrors(GetZeroingErrorCodes());
+    GHAND_LOG_INFO("Self-test error: zeroing (%zu motors)",
+                   info.zeroing.size());
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::Motor)) {
+    info.motor = CollectMotorErrors(GetMotorErrorCodes());
+    GHAND_LOG_INFO("Self-test error: motor check (%zu motors)",
+                   info.motor.size());
+  }
+  return info;
 }
 
 // PDO parsing helper functions

@@ -5,6 +5,7 @@
 #define SRC_COMM_ETHERCAT_COMM_H_
 
 #include <atomic>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -66,6 +67,8 @@ class EtherCATComm : public IComm {
       const std::string& filename,
       std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
+
+  SelfTestErrorInfo GetSelfTestErrorInfo() override;
 
   // Low-level EtherCAT API (retained for internal use)
   int SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,
@@ -159,6 +162,22 @@ class EtherCATComm : public IComm {
   TactileData ParseTactileData(const uint8_t* data, size_t size,
                                size_t* offset) const;
   void ParseAndNotify(const uint8_t* data, size_t size);
+
+  // Self-test error helpers (object dictionary 0x2008). A1~A8 are internal.
+  bool ReadDiagnosticErrorCodes(uint8_t command,
+                                std::array<uint8_t, 13>* codes);
+  uint8_t GetSelfTestSummaryErrorCode();
+  uint8_t GetVersionCheckErrorCode();
+  std::array<uint8_t, 13> GetPositionSensorErrorCodes();
+  std::array<uint8_t, 13> GetTactileSensorErrorCodes();
+  uint8_t GetTemperatureSensorErrorCode();
+  uint8_t GetFanErrorCode();
+  std::array<uint8_t, 13> GetZeroingErrorCodes();
+  std::array<uint8_t, 13> GetMotorErrorCodes();
+
+  JointId MotorIndexToJoint(uint8_t motor_index) const;
+  std::vector<MotorDiagnosticError> CollectMotorErrors(
+      const std::array<uint8_t, 13>& codes) const;
 };
 
 }  // namespace internal

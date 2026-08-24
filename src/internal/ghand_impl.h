@@ -85,6 +85,9 @@ class GHandImpl {
   std::vector<Joint> GetJointsData() const;
   TactileData GetTactileData() const;
 
+  // Self-test error query (object dictionary 0x2008).
+  SelfTestErrorInfo GetSelfTestErrorInfo() const;
+
   // Firmware update
   FirmwareUpdateError BootUpdate(
       const std::string& filename,

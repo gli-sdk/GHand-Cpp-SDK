@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2025-2026 GLITech
 // SPDX-License-Identifier: GPL-3.0-only
 
+#include <string> 
+#include <memory>
+#include <map>
 #include "ghand/ghand.h"
 
 #include "internal/ghand_impl.h"
@@ -111,6 +114,10 @@ HandState GHand::GetHandData() { return impl_->GetHandData(); }
 std::vector<Joint> GHand::GetJointsData() { return impl_->GetJointsData(); }
 
 TactileData GHand::GetTactileData() { return impl_->GetTactileData(); }
+
+SelfTestErrorInfo GHand::GetSelfTestErrorInfo() {
+  return impl_->GetSelfTestErrorInfo();
+}
 
 FirmwareUpdateError GHand::BootUpdate(
     const std::string& filename,

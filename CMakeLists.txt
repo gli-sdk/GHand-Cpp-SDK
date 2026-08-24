@@ -120,6 +120,7 @@ set(SOURCES
     src/comm/ethercat_comm.cc
     src/comm/modbus_codec.cc
     src/comm/rs485_comm.cc
+    src/comm/self_test_workflow.cc
     src/internal/ghand_impl.cc
     src/internal/ghand_callback_manager.cc
     src/internal/file_lock.cc

@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <vector>
 #include <map>
+#include <string>
 
 #include "canfd_comm.h"
 #include "ghand_callback_manager.h"
@@ -464,6 +465,14 @@ std::vector<Joint> GHandImpl::GetJointsData() const {
 
 TactileData GHandImpl::GetTactileData() const {
   return callback_manager_->GetTactileData();
+}
+
+SelfTestErrorInfo GHandImpl::GetSelfTestErrorInfo() const {
+  if (!IsConnected()) {
+    GHAND_LOG_ERROR("GetSelfTestErrorInfo called while disconnected");
+    return SelfTestErrorInfo{};
+  }
+  return comm_->GetSelfTestErrorInfo();
 }
 
 FirmwareUpdateError GHandImpl::BootUpdate(

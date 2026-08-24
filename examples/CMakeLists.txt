@@ -75,6 +75,11 @@ add_executable(torque_control tutorial/04torque_control.cc)
 target_link_libraries(torque_control ghand)
 copy_runtime_for_target(torque_control)
 
+# 09. Self-test error example
+add_executable(self_test_error tutorial/09self_test_error.cc)
+target_link_libraries(self_test_error ghand)
+copy_runtime_for_target(self_test_error)
+
 # Gesture dance demo
 add_executable(gesture_dance demo/gesture_dance.cc)
 target_link_libraries(gesture_dance ghand)
