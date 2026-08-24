@@ -308,8 +308,10 @@ enum class TactileCheckError : uint8_t {
 enum class ZeroingCheckError : uint8_t {
   None                   = 0x00,
   MotorAbnormal          = 0x01,
-  FullStrokeCheckFailed  = 0x02,
-  ZeroingTimeout         = 0x03,
+  JointStall             = 0x02,
+  BrakeTimeout           = 0x03,
+  GlobalTimeout          = 0x04,
+  CommunicationFault     = 0x05,
 };
 
 /**

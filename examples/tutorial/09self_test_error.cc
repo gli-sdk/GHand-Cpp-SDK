@@ -75,10 +75,14 @@ const char* ZeroingErrorName(uint8_t code) {
       return "NONE";
     case ghand::ZeroingCheckError::MotorAbnormal:
       return "MOTOR_ABNORMAL";
-    case ghand::ZeroingCheckError::FullStrokeCheckFailed:
-      return "FULL_STROKE_CHECK_FAILED";
-    case ghand::ZeroingCheckError::ZeroingTimeout:
-      return "ZEROING_TIMEOUT";
+    case ghand::ZeroingCheckError::JointStall:
+      return "JOINT_STALL";
+    case ghand::ZeroingCheckError::BrakeTimeout:
+      return "BRAKE_TIMEOUT";
+    case ghand::ZeroingCheckError::GlobalTimeout:
+      return "GLOBAL_TIMEOUT";
+    case ghand::ZeroingCheckError::CommunicationFault:
+      return "COMMUNICATION_FAULT";
     default:
       return "UNKNOWN";
   }
