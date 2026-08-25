@@ -94,7 +94,7 @@ Linux 构建通过 pkg-config 使用系统 `libmodbus` 开发包；`libmodbus.so
 | 构件 | 说明 |
 |----------|-------------|
 | `include/ghand/` | 公共头文件 |
-| `lib/ghand.dll` / `libghand.so` | 共享库 |
+| `ghand.dll` / `libghand.so` | 共享库 |
 | `config/ghand5.json`、`config/ghandlite1.json` | 产品配置 |
 
 链接 `ghand`，并确保运行时可以访问 JSON 配置。

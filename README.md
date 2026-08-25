@@ -95,7 +95,7 @@ Copy the following artifacts into your project:
 | Artifact | Description |
 |----------|-------------|
 | `include/ghand/` | Public headers |
-| `lib/ghand.dll` / `libghand.so` | Shared library |
+| `ghand.dll` / `libghand.so` | Shared library |
 | `config/ghand5.json`, `config/ghandlite1.json` | Product configuration |
 
 Link against `ghand` and ensure the JSON config is accessible at runtime.
