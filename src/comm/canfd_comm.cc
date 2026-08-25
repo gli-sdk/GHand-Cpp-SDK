@@ -589,37 +589,40 @@ DeviceInfo CANFDComm::GetDeviceInfo() {
     std::vector<uint8_t> version_bytes;
     if (!ReadInputBytes(addr, 1, &version_bytes) ||
         version_bytes.size() < 2) {
-      GHAND_LOG_WARNING("Failed to read " << name << " version over CANFD");
-      return "";
+      return "N/A";
     }
     uint16_t raw =
         (static_cast<uint16_t>(version_bytes[0]) << 8) | version_bytes[1];
+    if (raw == 0) {
+      return "N/A";
+    }
     return ParsePackedFirmwareVersion(raw);
   };
 
-  if (!ReadInputBytes(0x1000, 8, &bytes)) {
-    GHAND_LOG_ERROR("Failed to read device name over CANFD");
-    return info;
+  if (ReadInputBytes(0x1000, 8, &bytes)) {
+    info.device_name = ParseDeviceName(bytes.data(), bytes.size());
+    if (info.device_name.empty()) {
+      info.device_name = "N/A";
+    }
   }
-  info.device_name = ParseDeviceName(bytes.data(), bytes.size());
 
-  if (!ReadInputBytes(0x1008, 8, &bytes)) {
-    GHAND_LOG_ERROR("Failed to read hardware version over CANFD");
-    return info;
+  if (ReadInputBytes(0x1008, 8, &bytes)) {
+    info.hardware_version = ParseHardwareVersion(bytes.data(), bytes.size());
+    if (info.hardware_version.empty()) {
+      info.hardware_version = "N/A";
+    }
   }
-  info.hardware_version = ParseHardwareVersion(bytes.data(), bytes.size());
 
-  if (!ReadInputBytes(0x1010, 8, &bytes)) {
-    GHAND_LOG_ERROR("Failed to read software version over CANFD");
-    return info;
+  if (ReadInputBytes(0x1010, 8, &bytes)) {
+    info.software_version = ParseFirmwareVersion(bytes.data(), bytes.size());
+    if (info.software_version.empty()) {
+      info.software_version = "N/A";
+    }
   }
-  info.software_version = ParseFirmwareVersion(bytes.data(), bytes.size());
 
-  if (!ReadInputBytes(0x1018, 8, &bytes)) {
-    GHAND_LOG_ERROR("Failed to read serial number over CANFD");
-    return info;
+  if (ReadInputBytes(0x1018, 8, &bytes)) {
+    info.serial_number = ParseSerialNumber(bytes.data(), bytes.size());
   }
-  info.serial_number = ParseSerialNumber(bytes.data(), bytes.size());
 
   info.firmware_package_version = read_version(0x1185, "firmware package");
   info.position_sensor_version = read_version(0x1186, "position sensor");

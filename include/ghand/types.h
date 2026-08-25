@@ -296,16 +296,16 @@ enum class FirmwareUpdateError : int {
 
 // Device info structure
 struct DeviceInfo {
-  std::string device_name;
-  std::string hardware_version;
-  std::string software_version;       // Main controller firmware version
-  std::string position_sensor_version;
-  std::string tactile_sensor_version;
-  std::string motor_driver_version;
-  std::string firmware_package_version;
-  std::string thumb_tactile_sensor_version;
-  std::string finger_tactile_sensor_version;
-  unsigned int serial_number;
+  std::string device_name = "N/A";
+  std::string hardware_version = "N/A";
+  std::string software_version = "N/A";       // Main controller firmware version
+  std::string position_sensor_version = "N/A";
+  std::string tactile_sensor_version = "N/A";
+  std::string motor_driver_version = "N/A";
+  std::string firmware_package_version = "N/A";
+  std::string thumb_tactile_sensor_version = "N/A";
+  std::string finger_tactile_sensor_version = "N/A";
+  unsigned int serial_number = 0;
 };
 
 /**

@@ -680,6 +680,9 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
   result = SDORead(1, 0x1008, 0x00, &size, &value, EC_TIMEOUTRXM);
   if (result == 1) {
     info.device_name = ByteArrayString(value, sizeof(value));
+    if (info.device_name.empty()) {
+      info.device_name = "N/A";
+    }
   }
 
   size = sizeof(value);
@@ -687,6 +690,9 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
   result = SDORead(1, 0x1009, 0x00, &size, &value, EC_TIMEOUTRXM);
   if (result == 1) {
     info.hardware_version = ByteArrayString(value, sizeof(value));
+    if (info.hardware_version.empty()) {
+      info.hardware_version = "N/A";
+    }
   }
 
   size = sizeof(value);
@@ -710,6 +716,9 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
   
   if (info.software_version.empty()) {
     info.software_version = ReadFirmwareVersion(0x01);
+  }
+  if (info.software_version.empty()) {
+    info.software_version = "N/A";
   }
   info.position_sensor_version = ReadFirmwareVersion(0x02);
   info.tactile_sensor_version = ReadFirmwareVersion(0x03);
@@ -1331,19 +1340,23 @@ std::string EtherCATComm::ReadFirmwareVersion(uint8_t mcu_id) {
   std::uint8_t cmd = mcu_id;
   int size = sizeof(std::uint8_t);
   if (SDOWrite(1, 0x2007, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
-    return "";
+    return "N/A";
   }
 
   std::uint8_t version_high = 0;
   size = sizeof(std::uint8_t);
   if (SDORead(1, 0x2007, 0x02, &size, &version_high, EC_TIMEOUTRXM) <= 0) {
-    return "";
+    return "N/A";
   }
 
   std::uint8_t version_low = 0;
   size = sizeof(std::uint8_t);
   if (SDORead(1, 0x2007, 0x03, &size, &version_low, EC_TIMEOUTRXM) <= 0) {
-    return "";
+    return "N/A";
+  }
+
+  if (version_high == 0 && version_low == 0) {
+    return "N/A";
   }
 
   uint8_t major = (version_high >> 5) & 0x07;

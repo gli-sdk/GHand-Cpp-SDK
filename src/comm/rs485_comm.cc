@@ -464,53 +464,54 @@ DeviceInfo RS485Comm::GetDeviceInfo() {
   if (!IsConnected()) return info;
 
   std::vector<uint8_t> bytes;
-  if (!ReadInputRegistersBytes(0x1000, 8, &bytes)) {
-    GHAND_LOG_ERROR("Failed to read device name");
-    return info;
+  if (ReadInputRegistersBytes(0x1000, 8, &bytes)) {
+    info.device_name = ParseDeviceName(bytes.data(), bytes.size());
+    if (info.device_name.empty()) {
+      info.device_name = "N/A";
+    }
   }
-  info.device_name = ParseDeviceName(bytes.data(), bytes.size());
 
-  if (!ReadInputRegistersBytes(0x1008, 8, &bytes)) {
-    GHAND_LOG_ERROR("Failed to read hardware version");
-    return info;
+  if (ReadInputRegistersBytes(0x1008, 8, &bytes)) {
+    info.hardware_version = ParseHardwareVersion(bytes.data(), bytes.size());
+    if (info.hardware_version.empty()) {
+      info.hardware_version = "N/A";
+    }
   }
-  info.hardware_version = ParseHardwareVersion(bytes.data(), bytes.size());
 
-  if (!ReadInputRegistersBytes(0x1010, 8, &bytes)) {
-    GHAND_LOG_ERROR("Failed to read software version");
-    return info;
+  if (ReadInputRegistersBytes(0x1010, 8, &bytes)) {
+    info.software_version = ParseFirmwareVersion(bytes.data(), bytes.size());
+    if (info.software_version.empty()) {
+      info.software_version = "N/A";
+    }
   }
-  info.software_version = ParseFirmwareVersion(bytes.data(), bytes.size());
 
-  if (!ReadInputRegistersBytes(0x1018, 8, &bytes)) {
-    GHAND_LOG_ERROR("Failed to read serial number");
-    return info;
+  if (ReadInputRegistersBytes(0x1018, 8, &bytes)) {
+    info.serial_number = ParseSerialNumber(bytes.data(), bytes.size());
   }
-  info.serial_number = ParseSerialNumber(bytes.data(), bytes.size());
 
   if (ReadInputRegistersBytes(0x1185, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
-    info.firmware_package_version = ParsePackedFirmwareVersion(raw);
+    if (raw != 0) info.firmware_package_version = ParsePackedFirmwareVersion(raw);
   }
   if (ReadInputRegistersBytes(0x1186, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
-    info.position_sensor_version = ParsePackedFirmwareVersion(raw);
+    if (raw != 0) info.position_sensor_version = ParsePackedFirmwareVersion(raw);
   }
   if (ReadInputRegistersBytes(0x1187, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
-    info.tactile_sensor_version = ParsePackedFirmwareVersion(raw);
+    if (raw != 0) info.tactile_sensor_version = ParsePackedFirmwareVersion(raw);
   }
   if (ReadInputRegistersBytes(0x1188, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
-    info.motor_driver_version = ParsePackedFirmwareVersion(raw);
+    if (raw != 0) info.motor_driver_version = ParsePackedFirmwareVersion(raw);
   }
   if (ReadInputRegistersBytes(0x1189, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
-    info.thumb_tactile_sensor_version = ParsePackedFirmwareVersion(raw);
+    if (raw != 0) info.thumb_tactile_sensor_version = ParsePackedFirmwareVersion(raw);
   }
   if (ReadInputRegistersBytes(0x118A, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
-    info.finger_tactile_sensor_version = ParsePackedFirmwareVersion(raw);
+    if (raw != 0) info.finger_tactile_sensor_version = ParsePackedFirmwareVersion(raw);
   }
 
   return info;
