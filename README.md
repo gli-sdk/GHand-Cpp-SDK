@@ -156,7 +156,7 @@ int main() {
 
     // Control joints
     std::vector<ghand::JointCommand> cmds = {
-        {ghand::JointId::THUMB_MCP, 45.0f, 50, 50},
+        {ghand::JointId::FF_PIP, 45.0f, 50, 50},
         {ghand::JointId::FF_MCP,    30.0f, 50, 50},
     };
     hand->MoveJoints(cmds);
