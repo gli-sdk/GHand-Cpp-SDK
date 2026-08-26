@@ -150,6 +150,7 @@ class EtherCATComm : public IComm {
 
   // Firmware version helper
   std::string ReadFirmwareVersion(uint8_t mcu_id);
+  bool CompleteFirmwareResetHandshake(uint16_t slave);
 
   // Static helper methods
   static void FoeProgressHook(uint16_t slave, int32_t packetnumber,
