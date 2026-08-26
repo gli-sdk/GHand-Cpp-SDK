@@ -42,6 +42,9 @@ std::string ParsePackedFirmwareVersion(uint16_t raw);
 // Parse serial number from 16 bytes (8 registers).
 uint32_t ParseSerialNumber(const uint8_t* raw_bytes, size_t len = 16);
 
+// Parse product serial number from 19 ASCII bytes.
+std::string ParseAsciiSerialNumber(const uint8_t* raw_bytes, size_t len = 19);
+
 // Parse hand type from 2 bytes (1 register).
 // Returns 0 for unknown, 1 for left hand, 2 for right hand.
 uint8_t ParseHandType(const uint8_t* raw_bytes, size_t len = 2);

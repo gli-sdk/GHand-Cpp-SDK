@@ -485,8 +485,11 @@ DeviceInfo RS485Comm::GetDeviceInfo() {
     }
   }
 
-  if (ReadInputRegistersBytes(0x1018, 8, &bytes)) {
-    info.serial_number = ParseSerialNumber(bytes.data(), bytes.size());
+  if (ReadInputRegistersBytes(0x119A, 10, &bytes)) {
+    std::string serial = ParseAsciiSerialNumber(bytes.data(), bytes.size());
+    if (!serial.empty()) {
+      info.serial_number = serial;
+    }
   }
 
   if (ReadInputRegistersBytes(0x1185, 1, &bytes) && bytes.size() >= 2) {

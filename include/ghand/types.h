@@ -305,7 +305,7 @@ struct DeviceInfo {
   std::string firmware_package_version = "N/A";
   std::string thumb_tactile_sensor_version = "N/A";
   std::string finger_tactile_sensor_version = "N/A";
-  unsigned int serial_number = 0;
+  std::string serial_number = "N/A";
 };
 
 /**

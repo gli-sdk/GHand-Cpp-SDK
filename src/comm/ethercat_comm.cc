@@ -32,6 +32,7 @@
 
 #include "ghand/logging.h"
 #include "logging_macros.h"
+#include "modbus_codec.h"
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr int kEcTimeoutMon = 500;
@@ -702,16 +703,15 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
     info.software_version = ByteArrayString(value, sizeof(value));
   }
 
-  size = sizeof(value);
+  size = 19;
   memset(value, 0, sizeof(value));
-  result = SDORead(1, 0x1018, 0x04, &size, &value, EC_TIMEOUTRXM);
+  result = SDORead(1, 0x200C, 0x01, &size, &value, EC_TIMEOUTRXM);
   if (result == 1) {
-    unsigned int serial_num = 0;
-    serial_num |= static_cast<unsigned char>(value[0]);
-    serial_num |= static_cast<unsigned char>(value[1]) << 8;
-    serial_num |= static_cast<unsigned char>(value[2]) << 16;
-    serial_num |= static_cast<unsigned char>(value[3]) << 24;
-    info.serial_number = serial_num;
+    std::string serial =
+        ParseAsciiSerialNumber(value, static_cast<size_t>(size));
+    if (!serial.empty()) {
+      info.serial_number = serial;
+    }
   }
   
   if (info.software_version.empty()) {

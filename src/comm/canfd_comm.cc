@@ -620,8 +620,11 @@ DeviceInfo CANFDComm::GetDeviceInfo() {
     }
   }
 
-  if (ReadInputBytes(0x1018, 8, &bytes)) {
-    info.serial_number = ParseSerialNumber(bytes.data(), bytes.size());
+  if (ReadInputBytes(0x119A, 10, &bytes)) {
+    std::string serial = ParseAsciiSerialNumber(bytes.data(), bytes.size());
+    if (!serial.empty()) {
+      info.serial_number = serial;
+    }
   }
 
   info.firmware_package_version = read_version(0x1185, "firmware package");

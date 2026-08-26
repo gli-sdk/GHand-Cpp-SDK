@@ -105,6 +105,10 @@ uint32_t ParseSerialNumber(const uint8_t* raw_bytes, size_t len) {
   return serial;
 }
 
+std::string ParseAsciiSerialNumber(const uint8_t* raw_bytes, size_t len) {
+  return ParseUtf8String(raw_bytes, len > 19 ? 19 : len);
+}
+
 uint8_t ParseHandType(const uint8_t* raw_bytes, size_t len) {
   if (len < 2) return 0;
   return raw_bytes[1];
