@@ -26,7 +26,7 @@ ProductConfig LoadProductConfig(ProductType product);
  * whose name field exactly matches (case-insensitive) device_name, and loads
  * it.
  *
- * @param device_name Device-reported device name (e.g., "XIAOYAO-Hand")
+ * @param device_name Device-reported device name (e.g., "GHand 5")
  * @return ProductConfig on match, empty config (name empty) on failure
  */
 ProductConfig FindConfigByName(const std::string& device_name);

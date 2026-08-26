@@ -54,7 +54,7 @@ bool HandZero(ghand::GHand& hand) {
 }
 
 int main() {
-  std::cout << "***** Xiaoyao Dexterous Hand SDK - Support Demo *****\n"
+  std::cout << "***** GHand SDK - Support Demo *****\n"
             << '\n';
   auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);

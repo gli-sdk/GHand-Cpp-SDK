@@ -239,7 +239,7 @@ bool SecondAction(ghand::GHand& hand) {
 
 // Main function.
 int main() {
-  std::cout << "***** Xiaoyao Dexterous Hand SDK - Gesture Dance Demo *****\n"
+  std::cout << "***** GHand SDK - Gesture Dance Demo *****\n"
             << '\n';
   auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);

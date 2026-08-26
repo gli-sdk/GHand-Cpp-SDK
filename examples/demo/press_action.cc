@@ -185,7 +185,7 @@ void RunPressDemo(ghand::GHand& hand) {
 }
 
 int main() {
-  std::cout << "***** Xiaoyao Dexterous Hand SDK - Press Demo *****\n" << '\n';
+  std::cout << "***** GHand SDK - Press Demo *****\n" << '\n';
   auto hand = CreateConnectedHand();
   if (!hand) return 1;
 

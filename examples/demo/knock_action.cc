@@ -61,7 +61,7 @@ int main() {
 #ifdef _WIN32
   SetConsoleOutputCP(CP_UTF8);
 #endif
-  std::cout << "***** Xiaoyao Dexterous Hand SDK - Knock Demo *****\n"
+  std::cout << "***** GHand SDK - Knock Demo *****\n"
             << '\n';
   auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
