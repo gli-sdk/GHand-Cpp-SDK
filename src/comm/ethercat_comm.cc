@@ -1156,6 +1156,17 @@ SelfTestErrorInfo EtherCATComm::GetSelfTestErrorInfo() {
   return info;
 }
 
+uint8_t EtherCATComm::GetSelfTestStatus() {
+  uint8_t state = 0;
+  int size = sizeof(uint8_t);
+  if (SDORead(1, kSelfTestIndex, kSelfTestSubState, &size, &state,
+              EC_TIMEOUTRXM) <= 0) {
+    GHAND_LOG_ERROR("Self-test status read failed");
+    return 0;
+  }
+  return state;
+}
+
 // PDO parsing helper functions
 namespace {
 

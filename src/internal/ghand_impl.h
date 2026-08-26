@@ -87,6 +87,7 @@ class GHandImpl {
 
   // Self-test error query (object dictionary 0x2008).
   SelfTestErrorInfo GetSelfTestErrorInfo() const;
+  uint8_t GetSelfTestStatus() const;
 
   // Firmware update
   FirmwareUpdateError BootUpdate(

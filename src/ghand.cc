@@ -119,6 +119,8 @@ SelfTestErrorInfo GHand::GetSelfTestErrorInfo() {
   return impl_->GetSelfTestErrorInfo();
 }
 
+uint8_t GHand::GetSelfTestStatus() { return impl_->GetSelfTestStatus(); }
+
 FirmwareUpdateError GHand::BootUpdate(
     const std::string& filename,
     std::function<void(int)> progress_callback) {

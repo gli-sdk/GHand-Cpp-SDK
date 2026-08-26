@@ -475,6 +475,14 @@ SelfTestErrorInfo GHandImpl::GetSelfTestErrorInfo() const {
   return comm_->GetSelfTestErrorInfo();
 }
 
+uint8_t GHandImpl::GetSelfTestStatus() const {
+  if (!IsConnected()) {
+    GHAND_LOG_ERROR("GetSelfTestStatus called while disconnected");
+    return 0;
+  }
+  return comm_->GetSelfTestStatus();
+}
+
 FirmwareUpdateError GHandImpl::BootUpdate(
                         const std::string& filename,
                         std::function<void(int)> progress_callback) {

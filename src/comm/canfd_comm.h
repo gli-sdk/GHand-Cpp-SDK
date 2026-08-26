@@ -72,6 +72,7 @@ class CANFDComm : public IComm {
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
   SelfTestErrorInfo GetSelfTestErrorInfo() override;
+  uint8_t GetSelfTestStatus() override;
 
  private:
   // CANFD arbitration helpers (Python SDK compatible)

@@ -697,6 +697,18 @@ SelfTestErrorInfo RS485Comm::GetSelfTestErrorInfo() {
   return BuildSelfTestErrorInfo(config_, io);
 }
 
+uint8_t RS485Comm::GetSelfTestStatus() {
+  if (!IsConnected()) return 0;
+  std::lock_guard<std::mutex> lock(io_mutex_);
+  if (ctx_ == nullptr) return 0;
+  modbus_set_slave(ctx_, slave_id_);
+  uint16_t reg = 0;
+  if (modbus_read_registers(ctx_, 0x0038, 1, &reg) != 1) {
+    return 0;
+  }
+  return static_cast<uint8_t>(reg & 0x00FF);
+}
+
 // Tactile sensor
 
 bool RS485Comm::OpenTactile() {

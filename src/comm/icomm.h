@@ -84,6 +84,9 @@ class IComm {
   // Self-test error query (object dictionary 0x2008). Default implementation
   // returns an empty result for backends that do not support the query.
   virtual SelfTestErrorInfo GetSelfTestErrorInfo() { return SelfTestErrorInfo{}; }
+  // Self-test status: 0 idle, 1 processing, 2 command processed successfully,
+  // 3 failed.
+  virtual uint8_t GetSelfTestStatus() { return 0; }
 };
 
 }  // namespace internal

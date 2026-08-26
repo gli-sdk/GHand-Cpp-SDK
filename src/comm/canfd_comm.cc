@@ -755,6 +755,15 @@ SelfTestErrorInfo CANFDComm::GetSelfTestErrorInfo() {
   return BuildSelfTestErrorInfo(config_, io);
 }
 
+uint8_t CANFDComm::GetSelfTestStatus() {
+  if (!IsConnected()) return 0;
+  std::vector<uint8_t> bytes;
+  if (!ReadRegisters(0x0038, 1, &bytes, 0x03) || bytes.size() < 2) {
+    return 0;
+  }
+  return bytes[1];
+}
+
 // Tactile sensor
 
 bool CANFDComm::WriteTactileControl(uint16_t command) {

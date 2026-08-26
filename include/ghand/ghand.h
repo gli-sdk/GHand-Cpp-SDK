@@ -241,6 +241,17 @@ class GHAND_API GHand {
    */
   SelfTestErrorInfo GetSelfTestErrorInfo();
 
+  /**
+   * @brief Read the current self-test status byte.
+   *
+   * EtherCAT reads 0x2008:0x02. CANFD and RS485 read the low byte of holding
+   * register 0x0038.
+   *
+   * Status values: 0 idle, 1 processing, 2 command processed successfully,
+   * 3 failed.
+   */
+  uint8_t GetSelfTestStatus();
+
   // Callback registration
   /**
    * @brief Register joint data callback

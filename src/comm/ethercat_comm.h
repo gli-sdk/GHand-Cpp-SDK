@@ -69,6 +69,7 @@ class EtherCATComm : public IComm {
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
   SelfTestErrorInfo GetSelfTestErrorInfo() override;
+  uint8_t GetSelfTestStatus() override;
 
   // Low-level EtherCAT API (retained for internal use)
   int SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,
