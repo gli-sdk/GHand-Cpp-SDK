@@ -36,6 +36,7 @@
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr int kEcTimeoutMon = 500;
+constexpr int kSdoWriteSettleMs = 20;
 
 namespace ghand {
 namespace internal {
@@ -561,6 +562,7 @@ bool EtherCATComm::CompleteFirmwareResetHandshake(uint16_t slave) {
     GHAND_LOG_ERROR("Failed to write firmware reset-ready command 0x5B");
     return false;
   }
+  std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
 
   constexpr int kResetReadyPolls = 50;
   constexpr int kResetReadyDelayMs = 100;
@@ -595,6 +597,7 @@ FirmwareUpdateError EtherCATComm::BootUpdate(
   std::uint8_t result = 0xFF;
   int ret = SDOWrite(1, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM);
   if (ret > 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
     ret = SDORead(1, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM);
     if (ret > 0 && state == 0) {
       ret = SDORead(1, 0x2005, 0x03, &size, &result, EC_TIMEOUTRXM);
@@ -914,6 +917,7 @@ bool EtherCATComm::ClearFault() {
   int times = 100;
   ret = SDOWrite(1, 0x2002, 0x01, size, &command, EC_TIMEOUTRXM);
   if (ret > 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
     while (times--) {
       ret = SDORead(1, 0x2002, 0x02, &size, &state, EC_TIMEOUTRXM);
       if (ret > 0 && state == 0) {
@@ -937,6 +941,7 @@ bool EtherCATComm::InitJoint() {
   int times = 100;
   ret = SDOWrite(1, 0x2003, 0x01, size, &command, EC_TIMEOUTRXM);
   if (ret > 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
     while (times--) {
       ret = SDORead(1, 0x2003, 0x02, &size, &state, EC_TIMEOUTRXM);
       if (ret > 0 && state == 0) {
@@ -968,6 +973,7 @@ bool EtherCATComm::ZeroTactile() {
   std::uint8_t state = 0xFF;
   int size = sizeof(std::uint8_t);
   int result = SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
+  std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
   result = SDORead(1, 0x2004, 0x03, &size, &state, EC_TIMEOUTRXM);
   return result > 0;
 }
@@ -999,6 +1005,7 @@ bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
     GHAND_LOG_ERROR("Self-test 0x%02X: SDO write failed", command);
     return false;
   }
+  std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
 
   uint8_t state = 0xFF;
   int attempts = kSelfTestPollAttempts;
@@ -1399,6 +1406,7 @@ std::string EtherCATComm::ReadFirmwareVersion(uint8_t mcu_id) {
   if (SDOWrite(1, 0x2007, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
     return "N/A";
   }
+  std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
 
   std::uint8_t version_high = 0;
   size = sizeof(std::uint8_t);
@@ -1430,6 +1438,7 @@ bool EtherCATComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
     if (SDOWrite(1, 0x2005, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
       return false;
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
     std::uint8_t state = 0xFF;
     size = sizeof(std::uint8_t);
     if (SDORead(1, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM) <= 0) {

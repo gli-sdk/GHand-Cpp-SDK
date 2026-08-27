@@ -91,7 +91,7 @@ class CANFDComm : public IComm {
   bool ReadRegisters(int addr, int count, std::vector<uint8_t>* out_bytes,
                      int func_code = 0x04, int timeout_ms = 500);
   bool WriteRegisters(int addr, const std::vector<uint8_t>& data,
-                      int timeout_ms = 5000);
+                      int timeout_ms = 500);
 
   bool WriteSingleRegister(int addr, uint16_t value, int timeout_ms = 500);
   bool WaitHoldingResult(int addr, int timeout_ms = 2000,
