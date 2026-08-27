@@ -547,43 +547,56 @@ bool EtherCATComm::InputBin(const char* fname, int* length) {
   return true;
 }
 
-bool EtherCATComm::CompleteFirmwareResetHandshake(uint16_t slave) {
-  soem_->ctx.slavelist[slave].state = EC_STATE_SAFE_OP;
-  ecx_writestate(&soem_->ctx, slave);
-  if (ecx_statecheck(&soem_->ctx, slave, EC_STATE_SAFE_OP,
-                     EC_TIMEOUTSTATE * 10) != EC_STATE_SAFE_OP) {
-    GHAND_LOG_ERROR("Failed to enter SAFEOP after firmware FOE transfer");
-    return false;
+FirmwareUpdateError EtherCATComm::CompleteFirmwareResetHandshake(uint16_t slave) {
+  const uint16_t target_states[] = {
+      EC_STATE_INIT,
+      EC_STATE_PRE_OP,
+      EC_STATE_SAFE_OP,
+  };
+  for (uint16_t target_state : target_states) {
+    soem_->ctx.slavelist[slave].state = target_state;
+    ecx_writestate(&soem_->ctx, slave);
+    if (ecx_statecheck(&soem_->ctx, slave, target_state,
+                       EC_TIMEOUTSTATE * 10) != target_state) {
+      GHAND_LOG_ERROR("Failed to switch communication state after firmware FOE transfer");
+      return FirmwareUpdateError::SWITCH_COMM_STATE_FAILED;
+    }
   }
+
+  dorun_ = 1;
+  soem_->ctx.slavelist[slave].state = EC_STATE_OPERATIONAL;
+  ecx_writestate(&soem_->ctx, slave);
+  StartThreads();
+  if (ecx_statecheck(&soem_->ctx, slave, EC_STATE_OPERATIONAL,
+                     EC_TIMEOUTSTATE * 10) != EC_STATE_OPERATIONAL) {
+    GHAND_LOG_ERROR("Failed to switch communication state after firmware FOE transfer");
+    return FirmwareUpdateError::SWITCH_COMM_STATE_FAILED;
+  }
+  inOP_ = 1;
 
   std::uint8_t command = 0x5B;
   int size = sizeof(std::uint8_t);
   if (SDOWrite(slave, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM) <= 0) {
-    GHAND_LOG_ERROR("Failed to write firmware reset-ready command 0x5B");
-    return false;
+    GHAND_LOG_ERROR("Failed to write firmware reset check command 0x5B");
+    return FirmwareUpdateError::WRITE_RESET_CHECK_FAILED;
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
 
-  constexpr int kResetReadyPolls = 50;
-  constexpr int kResetReadyDelayMs = 100;
-  for (int i = 0; i < kResetReadyPolls; ++i) {
-    std::uint8_t state = 0xFF;
-    size = sizeof(std::uint8_t);
-    if (SDORead(slave, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM) > 0 &&
-        state == 1) {
-      command = 0x5C;
-      size = sizeof(std::uint8_t);
-      if (SDOWrite(slave, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM) <= 0) {
-        GHAND_LOG_ERROR("Failed to write firmware reset command 0x5C");
-        return false;
-      }
-      return true;
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(kResetReadyDelayMs));
+  std::uint8_t state = 0xFF;
+  size = sizeof(std::uint8_t);
+  if (SDORead(slave, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM) <= 0 ||
+      state != 1) {
+    GHAND_LOG_ERROR("Device firmware reset is unavailable");
+    return FirmwareUpdateError::NOT_RESETTABLE;
   }
 
-  GHAND_LOG_ERROR("Timed out waiting for firmware reset-ready state");
-  return false;
+  command = 0x5C;
+  size = sizeof(std::uint8_t);
+  if (SDOWrite(slave, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM) <= 0) {
+    GHAND_LOG_ERROR("Firmware reset command 0x5C failed");
+    return FirmwareUpdateError::FIRMWARE_RESET_FAILED;
+  }
+  return FirmwareUpdateError::SUCCESS;
 }
 
 FirmwareUpdateError EtherCATComm::BootUpdate(
@@ -641,9 +654,10 @@ FirmwareUpdateError EtherCATComm::BootUpdate(
           ecx_FOEwrite(&soem_->ctx, slave, file_name, 0, filesize,
                        &file_buffer_, EC_TIMEOUTSTATE * 10);
 
-      bool reset_handshake_ok = false;
+      FirmwareUpdateError reset_handshake_result =
+          FirmwareUpdateError::FOE_TRANSFER_FAILED;
       if (update_result > 0) {
-        reset_handshake_ok = CompleteFirmwareResetHandshake(slave);
+        reset_handshake_result = CompleteFirmwareResetHandshake(slave);
       }
 
       GHAND_LOG_DEBUG("Releasing device lock after firmware update (result: "
@@ -652,8 +666,8 @@ FirmwareUpdateError EtherCATComm::BootUpdate(
 
       foe_instance_ = nullptr;
       if (update_result > 0) {
-        if (!reset_handshake_ok) {
-          return FirmwareUpdateError::FOE_TRANSFER_FAILED;
+        if (reset_handshake_result != FirmwareUpdateError::SUCCESS) {
+          return reset_handshake_result;
         }
         return FirmwareUpdateError::SUCCESS;
       }

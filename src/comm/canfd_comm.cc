@@ -337,7 +337,11 @@ bool CANFDComm::WriteRegisters(int addr, const std::vector<uint8_t>& data,
       rx_errors_++;
       return false;
     }
-    if (r_fc == func_code && r_start == 1 && r_end == 1) return true;
+    if (r_fc == func_code && r_start == 1 && r_end == 1) {
+      if (resp_len < 4) return false;
+      return resp_data[0] == payload[0] && resp_data[1] == payload[1] &&
+             resp_data[2] == payload[2] && resp_data[3] == payload[3];
+    }
   }
 }
 
@@ -545,6 +549,7 @@ bool CANFDComm::SetBaudrateConfig(uint8_t baudrate_gear) {
     return false;
   }
 
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
   GHAND_LOG_INFO("CANFD baudrate config set to gear 0x"
                  << std::hex << static_cast<int>(baudrate_gear) << std::dec
                  << " (bitrate=" << baudrate_config.bitrate << "/"

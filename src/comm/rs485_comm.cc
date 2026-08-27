@@ -597,6 +597,7 @@ bool RS485Comm::SetBaudrateConfig(uint8_t baudrate_gear) {
     return false;
   }
 
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
   GHAND_LOG_INFO("RS485 baudrate config set to gear 0x"
                  << std::hex << static_cast<int>(baudrate_gear) << std::dec
                  << " (" << baudrate

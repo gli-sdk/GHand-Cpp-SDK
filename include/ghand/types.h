@@ -284,6 +284,10 @@ enum class FirmwareUpdateError : int {
   PREPARE_COMMAND_FAILED,   // Write 0x5A pre-check failed
   ENTER_BOOT_MODE_FAILED,   // Enter BOOT state failed
   FOE_TRANSFER_FAILED,      // FOE transfer failed
+  SWITCH_COMM_STATE_FAILED,  // Communication state switch failed
+  WRITE_RESET_CHECK_FAILED,  // Write reset check command failed
+  NOT_RESETTABLE,            // Device reset is unavailable
+  FIRMWARE_RESET_FAILED,     // Firmware reset command failed
   MAIN_CONTROLLER_FAILED,   // Main controller MCU upgrade failed
   POSITION_SENSOR_FAILED,   // Position sensor MCU upgrade failed
   TACTILE_SENSOR_FAILED,    // Tactile sensor MCU upgrade failed
