@@ -542,17 +542,8 @@ FirmwareUpdateError GHandImpl::BootUpdate(
     }
     comm_->Disconnect();
     return FirmwareUpdateError::RECONNECT_FAILED;
-  } else {
-    for (int i = 0; i < retry_count; i++) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
-
-      if (Connect(device_name_)) {
-        return ret;
-      }
-    }
-    comm_->Disconnect();
-    return FirmwareUpdateError::RECONNECT_FAILED;
   }
+  return ret;
 }
 
 void GHandImpl::ClampJointAngle(JointCommand& joint) {
