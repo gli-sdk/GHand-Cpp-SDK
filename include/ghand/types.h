@@ -285,7 +285,6 @@ enum class FirmwareUpdateError : int {
   ENTER_BOOT_MODE_FAILED,   // Enter BOOT state failed
   FOE_TRANSFER_FAILED,      // FOE transfer failed
   SWITCH_COMM_STATE_FAILED,  // Communication state switch failed
-  WRITE_RESET_CHECK_FAILED,  // Write reset check command failed
   NOT_RESETTABLE,            // Device reset is unavailable
   FIRMWARE_RESET_FAILED,     // Firmware reset command failed
   MAIN_CONTROLLER_FAILED,   // Main controller MCU upgrade failed

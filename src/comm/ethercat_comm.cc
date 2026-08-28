@@ -37,6 +37,9 @@
 constexpr double kPi = 3.14159265358979323846;
 constexpr int kEcTimeoutMon = 500;
 constexpr int kSdoWriteSettleMs = 20;
+constexpr int kFirmwareResetReadyPollMs = 500;
+constexpr int kFirmwareResetReadyTimeoutMs = 5 * 60 * 1000;
+constexpr int kFirmwareResetDelayMs = 1000;
 
 namespace ghand {
 namespace internal {
@@ -574,29 +577,37 @@ FirmwareUpdateError EtherCATComm::CompleteFirmwareResetHandshake(uint16_t slave)
   }
   inOP_ = 1;
 
-  std::uint8_t command = 0x5B;
-  int size = sizeof(std::uint8_t);
-  if (SDOWrite(slave, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM) <= 0) {
-    GHAND_LOG_ERROR("Failed to write firmware reset check command 0x5B");
-    return FirmwareUpdateError::WRITE_RESET_CHECK_FAILED;
-  }
-  std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
+  const auto reset_ready_deadline =
+      std::chrono::steady_clock::now() +
+      std::chrono::milliseconds(kFirmwareResetReadyTimeoutMs);
+  while (std::chrono::steady_clock::now() < reset_ready_deadline) {
+    std::uint8_t command = 0x5B;
+    int size = sizeof(std::uint8_t);
+    if (SDOWrite(slave, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM) <= 0) {
+      GHAND_LOG_ERROR("Failed to write firmware reset check command 0x5B");
+      continue;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
 
-  std::uint8_t state = 0xFF;
-  size = sizeof(std::uint8_t);
-  if (SDORead(slave, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM) <= 0 ||
-      state != 1) {
-    GHAND_LOG_ERROR("Device firmware reset is unavailable");
-    return FirmwareUpdateError::NOT_RESETTABLE;
+    std::uint8_t state = 0xFF;
+    size = sizeof(std::uint8_t);
+    if (SDORead(slave, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM) > 0 &&
+        state == 1) {
+      command = 0x5C;
+      size = sizeof(std::uint8_t);
+      if (SDOWrite(slave, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM) <= 0) {
+        GHAND_LOG_ERROR("Firmware reset command 0x5C failed");
+        return FirmwareUpdateError::FIRMWARE_RESET_FAILED;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(kFirmwareResetDelayMs));
+      return FirmwareUpdateError::SUCCESS;
+    }
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(kFirmwareResetReadyPollMs));
   }
 
-  command = 0x5C;
-  size = sizeof(std::uint8_t);
-  if (SDOWrite(slave, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM) <= 0) {
-    GHAND_LOG_ERROR("Firmware reset command 0x5C failed");
-    return FirmwareUpdateError::FIRMWARE_RESET_FAILED;
-  }
-  return FirmwareUpdateError::SUCCESS;
+  GHAND_LOG_ERROR("Device firmware reset is unavailable");
+  return FirmwareUpdateError::NOT_RESETTABLE;
 }
 
 FirmwareUpdateError EtherCATComm::BootUpdate(
@@ -652,7 +663,7 @@ FirmwareUpdateError EtherCATComm::BootUpdate(
       char file_name[] = "ECATFW__firmware";
       int update_result =
           ecx_FOEwrite(&soem_->ctx, slave, file_name, 0, filesize,
-                       &file_buffer_, EC_TIMEOUTSTATE * 10);
+                       &file_buffer_, EC_TIMEOUTSTATE * 1000);
 
       FirmwareUpdateError reset_handshake_result =
           FirmwareUpdateError::FOE_TRANSFER_FAILED;
