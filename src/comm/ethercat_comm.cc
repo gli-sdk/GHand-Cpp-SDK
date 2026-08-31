@@ -584,7 +584,7 @@ FirmwareUpdateError EtherCATComm::CompleteFirmwareResetHandshake(uint16_t slave)
     std::uint8_t command = 0x5B;
     int size = sizeof(std::uint8_t);
     if (SDOWrite(slave, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM) <= 0) {
-      GHAND_LOG_ERROR("Failed to write firmware reset check command 0x5B");
+      // GHAND_LOG_ERROR("Failed to write firmware reset check command 0x5B");
       continue;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
@@ -621,7 +621,7 @@ FirmwareUpdateError EtherCATComm::BootUpdate(
   std::uint8_t result = 0xFF;
   int ret = SDOWrite(1, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM);
   if (ret > 0) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
+    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     ret = SDORead(1, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM);
     if (ret > 0 && state == 0) {
       ret = SDORead(1, 0x2005, 0x03, &size, &result, EC_TIMEOUTRXM);
