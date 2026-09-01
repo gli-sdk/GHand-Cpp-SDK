@@ -80,6 +80,11 @@ add_executable(self_test_error tutorial/09self_test_error.cc)
 target_link_libraries(self_test_error ghand)
 copy_runtime_for_target(self_test_error)
 
+# 10. Baud-rate switch example
+add_executable(switch_baud_rate tutorial/10switch_baud_rate.cc)
+target_link_libraries(switch_baud_rate ghand)
+copy_runtime_for_target(switch_baud_rate)
+
 # Gesture dance demo
 add_executable(gesture_dance demo/gesture_dance.cc)
 target_link_libraries(gesture_dance ghand)
