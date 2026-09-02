@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(GHandSDK VERSION 2.2.1 LANGUAGES C CXX)
+project(GHandSDK VERSION 2.2.2 LANGUAGES C CXX)
 include(CMakePackageConfigHelpers)
 
 # Set C++ standard
