@@ -9,6 +9,7 @@ Expected layout:
 ```text
 deps/
   include/
+    modbus/
     nlohmann/
     soem/
     wpcap/

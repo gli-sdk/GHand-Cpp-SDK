@@ -295,7 +295,6 @@ ghand-sdk-cpp/
 ├── config/           # 产品配置（JSON）
 ├── examples/         # 教程与示例程序
 ├── deps/             # 发布包预构建依赖
-└── lib/              # 预编译库
 ```
 
 ## 🌐 开源与生态资源

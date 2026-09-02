@@ -39,12 +39,13 @@ Expected source state:
 ## Linux
 
 - Architecture: x86_64
-- Compiler: `<fill from build machine>`
-- Compiler version: `<fill from build machine>`
+- Compiler: not recorded in this repository
+- Compiler version: not recorded in this repository
 - Build type: Release
 - Output: `deps/lib/linux/libsoem.a`
-- Status: not rebuilt in this Windows workspace. Rebuild from the clean official
-  SOEM v2.0.0 source in a Linux x86_64 environment before final publication.
+- Status: prebuilt archive included in this repository. The exact Linux build
+  environment was not recorded here; refresh this entry with the compiler and
+  toolchain details whenever `deps/lib/linux/libsoem.a` is replaced.
 
 ## Windows
 
@@ -60,5 +61,6 @@ Expected source state:
 
 ## Release Rule
 
-Do not replace `libsoem.a`, `soem.lib`, or `deps/include/soem/` without updating
-this file, `THIRD_PARTY_NOTICES.md`, and the release validation notes.
+Do not replace `deps/lib/linux/libsoem.a`, `deps/lib/windows/soem.lib`, or
+`deps/include/soem/` without updating this file, `THIRD_PARTY_NOTICES.md`, and
+the release validation notes.

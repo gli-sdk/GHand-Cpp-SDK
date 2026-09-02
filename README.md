@@ -297,7 +297,6 @@ ghand-sdk-cpp/
 ├── config/           # Product configuration (JSON)
 ├── examples/         # Tutorial and demo programs
 ├── deps/             # Release-package prebuilt dependencies
-└── lib/              # Precompiled libraries
 ```
 
 ## 🌐 Open Source & Ecosystem Resources

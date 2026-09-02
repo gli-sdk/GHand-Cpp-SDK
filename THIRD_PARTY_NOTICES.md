@@ -25,7 +25,7 @@ unmodified official SOEM v2.0.0 checkout.
 ## libmodbus
 
 - Name: libmodbus
-- Version: system package on Linux; Windows binary distribution version must be verified with the shipped DLL/import library
+- Version: 3.1.12
 - Project: https://github.com/stephane/libmodbus
 - License: LGPL-2.1-or-later
 - Integration: dynamically linked
@@ -38,9 +38,9 @@ Linux:
 
 Windows:
 - Windows release packages may include `modbus.dll` and `libmodbus.lib`.
-- If libmodbus binaries are included in a Windows binary distribution, the
-  applicable license notice, verified version, and corresponding source
-  information must be provided with that distribution.
+- If libmodbus binaries are included in a Windows binary distribution, provide
+  the applicable license notice and corresponding source information with that
+  distribution.
 
 libmodbus remains licensed under LGPL-2.1-or-later. See `LICENSES/LGPL-2.1-or-later.txt` and `LICENSES/libmodbus-NOTICE.txt`.
 
