@@ -164,10 +164,7 @@ void PrintError() {
   // Print hand state errors
   if (ghand::HasError(g_hand_state)) {
     std::cerr << "\n[ERROR] Hand state error detected!" << '\n';
-    std::cerr << "Error: " << ghand::ToString(g_hand_state.error) << '\n';
-    std::cerr << "State: " << ghand::ToString(g_hand_state.state) << '\n';
-    std::cerr << "Temperature: " << g_hand_state.temperature << " degC"
-              << '\n';
+    std::cerr << ghand::ToString(g_hand_state) << '\n';
   }
 
   // Print joint errors

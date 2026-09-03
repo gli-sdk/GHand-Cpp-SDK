@@ -21,7 +21,7 @@ void PrintJointStates(const std::vector<ghand::Joint>& joints) {
               << ", angle: " << std::fixed << std::setprecision(2)
               << joint.angle << " deg"
               << ", speed: " << static_cast<int>(joint.velocity)
-              << ", torque: " << static_cast<int>(joint.torque) << '\n';
+              << ", current: " << joint.current << '\n';
   }
 }
 

@@ -253,39 +253,39 @@ std::unique_ptr<ghand::GHand> CreateConnectedHand() {
 
 std::vector<ghand::JointCommand> BuildJointCommands(const HandData& hand) {
   const int speed = 100;
-  const int torque = 100;
+  const int current = 100;
   return {
       {ghand::JointId::THUMB_MCP,
-       ClipAngle(hand.thumb.pip_bend, 0, 75), speed, torque},
+       ClipAngle(hand.thumb.pip_bend, 0, 75), speed, current},
       {ghand::JointId::THUMB_TMC_FE,
-       ClipAngle(hand.thumb.mcp_bend - 40, 0, 55), speed, torque},
+       ClipAngle(hand.thumb.mcp_bend - 40, 0, 55), speed, current},
       {ghand::JointId::THUMB_TMC_AA,
        ClipAngle(-(hand.thumb.mcp_roll + hand.thumb.pip_roll +
                    hand.thumb.dip_roll) -
                      85,
                  0, 90),
-       speed, torque},
+       speed, current},
       {ghand::JointId::THUMB_TMC_PS,
-       ClipAngle(-hand.thumb.dip_sway, -30, 60), speed, torque},
+       ClipAngle(-hand.thumb.dip_sway, -30, 60), speed, current},
       {ghand::JointId::FF_PIP,
-       ClipAngle(hand.index.pip_bend, 0, 75), speed, torque},
+       ClipAngle(hand.index.pip_bend, 0, 75), speed, current},
       {ghand::JointId::FF_MCP,
-       ClipAngle(hand.index.mcp_bend, 0, 70), speed, torque},
+       ClipAngle(hand.index.mcp_bend, 0, 70), speed, current},
       {ghand::JointId::FF_MCP_AA,
        ClipAngle(hand.index.mcp_sway + hand.index.pip_sway, -15, 15),
-       speed, torque},
+       speed, current},
       {ghand::JointId::MF_PIP,
-       ClipAngle(hand.middle.pip_bend, 0, 75), speed, torque},
+       ClipAngle(hand.middle.pip_bend, 0, 75), speed, current},
       {ghand::JointId::MF_MCP,
-       ClipAngle(hand.middle.mcp_bend, 0, 70), speed, torque},
+       ClipAngle(hand.middle.mcp_bend, 0, 70), speed, current},
       {ghand::JointId::RF_PIP,
-       ClipAngle(hand.ring.pip_bend, 0, 75), speed, torque},
+       ClipAngle(hand.ring.pip_bend, 0, 75), speed, current},
       {ghand::JointId::RF_MCP,
-       ClipAngle(hand.ring.mcp_bend, 0, 70), speed, torque},
+       ClipAngle(hand.ring.mcp_bend, 0, 70), speed, current},
       {ghand::JointId::LF_PIP,
-       ClipAngle(hand.pinky.pip_bend, 0, 75), speed, torque},
+       ClipAngle(hand.pinky.pip_bend, 0, 75), speed, current},
       {ghand::JointId::LF_MCP,
-       ClipAngle(hand.pinky.mcp_bend, 0, 70), speed, torque},
+       ClipAngle(hand.pinky.mcp_bend, 0, 70), speed, current},
   };
 }
 

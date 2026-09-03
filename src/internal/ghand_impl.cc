@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2025-2026 GLITech
+﻿// SPDX-FileCopyrightText: 2025-2026 GLITech
 // SPDX-License-Identifier: GPL-3.0-only
 
 #define _USE_MATH_DEFINES
@@ -372,9 +372,10 @@ bool GHandImpl::MoveJoints(const std::vector<JointCommand>& joints) {
     for (const auto& joint : joints) {
       if (joint.id == joint_id) {
         JointCommand limited = joint;
+        limited.mode = control_mode_;
         ClampJointAngle(limited);
         ClampJointVelocity(limited);
-        ClampJointTorque(limited);
+        ClampJointCurrent(limited);
         ordered_joints.push_back(limited);
         break;
       }
@@ -589,8 +590,8 @@ void GHandImpl::ClampJointVelocity(JointCommand& joint) {
                                    << "clamped to 100");
     }
 
-  } else if (control_mode_ == ControlMode::TORQUE) {
-    // Torque mode encodes velocity as 0-100.
+  } else if (control_mode_ == ControlMode::CURRENT) {
+    // Current mode encodes velocity as 0-100.
     int velocity = static_cast<int>(joint.velocity);
     if (velocity > 100) {
       velocity = 100;
@@ -619,67 +620,67 @@ void GHandImpl::ClampJointVelocity(JointCommand& joint) {
   }
 }
 
-void GHandImpl::ClampJointTorque(JointCommand& joint) {
-  int original = static_cast<int>(joint.torque);
-  int torque = original;
+void GHandImpl::ClampJointCurrent(JointCommand& joint) {
+  int original = static_cast<int>(joint.current);
+  int current = original;
 
   if (control_mode_ == ControlMode::POSITION ||
       control_mode_ == ControlMode::SPEED) {
-    // Position mode and speed mode: torque range 0-100, negative values take
+    // Position mode and speed mode: current range 0-100, negative values take
     // absolute value, absolute value > 100 clamped to 100.
-    if (joint.torque < 0) {
-      int8_t original = joint.torque;
-      int torque_abs = std::abs(static_cast<int>(joint.torque));
-      if (torque_abs > 100) torque_abs = 100;
-      joint.torque = static_cast<int8_t>(torque_abs);
+    if (joint.current < 0) {
+      int8_t original = joint.current;
+      int current_abs = std::abs(static_cast<int>(joint.current));
+      if (current_abs > 100) current_abs = 100;
+      joint.current = static_cast<int8_t>(current_abs);
       const char* mode_name =
           (control_mode_ == ControlMode::POSITION) ? "POSITION" : "SPEED";
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " torque "
+      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " current "
                                    << static_cast<int>(original)
                                    << " is negative in " << mode_name
                                    << " mode, converted to absolute value "
-                                   << static_cast<int>(joint.torque));
+                                   << static_cast<int>(joint.current));
     }
-    if (joint.torque > 100) {
-      int8_t original = joint.torque;
-      joint.torque = 100;
+    if (joint.current > 100) {
+      int8_t original = joint.current;
+      joint.current = 100;
       const char* mode_name =
           (control_mode_ == ControlMode::POSITION) ? "POSITION" : "SPEED";
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " torque "
+      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " current "
                                    << static_cast<int>(original)
                                    << " exceeds limit in " << mode_name
                                    << " mode, clamped to 100");
     }
-  } else if (control_mode_ == ControlMode::TORQUE) {
-    // Torque mode: torque range -100 to 100
-    if (joint.torque < -100) {
-      int8_t original = joint.torque;
-      joint.torque = -100;
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " torque "
+  } else if (control_mode_ == ControlMode::CURRENT) {
+    // Current mode: current range -100 to 100
+    if (joint.current < -100) {
+      int8_t original = joint.current;
+      joint.current = -100;
+      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " current "
                                    << static_cast<int>(original)
-                                   << " below limit in TORQUE mode, "
+                                   << " below limit in current mode, "
                                    << "clamped to -100");
-    } else if (joint.torque > 100) {
-      int8_t original = joint.torque;
-      joint.torque = 100;
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " torque "
+    } else if (joint.current > 100) {
+      int8_t original = joint.current;
+      joint.current = 100;
+      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " current "
                                    << static_cast<int>(original)
-                                   << " exceeds limit in TORQUE mode, "
+                                   << " exceeds limit in current mode, "
                                    << "clamped to 100");
     }
   }
 
-  if (torque != original) {
-    joint.torque = static_cast<int8_t>(torque);
+  current = static_cast<int>(joint.current);
+  if (current != original) {
 
     const char* mode_name =
         (control_mode_ == ControlMode::POSITION)
             ? "POSITION"
-            : (control_mode_ == ControlMode::SPEED ? "SPEED" : "TORQUE");
+            : (control_mode_ == ControlMode::SPEED ? "SPEED" : "CURRENT");
 
     GHAND_LOG_WARNING("[Joint] "
-                      << ToString(joint.id) << " torque " << original
-                      << " adjusted to " << torque << " in " << mode_name
+                      << ToString(joint.id) << " current " << original
+                      << " adjusted to " << current << " in " << mode_name
                       << " mode");
   }
 }

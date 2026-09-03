@@ -19,9 +19,9 @@
 struct JointParams {
   float angle;  // Angle (degrees)
   int speed;    // Speed (0-100)
-  int torque;   // Torque (0-100)
+  int current;   // current (0-100)
 
-  JointParams() : angle(0), speed(0), torque(0) {}
+  JointParams() : angle(0), speed(0), current(0) {}
 };
 
 bool ParseFloat(const std::string& input, float* value) {
@@ -75,7 +75,7 @@ void DisplaySetJoints(
   std::cout << "\nSet Joints:" << '\n';
   std::cout << std::left << std::setw(20) << "Joint Name" << std::setw(10)
             << "Angle(deg)" << std::setw(10) << "Speed(%)" << std::setw(10)
-            << "Torque(%)" << '\n';
+            << "current(%)" << '\n';
   std::cout << std::string(50, '-') << '\n';
 
   for (const auto& pair : joint_params) {
@@ -89,7 +89,7 @@ void DisplaySetJoints(
     std::cout << std::left << std::setw(20) << joint_name << std::fixed
               << std::setprecision(1) << std::setw(10) << params.angle
               << std::setw(10) << params.speed << std::setw(10)
-              << params.torque << '\n';
+              << params.current << '\n';
   }
 }
 
@@ -231,8 +231,8 @@ std::unordered_map<int, JointParams> ReadJointParams() {
     params.angle =
         ReadFloatWithDefault("Angle value (degrees)", params.angle);
     params.speed = ReadIntWithDefault("Speed value (0-100)", params.speed);
-    params.torque =
-        ReadIntWithDefault("Torque value (0-100)", params.torque);
+    params.current =
+        ReadIntWithDefault("current value (0-100)", params.current);
     std::cout << "  OK Set successfully" << '\n';
   }
 
@@ -248,7 +248,7 @@ std::vector<ghand::JointCommand> BuildJointCommands(
     joints.push_back({static_cast<ghand::JointId>(joint_id),
                       params.angle,
                       static_cast<int8_t>(params.speed),
-                      static_cast<int8_t>(params.torque)});
+                      static_cast<int8_t>(params.current)});
   }
   return joints;
 }

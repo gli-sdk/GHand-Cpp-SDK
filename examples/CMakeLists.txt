@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+﻿cmake_minimum_required(VERSION 3.10)
 
 # Helper function: add post-build commands to copy DLLs and config files for examples
 function(copy_runtime_for_target target_name)
@@ -70,10 +70,10 @@ add_executable(speed_control tutorial/03speed_control.cc)
 target_link_libraries(speed_control ghand)
 copy_runtime_for_target(speed_control)
 
-# 09. Torque control example
-add_executable(torque_control tutorial/04torque_control.cc)
-target_link_libraries(torque_control ghand)
-copy_runtime_for_target(torque_control)
+# 09. Current control example
+add_executable(current_control tutorial/04current_control.cc)
+target_link_libraries(current_control ghand)
+copy_runtime_for_target(current_control)
 
 # 09. Self-test error example
 add_executable(self_test_error tutorial/09self_test_error.cc)

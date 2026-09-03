@@ -23,7 +23,10 @@ namespace internal {
 // CANFD valid data lengths (DLC mapping)
 static const uint8_t kCanfdLengths[] = {0,  1,  2,  3,  4,  5,  6,  7,
                                          8,  12, 16, 20, 24, 32, 48, 64};
-static const int kBaudrateConfigRegister = 0x002C;
+static const int kBaudrateConfigRegister = 0x0004;
+static const int kSlaveIdRegister = 0x0003;
+static const int kClearFaultRegister = 0x001F;
+static const int kInitJointRegister = 0x001E;
 static const uint8_t kDefaultBaudrateGear = 0x05;
 
 struct CANFDBaudrateConfig {
@@ -104,14 +107,6 @@ static std::vector<std::vector<uint8_t>> BuildConnectionPayloads(
                          config.canfd_connection_timer_values));
   }
 
-  if (config.name.empty()) {
-    AddUniquePayload(&payloads,
-                     delete_connection
-                         ? BuildCanfdRegisterPayload(
-                               0x0036, 3, {0x0000, 0x0000, 0x0000})
-                         : BuildCanfdRegisterPayload(0x0037, 2,
-                                                      {0x0000, 0x0000}));
-  }
   return payloads;
 }
 
@@ -527,7 +522,7 @@ void CANFDComm::UpdateConfig(const ProductConfig& config) { config_ = config; }
 
 bool CANFDComm::SetSlaveId(uint8_t slave_id) {
   if (!IsConnected()) return false;
-  if (!WriteSingleRegister(0x0000, slave_id)) return false;
+  if (!WriteSingleRegister(kSlaveIdRegister, slave_id)) return false;
   slave_id_ = slave_id;
   GHAND_LOG_INFO("CANFD slave ID set to 0x"
                  << std::hex << static_cast<int>(slave_id) << std::dec);
@@ -667,18 +662,12 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
   }
 
   if (config_.product_type == ProductType::GHandLite1) {
-    const auto& control_map = config_.joint_control_registers.empty()
-                                  ? kHoldingRegMap
-                                  : config_.joint_control_registers;
+    const auto& control_map = config_.joint_control_registers;
     for (const auto& joint : joints) {
       auto it = control_map.find(joint.id);
       if (it == control_map.end()) continue;
 
-      std::vector<uint16_t> registers;
-      registers.push_back((static_cast<uint16_t>(mode) << 8) & 0xFF00);
-      auto regs = EncodeJointCommand(joint);
-      registers.push_back(regs.first);
-      registers.push_back(regs.second);
+      std::vector<uint16_t> registers = EncodeJointCommand(joint, mode);
       if (!WriteRegisters(it->second, RegistersToBytes(registers))) {
         return false;
       }
@@ -686,15 +675,14 @@ bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
     return true;
   }
 
+  const auto& control_map = config_.joint_control_registers;
+
   // Write each joint
   for (const auto& joint : joints) {
-    auto it = kHoldingRegMap.find(joint.id);
-    if (it == kHoldingRegMap.end()) continue;
+    auto it = control_map.find(joint.id);
+    if (it == control_map.end()) continue;
 
-    std::vector<uint16_t> registers;
-    auto regs = EncodeJointCommand(joint);
-    registers.push_back(regs.first);
-    registers.push_back(regs.second);
+    std::vector<uint16_t> registers = EncodeJointCommand(joint, mode);
     if (!WriteRegisters(it->second, RegistersToBytes(registers))) return false;
   }
 
@@ -708,9 +696,7 @@ void CANFDComm::Stop() {
     return;
   }
 
-  const auto& control_map = config_.joint_control_registers.empty()
-                                ? kHoldingRegMap
-                                : config_.joint_control_registers;
+  const auto& control_map = config_.joint_control_registers;
   for (JointId joint_id : config_.valid_joints) {
     auto it = control_map.find(joint_id);
     if (it != control_map.end()) {
@@ -723,8 +709,8 @@ void CANFDComm::Stop() {
 
 bool CANFDComm::ClearFault() {
   if (!IsConnected()) return false;
-  if (!WriteSingleRegister(0x0001, 0x0100)) return false;
-  if (!WaitHoldingResult(0x0001)) {
+  if (!WriteSingleRegister(kClearFaultRegister, 0x0100)) return false;
+  if (!WaitHoldingResult(kClearFaultRegister)) {
     GHAND_LOG_ERROR("Fault clearance failed or timed out over CANFD");
     return false;
   }
@@ -734,7 +720,7 @@ bool CANFDComm::ClearFault() {
 
 bool CANFDComm::InitJoint() {
   if (!IsConnected()) return false;
-  if (!WriteSingleRegister(0x0002, 0x0001)) return false;
+  if (!WriteSingleRegister(kInitJointRegister, 0x0001)) return false;
   GHAND_LOG_INFO("Joint initialization completed");
   return true;
 }
@@ -834,7 +820,7 @@ HandState CANFDComm::GetHandInfo() {
   if (!IsConnected()) return HandState{};
 
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(0x1021, 2, &bytes)) {
+  if (!ReadInputBytes(0x1047, 11, &bytes)) {
     GHAND_LOG_ERROR("Failed to read hand info over CANFD");
     return HandState{};
   }
@@ -850,7 +836,7 @@ TactileData CANFDComm::GetTactileData() {
   if (!IsConnected() || !config_.has_tactile) return data;
 
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(0x1080, 16, &bytes)) {
+  if (!ReadInputBytes(0x1110, 16, &bytes)) {
     GHAND_LOG_ERROR("Failed to read tactile status over CANFD");
     return data;
   }
@@ -863,7 +849,7 @@ TactileData CANFDComm::GetTactileData() {
   data.sensor_state = tactile_err.first;
   data.sensor_error = tactile_err.second;
 
-  int current_addr = 0x1080 + 16;
+  int current_addr = 0x1110 + 16;
   for (size_t i = 0; i < config_.tactile_regions.size(); ++i) {
     const auto& region = config_.tactile_regions[i];
     RegionTactile rt;

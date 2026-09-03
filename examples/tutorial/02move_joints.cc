@@ -11,7 +11,7 @@ void DisplayJoints(const std::vector<ghand::Joint>& joints) {
   std::cout << "\n========== Joint Status ==========" << '\n';
   std::cout << std::left << std::setw(20) << "Joint" << std::setw(10)
             << "Angle(deg)" << std::setw(10) << "Velocity(%)" << std::setw(10)
-            << "Torque(%)" << std::setw(15) << "State"
+            << "Current(%)" << std::setw(15) << "State"
             << "Error" << '\n';
   std::cout << std::string(80, '-') << '\n';
 
@@ -19,7 +19,7 @@ void DisplayJoints(const std::vector<ghand::Joint>& joints) {
     std::cout << std::left << std::setw(20) << ghand::ToString(joint.id)
               << std::fixed << std::setprecision(1) << std::setw(10)
               << joint.angle << std::setw(15) << +joint.velocity
-              << std::setw(15) << +joint.torque << std::setw(15)
+              << std::setw(15) << joint.current << std::setw(15)
               << ghand::ToString(joint.state) << ghand::ToString(joint.error)
               << '\n';
   }

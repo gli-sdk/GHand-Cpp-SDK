@@ -26,7 +26,7 @@ const Joint* FindJointById(const std::vector<Joint>& joints, JointId id) {
 GHandCallbackManager::GHandCallbackManager() {
   // Initialize cached data
   last_joints_.clear();
-  last_state_ = HandState{State::STOPPED, ErrorCode::NORMAL, 0};
+  last_state_ = HandState{};
   last_joint_callback_time_ = std::chrono::steady_clock::now();
   last_temp_callback_time_ = std::chrono::steady_clock::now();
 }
@@ -155,7 +155,9 @@ bool GHandCallbackManager::HasTemperatureChanged(
     const HandState& temperature) {
   // 1. State or error changes trigger immediately
   if (temperature.state != last_state_.state ||
-      temperature.error != last_state_.error) {
+      temperature.error_warn != last_state_.error_warn ||
+      temperature.error_fault != last_state_.error_fault ||
+      temperature.error_critical != last_state_.error_critical) {
     GHAND_LOG_DEBUG(
         "Hand state change detected: " << ghand::ToString(temperature.state));
     return true;

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2025-2026 GLITech
+﻿// SPDX-FileCopyrightText: 2025-2026 GLITech
 // SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef SRC_INTERNAL_GHAND_IMPL_H_
@@ -101,7 +101,7 @@ class GHandImpl {
   void SetupCallbacks();
   void ClampJointAngle(JointCommand& joint);
   void ClampJointVelocity(JointCommand& joint);
-  void ClampJointTorque(JointCommand& joint);
+  void ClampJointCurrent(JointCommand& joint);
 
   std::unique_ptr<IComm> comm_;
   std::unique_ptr<GHandCallbackManager> callback_manager_;

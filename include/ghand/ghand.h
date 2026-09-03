@@ -100,7 +100,7 @@ class GHAND_API GHand {
 
   /**
    * @brief Set RS485/CANFD slave ID on the connected device.
-   * @param slave_id New slave ID written to holding register 0x0000
+   * @param slave_id New slave ID written to holding register 0x0003
    * @return true on success; call GetLastResult() when false
    */
   bool SetSlaveId(uint8_t slave_id);
@@ -108,7 +108,7 @@ class GHAND_API GHand {
   /**
    * @brief Set RS485 baud-rate on the connected device.
    *
-   * The mapped protocol gear is written to holding register 0x002C, saved by
+   * The mapped protocol gear is written to holding register 0x0004, saved by
    * the device, and takes effect after the next power-up.
    *
    * @param baud_rate RS485 baud rate
@@ -119,7 +119,7 @@ class GHAND_API GHand {
   /**
    * @brief Set CAN-FD bit timing on the connected device.
    *
-   * The mapped protocol gear is written to holding register 0x002C, saved by
+   * The mapped protocol gear is written to holding register 0x0004, saved by
    * the device, and takes effect after the next power-up.
    *
    * @param timing CAN-FD bit timing profile

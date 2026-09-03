@@ -1,4 +1,4 @@
-# GHand SDK C++
+﻿# GHand SDK C++
 [![Version](https://img.shields.io/badge/version-v2.2.1-blue.svg)](include/ghand/version.h)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
@@ -10,35 +10,35 @@
 
 C++ SDK for GHand dexterous hands, supporting EtherCAT, CANFD, and RS485 communication with joint control, tactile sensing, and real-time state feedback.
 
-## ✨ Features
+## Features
 
 - EtherCAT, CANFD, and RS485 communication
-- Independent per-joint control for all 5 fingers (position, velocity, torque)
+- Independent per-joint control for all 5 fingers (position, velocity, current)
 - Real-time data callbacks for joint states and tactile data
 - Left and right hand device support
 - Automatic product detection via device name matching
 - Provided as Windows dynamic-link library (DLL)
 
-## 📖 Official Documentation
+## Official Documentation
 
 For detailed technical specifications and API references, visit: [C++ SDK Developer Documentation](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)
 
-## 📑 Table of Contents
+## Table of Contents
 
-- [Features](#-features)
-- [Official Documentation](#-official-documentation)
-- [System Requirements](#-system-requirements)
-- [Dependencies](#-dependencies)
-- [Installation](#-installation)
-- [Quick Start](#-quick-start)
-- [Build from Source](#-build-from-source)
+- [Features](#features)
+- [Official Documentation](#official-documentation)
+- [System Requirements](#system-requirements)
+- [Dependencies](#dependencies)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Build from Source](#build-from-source)
 - [Directory Structure](#-directory-structure)
 - [Open Source & Ecosystem Resources](#-open-source--ecosystem-resources)
-- [Changelog](#-changelog)
-- [Support & Feedback](#-support--feedback)
-- [License](#-license)
+- [Changelog](#changelog)
+- [Support & Feedback](#support--feedback)
+- [License](#license)
 
-## 💻 System Requirements
+## System Requirements
 
 ### Supported Platforms
 
@@ -59,7 +59,7 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 - libssl-dev
 - libmodbus-dev
 
-## 🔧 Dependencies
+## Dependencies
 
 ### Required Tools
 - CMake 3.16 or higher
@@ -86,7 +86,7 @@ dependency set.
 - pkg-config
 - pthreads
 
-## 📦 Installation
+## Installation
 
 ### Prebuilt Library
 
@@ -123,7 +123,7 @@ find_package(GHandSDK CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE GHand::ghand)
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ```cpp
 #include "ghand/ghand.h"
@@ -178,7 +178,7 @@ if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
 }
 ```
 
-## 🔨 Build from Source
+## Build from Source
 
 Build from the repository or release package root that contains `deps/`.
 
@@ -286,36 +286,36 @@ CANFD baud-rate gears:
 | `0x04` | 1 Mbps, 75% sample point | 4 Mbps, 80% sample point |
 | `0x05` | 1 Mbps, 75% sample point | 5 Mbps, 75% sample point |
 
-## 📁 Directory Structure
+## Directory Structure
 
 ```
 ghand-sdk-cpp/
-├── include/ghand/    # Public API headers
-├── src/              # Source implementation
-│   ├── comm/         # Communication layer (EtherCAT, CANFD)
-│   └── internal/     # Internal state machine & config
-├── config/           # Product configuration (JSON)
-├── examples/         # Tutorial and demo programs
-├── deps/             # Release-package prebuilt dependencies
-└── lib/              # Precompiled libraries
+|-- include/ghand/    # Public API headers
+|-- src/              # Source implementation
+|   |-- comm/         # Communication layer (EtherCAT, CANFD)
+|   `-- internal/     # Internal state machine & config
+|-- config/           # Product configuration (JSON)
+|-- examples/         # Tutorial and demo programs
+|-- deps/             # Release-package prebuilt dependencies
+`-- lib/              # Precompiled libraries
 ```
 
-## 🌐 Open Source & Ecosystem Resources
+## Open Source & Ecosystem Resources
 
 - **GLI Open Source Hub**: [GLI GitHub Organization](https://github.com/gli-sdk)
 - **Official Documentation**: [GHand Dexterous Hand Docs](https://fcnzogxju7xr.feishu.cn/docx/AhZ6ds2iCoguaAxIzBxciYHinNo)
 - **Python SDK**: [GHand Python SDK](https://github.com/gli-sdk/GHand-Python-SDK)
 
-## 📋 Changelog
+## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes.
 
-## 📞 Support & Feedback
+## Support & Feedback
 
-- 📋 **Technical Support:** For project-specific issues, open an `Issue` in this repository.
-- 📧 **General Inquiries:** [support@glitech.com](mailto:support@glitech.com)
+- **Technical Support:** For project-specific issues, open an `Issue` in this repository.
+- **General Inquiries:** [support@glitech.com](mailto:support@glitech.com)
 
-## 📄 License
+## License
 
 GHand C++ SDK is distributed under the GNU General Public License Version 3
 (GPL-3.0-only).

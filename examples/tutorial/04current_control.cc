@@ -21,7 +21,7 @@ void PrintJointStates(const std::vector<ghand::Joint>& joints) {
               << ", angle: " << std::fixed << std::setprecision(2)
               << joint.angle << " deg"
               << ", speed: " << static_cast<int>(joint.velocity)
-              << ", torque: " << static_cast<int>(joint.torque) << '\n';
+              << ", current: " << joint.current << '\n';
   }
 }
 
@@ -39,7 +39,7 @@ int main() {
     return 1;
   }
 
-  hand->SetControlMode(ghand::ControlMode::TORQUE);
+  hand->SetControlMode(ghand::ControlMode::CURRENT);
 
   std::vector<ghand::JointCommand> joints = {
       {ghand::JointId::THUMB_MCP, 0.0f, 0, 10},
@@ -54,9 +54,9 @@ int main() {
       {ghand::JointId::LF_MCP, 0.0f, 0, 10},
   };
 
-  std::cout << "Closing fingers (torque=10)..." << '\n';
+  std::cout << "Closing fingers (current=10)..." << '\n';
   if (!hand->MoveJoints(joints)) {
-    std::cerr << "Failed to send torque command" << '\n';
+    std::cerr << "Failed to send current command" << '\n';
     hand->Disconnect();
     return 1;
   }
@@ -65,12 +65,12 @@ int main() {
   PrintJointStates(hand->GetJointsData());
 
   for (auto& joint : joints) {
-    joint.torque = -10;
+    joint.current = -10;
   }
 
-  std::cout << "Opening fingers (torque=-10)..." << '\n';
+  std::cout << "Opening fingers (current=-10)..." << '\n';
   if (!hand->MoveJoints(joints)) {
-    std::cerr << "Failed to send torque command" << '\n';
+    std::cerr << "Failed to send current command" << '\n';
     hand->Disconnect();
     return 1;
   }

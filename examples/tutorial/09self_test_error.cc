@@ -1,4 +1,4 @@
-#include <cstdint>
+﻿#include <cstdint>
 #include <cstdio>
 #include <functional>
 #include <iostream>
@@ -151,10 +151,10 @@ std::string SingleCode(uint8_t summary, ghand::SelfTestError flag,
 }  // namespace
 
 int main() {
-  auto hand = ghand::DexHand::Create(ghand::ProductType::G5,
-                                     ghand::CommType::ETHERCAT);
+  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+                                   ghand::CommType::ETHERCAT);
   if (!hand) {
-    std::cerr << "Failed to create DexHand" << '\n';
+    std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
 
@@ -166,9 +166,8 @@ int main() {
   std::cout << "Connected." << '\n';
 
   ghand::HandState hand_info = hand->GetHandData();
-  if (hand_info.error != ghand::ErrorCode::SELF_CHECK_ERROR) {
-    std::cout << "No self-test error (device error="
-              << ghand::ToString(hand_info.error) << ")" << '\n';
+  if ((hand_info.error_critical[0] & 0x02) == 0) {
+    std::cout << "No self-test error" << '\n';
     hand->Disconnect();
     return 0;
   }

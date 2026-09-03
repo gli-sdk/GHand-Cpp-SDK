@@ -20,16 +20,6 @@ int16_t EncodeJointAngle(const JointCommand& joint) {
 
 }  // namespace
 
-const std::map<JointId, uint16_t> kHoldingRegMap = {
-    {JointId::THUMB_MCP, 0x0011},     {JointId::THUMB_TMC_FE, 0x0013},
-    {JointId::THUMB_TMC_AA, 0x0015},   {JointId::THUMB_TMC_PS, 0x0017},
-    {JointId::FF_PIP, 0x0019},        {JointId::FF_MCP, 0x001B},
-    {JointId::FF_MCP_AA, 0x001D},      {JointId::MF_PIP, 0x001F},
-    {JointId::MF_MCP, 0x0021},        {JointId::RF_PIP, 0x0023},
-    {JointId::RF_MCP, 0x0025},        {JointId::LF_PIP, 0x0027},
-    {JointId::LF_MCP, 0x0029},
-};
-
 std::vector<uint8_t> RegistersToBytes(const std::vector<uint16_t>& registers) {
   std::vector<uint8_t> bytes;
   bytes.reserve(registers.size() * 2);
@@ -54,7 +44,7 @@ bool GetJointInputSpan(const ProductConfig& config, uint16_t* start_addr,
     auto it = config.joint_input_registers.find(joint_id);
     if (it == config.joint_input_registers.end()) continue;
     if (it->second < start) start = it->second;
-    uint16_t joint_end = static_cast<uint16_t>(it->second + 2);
+    uint16_t joint_end = static_cast<uint16_t>(it->second + 4);
     if (joint_end > end) end = joint_end;
     found = true;
   }
@@ -117,11 +107,25 @@ uint8_t ParseHandType(const uint8_t* raw_bytes, size_t len) {
 HandState ParseHandInfo(const uint16_t* raw, size_t count) {
   HandState hs;
   if (count >= 1) {
-    hs.state = static_cast<State>((raw[0] >> 8) & 0xFF);
-    hs.error = static_cast<ErrorCode>(raw[0] & 0xFF);
+    hs.state = static_cast<State>(raw[0] & 0xFF);
   }
-  if (count >= 2) {
-    hs.temperature = static_cast<int16_t>(raw[1]);
+  const auto copy_low_high = [raw](size_t start, std::array<uint8_t, 6>* out) {
+    for (size_t i = 0; i < out->size(); ++i) {
+      const uint16_t reg = raw[start + i / 2];
+      (*out)[i] = static_cast<uint8_t>((i % 2 == 0) ? reg : (reg >> 8));
+    }
+  };
+  if (count >= 4) {
+    copy_low_high(1, &hs.error_warn);
+  }
+  if (count >= 7) {
+    copy_low_high(4, &hs.error_fault);
+  }
+  if (count >= 10) {
+    copy_low_high(7, &hs.error_critical);
+  }
+  if (count >= 11) {
+    hs.temperature = static_cast<int16_t>(raw[10]);
   }
   return hs;
 }
@@ -130,18 +134,19 @@ Joint ParseJointData(const uint16_t* raw, JointId joint_id) {
   Joint joint;
   joint.id = joint_id;
 
-  uint8_t status_byte = (raw[0] >> 8) & 0xFF;
-  uint8_t error_byte = raw[0] & 0xFF;
-  joint.state = static_cast<State>(status_byte);
-  joint.error = static_cast<ErrorCode>(error_byte);
+  uint8_t status_byte = raw[0] & 0xFF;
+  uint8_t error_byte = (raw[0] >> 8) & 0xFF;
+  joint.state = static_cast<JointStateCode>(status_byte);
+  joint.error = static_cast<JointErrorCode>(error_byte);
+  joint.mode = static_cast<uint8_t>(raw[1] & 0xFF);
 
-  int16_t angle_raw = static_cast<int16_t>(raw[1]);
-  joint.angle = DecodeJointAngle(angle_raw);
+  int16_t angle_raw = static_cast<int16_t>(raw[2]);
+  joint.angle = angle_raw / 100.0f;
 
-  uint8_t speed = (raw[2] >> 8) & 0xFF;
-  uint8_t torque = raw[2] & 0xFF;
-  joint.velocity = static_cast<int8_t>(speed);
-  joint.torque = static_cast<int8_t>(torque);
+  int16_t speed = static_cast<int16_t>(raw[3]);
+  int16_t current = static_cast<int16_t>(raw[4]);
+  joint.velocity = speed;
+  joint.current = current;
 
   return joint;
 }
@@ -152,8 +157,8 @@ std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
   joints.reserve(valid_joints.size());
 
   for (JointId joint_id : valid_joints) {
-    size_t offset = static_cast<size_t>(joint_id) * 3;
-    if (offset + 2 >= count) continue;
+    size_t offset = static_cast<size_t>(joint_id) * 5;
+    if (offset + 4 >= count) continue;
     joints.push_back(ParseJointData(raw + offset, joint_id));
   }
   return joints;
@@ -170,7 +175,7 @@ std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
     if (it == config.joint_input_registers.end()) continue;
     if (it->second < start_addr) continue;
     size_t offset = static_cast<size_t>(it->second - start_addr);
-    if (offset + 2 >= count) continue;
+    if (offset + 4 >= count) continue;
     joints.push_back(ParseJointData(raw + offset, joint_id));
   }
   return joints;
@@ -221,12 +226,22 @@ std::vector<Force> ParseTactileDistributed(const uint8_t* data_bytes,
   return forces;
 }
 
-std::pair<uint16_t, uint16_t> EncodeJointCommand(const JointCommand& joint) {
+std::vector<uint16_t> EncodeJointCommand(const JointCommand& joint,
+                                         ControlMode mode) {
   int16_t angle_raw = EncodeJointAngle(joint);
-  uint16_t reg0 = static_cast<uint16_t>(angle_raw);
-  uint16_t reg1 = ((static_cast<uint16_t>(joint.velocity) & 0xFF) << 8) |
-                  (static_cast<uint16_t>(joint.torque) & 0xFF);
-  return {reg0, reg1};
+  ControlMode joint_mode =
+      joint.mode == ControlMode::POSITION ? mode : joint.mode;
+  uint16_t mode_stop =
+      static_cast<uint16_t>(((joint.stop & 0xFFu) << 8) |
+                            (static_cast<uint8_t>(joint_mode) & 0x0Fu));
+  return {
+      mode_stop,
+      static_cast<uint16_t>(angle_raw),
+      static_cast<uint16_t>(static_cast<int16_t>(joint.velocity)),
+      static_cast<uint16_t>(static_cast<int16_t>(joint.current)),
+      static_cast<uint16_t>(joint.kp),
+      static_cast<uint16_t>(joint.kd),
+  };
 }
 
 }  // namespace internal
