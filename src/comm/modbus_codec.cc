@@ -139,6 +139,7 @@ Joint ParseJointData(const uint16_t* raw, JointId joint_id) {
   joint.state = static_cast<JointStateCode>(status_byte);
   joint.error = static_cast<JointErrorCode>(error_byte);
   joint.mode = static_cast<uint8_t>(raw[1] & 0xFF);
+  joint.stop = static_cast<uint8_t>((raw[1] >> 8) & 0xFF);
 
   int16_t angle_raw = static_cast<int16_t>(raw[2]);
   joint.angle = angle_raw / 100.0f;
