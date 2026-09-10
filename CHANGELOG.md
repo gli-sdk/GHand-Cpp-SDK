@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-09-02
+
+### Added
+- Added `CompleteFirmwareResetHandshake()` to coordinate firmware reset handling after EtherCAT FOE transfer.
+- Added `GetSelfTestStatus()` for self-test status retrieval across communication backends.
+
+### Changed
+- **BREAKING:** Changed `DeviceInfo::serial_number` from a numeric value to `std::string` so ASCII device serial numbers are preserved without lossy conversion.
+- Updated serial number handling to use ASCII format across communication modules.
+- Refined firmware reset handling with polling, timeout management, and clearer firmware update error states.
+- Simplified firmware update reconnect logic by removing a redundant retry loop.
+
+### Fixed
+- Restored CANFD register write default timeout to 5000 ms after reverting the EtherCAT SDO write settle delay change.
+- Reduced noisy firmware reset polling logs while waiting for reset readiness.
+
 ## [2.2.1] - 2026-08-24
 
 ### Licensing
@@ -33,9 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - CANFD ZQWL configuration now clears configuration ACK responses and waits after bitrate setup, matching the Python SDK transport behavior.
 
-### Changed
-- **BREAKING:** Removed `LOG_DEBUG`, `LOG_INFO`, `LOG_WARNING`, `LOG_ERROR` macros from public header `include/ghand/logging.h`. These were never documented as public API. If your code depended on them, define your own macros or call `ghand::Log()` directly.
-- **BREAKING:** Renamed all example files to remove number prefixes for consistency with C++ naming conventions
+### Breaking Changes
+- Removed `LOG_DEBUG`, `LOG_INFO`, `LOG_WARNING`, `LOG_ERROR` macros from public header `include/ghand/logging.h`. These were never documented as public API. If your code depended on them, define your own macros or call `ghand::Log()` directly.
+- Renamed all example files to remove number prefixes for consistency with C++ naming conventions
   - `01.basic_connection.cc` → `basic_connection.cc`
   - `02.move_joints.cc` → `move_joints.cc`
   - `03.tactile_callback.cc` → `tactile_callback.cc`

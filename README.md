@@ -1,5 +1,5 @@
 # GHand SDK C++
-[![Version](https://img.shields.io/badge/version-v2.2.1-blue.svg)](include/ghand/version.h)
+[![Version](https://img.shields.io/badge/version-v2.2.2-blue.svg)](include/ghand/version.h)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 [![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
@@ -297,7 +297,6 @@ ghand-sdk-cpp/
 ├── config/           # Product configuration (JSON)
 ├── examples/         # Tutorial and demo programs
 ├── deps/             # Release-package prebuilt dependencies
-└── lib/              # Precompiled libraries
 ```
 
 ## 🌐 Open Source & Ecosystem Resources
