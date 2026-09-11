@@ -1027,7 +1027,8 @@ bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
   uint8_t cmd = command;
   if (SDOWrite(1, kSelfTestIndex, kSelfTestSubCommand, size, &cmd,
                EC_TIMEOUTRXM) <= 0) {
-    GHAND_LOG_ERROR("Self-test 0x%02X: SDO write failed", command);
+    GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
+                                   << ": SDO write failed");
     return false;
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
@@ -1038,7 +1039,8 @@ bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
     int state_size = sizeof(uint8_t);
     if (SDORead(1, kSelfTestIndex, kSelfTestSubState, &state_size, &state,
                 EC_TIMEOUTRXM) <= 0) {
-      GHAND_LOG_ERROR("Self-test 0x%02X: state read failed", command);
+      GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
+                                     << ": state read failed");
       return false;
     }
     // State 只用于判断事务是否结束(2 或 3 都算结束);
@@ -1048,8 +1050,10 @@ bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
     }
   }
   if (state != kSelfTestStateSuccess && state != kSelfTestStateFailed) {
-    GHAND_LOG_ERROR("Self-test 0x%02X: state poll timeout (state=%u)", command,
-                    state);
+    GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
+                                   << ": state poll timeout (state="
+                                   << std::dec << static_cast<int>(state)
+                                   << ")");
     return false;
   }
 
@@ -1057,7 +1061,8 @@ bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
   int codes_size = static_cast<int>(codes->size());
   if (SDORead(1, kSelfTestIndex, kSelfTestSubErrorCode, &codes_size,
               codes->data(), EC_TIMEOUTRXM) <= 0) {
-    GHAND_LOG_ERROR("Self-test 0x%02X: error_code read failed", command);
+    GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
+                                   << ": error_code read failed");
     return false;
   }
   return true;
@@ -1155,35 +1160,41 @@ SelfTestErrorInfo EtherCATComm::GetSelfTestErrorInfo() {
 
   if (HasSelfTestError(info.summary, SelfTestError::Version)) {
     info.version = GetVersionCheckErrorCode();
-    GHAND_LOG_INFO("Self-test error: version mismatch (0x%02X)", info.version);
+    GHAND_LOG_INFO("Self-test error: version mismatch (0x" << std::hex
+                                                           << static_cast<int>(info.version)
+                                                           << ")");
   }
   if (HasSelfTestError(info.summary, SelfTestError::PositionSensor)) {
     info.position_sensor = CollectMotorErrors(GetPositionSensorErrorCodes());
-    GHAND_LOG_INFO("Self-test error: position sensor (%zu motors)",
-                   info.position_sensor.size());
+    GHAND_LOG_INFO("Self-test error: position sensor ("
+                   << info.position_sensor.size() << " motors)");
   }
   if (HasSelfTestError(info.summary, SelfTestError::TactileSensor)) {
     info.tactile_sensor = CollectMotorErrors(GetTactileSensorErrorCodes());
-    GHAND_LOG_INFO("Self-test error: tactile sensor (%zu motors)",
-                   info.tactile_sensor.size());
+    GHAND_LOG_INFO("Self-test error: tactile sensor ("
+                   << info.tactile_sensor.size() << " motors)");
   }
   if (HasSelfTestError(info.summary, SelfTestError::TemperatureSensor)) {
     info.temperature = GetTemperatureSensorErrorCode();
-    GHAND_LOG_INFO("Self-test error: temperature (0x%02X)", info.temperature);
+    GHAND_LOG_INFO("Self-test error: temperature (0x" << std::hex
+                                                      << static_cast<int>(info.temperature)
+                                                      << ")");
   }
   if (HasSelfTestError(info.summary, SelfTestError::Fan)) {
     info.fan = GetFanErrorCode();
-    GHAND_LOG_INFO("Self-test error: fan (0x%02X)", info.fan);
+    GHAND_LOG_INFO("Self-test error: fan (0x" << std::hex
+                                              << static_cast<int>(info.fan)
+                                              << ")");
   }
   if (HasSelfTestError(info.summary, SelfTestError::Zeroing)) {
     info.zeroing = CollectMotorErrors(GetZeroingErrorCodes());
-    GHAND_LOG_INFO("Self-test error: zeroing (%zu motors)",
-                   info.zeroing.size());
+    GHAND_LOG_INFO("Self-test error: zeroing (" << info.zeroing.size()
+                                                << " motors)");
   }
   if (HasSelfTestError(info.summary, SelfTestError::Motor)) {
     info.motor = CollectMotorErrors(GetMotorErrorCodes());
-    GHAND_LOG_INFO("Self-test error: motor check (%zu motors)",
-                   info.motor.size());
+    GHAND_LOG_INFO("Self-test error: motor check (" << info.motor.size()
+                                                    << " motors)");
   }
   return info;
 }
