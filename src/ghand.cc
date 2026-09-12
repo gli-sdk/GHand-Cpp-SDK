@@ -85,7 +85,16 @@ bool GHand::MoveJoints(const std::vector<JointCommand>& joints) {
   return impl_->MoveJoints(joints);
 }
 
+bool GHand::MoveJointsToSlave(
+    uint16_t slave_index, const std::vector<JointCommand>& joints) {
+  return impl_->MoveJointsToSlave(slave_index, joints);
+}
+
 void GHand::Stop() { impl_->Stop(); }
+
+bool GHand::StopSlave(uint16_t slave_index) {
+  return impl_->StopSlave(slave_index);
+}
 
 bool GHand::ClearFault() { return impl_->ClearFault(); }
 

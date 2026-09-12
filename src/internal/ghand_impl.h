@@ -66,7 +66,10 @@ class GHandImpl {
   // Control operations
   void SetControlMode(ControlMode mode);
   bool MoveJoints(const std::vector<JointCommand>& joints);
+  bool MoveJointsToSlave(uint16_t slave_index,
+                         const std::vector<JointCommand>& joints);
   void Stop();
+  bool StopSlave(uint16_t slave_index);
   bool ClearFault();
   bool InitJoint();
 

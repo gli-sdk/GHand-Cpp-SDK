@@ -85,6 +85,11 @@ add_executable(switch_baud_rate tutorial/10switch_baud_rate.cc)
 target_link_libraries(switch_baud_rate ghand)
 copy_runtime_for_target(switch_baud_rate)
 
+# 11. EtherCAT master-slave dual-hand example
+add_executable(master_slave_dual_hand tutorial/11master_slave_dual_hand.cc)
+target_link_libraries(master_slave_dual_hand ghand)
+copy_runtime_for_target(master_slave_dual_hand)
+
 # Gesture dance demo
 add_executable(gesture_dance demo/gesture_dance.cc)
 target_link_libraries(gesture_dance ghand)

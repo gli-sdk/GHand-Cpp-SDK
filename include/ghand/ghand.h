@@ -4,6 +4,7 @@
 #ifndef INCLUDE_GHAND_GHAND_H_
 #define INCLUDE_GHAND_GHAND_H_
 
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -185,9 +186,25 @@ class GHAND_API GHand {
   bool MoveJoints(const std::vector<JointCommand>& joints);
 
   /**
+   * @brief Control joints on a specific EtherCAT slave.
+   * @param slave_index EtherCAT slave index, starting from 1
+   * @param joints Joint command list, angle in degrees (deg)
+   * @return true on success; call GetLastResult() when false
+   */
+  bool MoveJointsToSlave(uint16_t slave_index,
+                         const std::vector<JointCommand>& joints);
+
+  /**
    * @brief Stop all motion immediately
    */
   void Stop();
+
+  /**
+   * @brief Stop motion on a specific EtherCAT slave.
+   * @param slave_index EtherCAT slave index, starting from 1
+   * @return true on success; call GetLastResult() when false
+   */
+  bool StopSlave(uint16_t slave_index);
 
   /**
    * @brief Clear fault state
