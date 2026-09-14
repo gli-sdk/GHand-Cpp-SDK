@@ -185,7 +185,7 @@ const char* ToString(JointId id) {
     case JointId::MF_PIP:
       return "MF_PIP";
     case JointId::MF_MCP:
-      return "MIDDLE_MCP";
+      return "MF_MCP";
     case JointId::RF_DIP:
       return "RF_DIP";
     case JointId::RF_PIP:

@@ -25,6 +25,9 @@ static const uint8_t kCanfdLengths[] = {0,  1,  2,  3,  4,  5,  6,  7,
                                          8,  12, 16, 20, 24, 32, 48, 64};
 static const int kBaudrateConfigRegister = 0x002C;
 static const uint8_t kDefaultBaudrateGear = 0x05;
+// 关掉适配器到允许重开之间的最小间隔。适配器驱动释放串口句柄需要时间,
+// 关掉后立刻重开会撞上驱动还没放手(对齐 Python 的 _MIN_REOPEN_INTERVAL_SEC)。
+static const int kMinReopenIntervalMs = 500;
 
 struct CANFDBaudrateConfig {
   uint32_t bitrate;
@@ -499,6 +502,10 @@ int CANFDComm::Connect(const std::string& device_name, uint8_t slave_id,
     return -1;
   }
 
+  // 监听态进 Connect 时 adapter 句柄已经被占用, driver_->Open() 内部会先
+  // Close() 再重开 —— 那正撞上"驱动还没放开句柄"的时间窗。首次连接时间戳
+  // 未初始化, 这里直接跳过, 不影响正常路径。
+  WaitReopenWindow();
   if (driver_->Open(device_name, baudrate_config.bitrate,
                     baudrate_config.dbitrate,
                     baudrate_config.bitrate_sample_point,
@@ -513,6 +520,7 @@ int CANFDComm::Connect(const std::string& device_name, uint8_t slave_id,
     GHAND_LOG_ERROR("Failed to establish CANFD connection");
     driver_->Close();
     connected_.store(false);
+    last_close_at_ = std::chrono::steady_clock::now();
     return -3;
   }
 
@@ -548,8 +556,64 @@ int CANFDComm::Disconnect() {
   if (driver_) {
     driver_->Close();
   }
+  last_close_at_ = std::chrono::steady_clock::now();
 
   return 0;
+}
+
+// 只打开适配器, 不与手部握手。手部可能正处于断电重启过程中, 此刻握手必然失败;
+// 这里要做的是让适配器以新位时序在总线上待着, 等设备起来。
+// 监听态下 connected_ 保持 false, 所以 IsConnected() 如实报否, 而既有的
+// Disconnect() 仍会走到 driver_->Close() 把它清理干净。
+bool CANFDComm::PrepareBaudrateListener(const std::string& device_name,
+                                        uint8_t baudrate_gear) {
+  if (!driver_) {
+    GHAND_LOG_ERROR("CANFD driver not available");
+    return false;
+  }
+
+  CANFDBaudrateConfig baudrate_config = {};
+  if (!ResolveCANFDBaudrateConfig(baudrate_gear, &baudrate_config)) {
+    GHAND_LOG_ERROR("Invalid CANFD baudrate gear: 0x"
+                    << std::hex << static_cast<int>(baudrate_gear) << std::dec);
+    return false;
+  }
+
+  WaitReopenWindow();
+  if (driver_->Open(device_name, baudrate_config.bitrate,
+                    baudrate_config.dbitrate,
+                    baudrate_config.bitrate_sample_point,
+                    baudrate_config.dbitrate_sample_point) != 0) {
+    GHAND_LOG_ERROR("Failed to open CANFD listener: " << device_name);
+    last_close_at_ = std::chrono::steady_clock::now();
+    return false;
+  }
+
+  GHAND_LOG_INFO("CANFD adapter listening: "
+                 << device_name << " gear=0x" << std::hex
+                 << static_cast<int>(baudrate_gear) << std::dec << " abit="
+                 << baudrate_config.bitrate << "/"
+                 << static_cast<int>(baudrate_config.bitrate_sample_point)
+                 << "% dbit=" << baudrate_config.dbitrate << "/"
+                 << static_cast<int>(baudrate_config.dbitrate_sample_point)
+                 << "% (no handshake)");
+  return true;
+}
+
+// 适配器驱动释放串口句柄需要时间, 关掉后立刻重开会撞上驱动还没放手 ——
+// 这正是"刚断开就马上以新档率重开"时好时坏的来源之一。
+void CANFDComm::WaitReopenWindow() {
+  if (last_close_at_ == std::chrono::steady_clock::time_point()) return;
+
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::steady_clock::now() - last_close_at_)
+                     .count();
+  auto remaining = kMinReopenIntervalMs - elapsed;
+  if (remaining > 0) {
+    GHAND_LOG_DEBUG("Waiting " << remaining
+                               << "ms before reopening CANFD adapter");
+    std::this_thread::sleep_for(std::chrono::milliseconds(remaining));
+  }
 }
 
 std::map<std::string, std::string> CANFDComm::SearchAdapters() {

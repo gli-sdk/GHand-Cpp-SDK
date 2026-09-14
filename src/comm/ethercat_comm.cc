@@ -620,8 +620,7 @@ FirmwareUpdateError EtherCATComm::CompleteFirmwareResetHandshake(uint16_t slave)
         GHAND_LOG_ERROR("Firmware reset command 0x5C failed");
         return FirmwareUpdateError::FIRMWARE_RESET_FAILED;
       }
-      // 0x5C 是否被接受需回读 State 确认(协议:1=已接受,约 200ms 后复位)。
-      // 从机先发应答再复位,20ms 后回读仍在窗口内,不会因设备已重启而误读。
+
       std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
       state = 0xFF;
       size = sizeof(std::uint8_t);

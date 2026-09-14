@@ -55,6 +55,8 @@ class GHandImpl {
   bool SetSlaveId(uint8_t slave_id);
   bool SetBaudrateConfig(RS485BaudRate baud_rate);
   bool SetBaudrateConfig(CANFDBitTiming timing);
+  bool PrepareCANFDBaudrateListener(const std::string& device_name,
+                                    CANFDBitTiming timing);
   OperationResult GetLastResult() const;
   Diagnostics GetDiagnostics() const;
 

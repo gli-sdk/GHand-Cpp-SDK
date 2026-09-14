@@ -55,6 +55,11 @@ bool GHand::SetBaudrateConfig(CANFDBitTiming timing) {
   return impl_->SetBaudrateConfig(timing);
 }
 
+bool GHand::PrepareCANFDBaudrateListener(const std::string& device_name,
+                                         CANFDBitTiming timing) {
+  return impl_->PrepareCANFDBaudrateListener(device_name, timing);
+}
+
 OperationResult GHand::GetLastResult() const {
   return impl_->GetLastResult();
 }

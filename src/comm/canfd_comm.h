@@ -5,6 +5,7 @@
 #define SRC_COMM_CANFD_COMM_H_
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -46,6 +47,8 @@ class CANFDComm : public IComm {
   void UpdateConfig(const ProductConfig& config) override;
   bool SetSlaveId(uint8_t slave_id) override;
   bool SetBaudrateConfig(uint8_t baudrate_gear) override;
+  bool PrepareBaudrateListener(const std::string& device_name,
+                               uint8_t baudrate_gear) override;
   Diagnostics GetDiagnostics() const override;
 
   DeviceInfo GetDeviceInfo() override;
@@ -113,8 +116,13 @@ class CANFDComm : public IComm {
   void StopPoll();
   void PollLoop();
 
+  // 距上次关闭适配器不足 kMinReopenIntervalMs 时补睡差额。
+  void WaitReopenWindow();
+
   std::unique_ptr<CANFDDriver> driver_;
   std::mutex io_mutex_;
+  // 最近一次关闭适配器的时刻(默认值表示从未关闭过)。
+  std::chrono::steady_clock::time_point last_close_at_{};
   uint8_t src_id_ = 0x0A;
   uint8_t slave_id_ = 0x31;
   std::atomic<bool> connected_{false};

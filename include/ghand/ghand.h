@@ -128,6 +128,21 @@ class GHAND_API GHand {
   bool SetBaudrateConfig(CANFDBitTiming timing);
 
   /**
+   * @brief Open a CAN-FD adapter at the requested timing without handshaking.
+   *
+   * Use this after writing a new CAN-FD baud-rate configuration: keep the
+   * adapter open at the new timing, power-cycle the device, then reconnect
+   * with the same timing.
+   *
+   * @param device_name Device name ("auto" for auto-discovery)
+   * @param timing CAN-FD bit timing profile to listen on
+   * @return true on success; call GetLastResult() when false
+   */
+  bool PrepareCANFDBaudrateListener(
+      const std::string& device_name = "auto",
+      CANFDBitTiming timing = CANFDBitTiming::TIMING_1M_5M);
+
+  /**
    * @brief Return the most recent SDK operation result.
    *
    * This is a compatibility extension for bool-returning APIs. The result is

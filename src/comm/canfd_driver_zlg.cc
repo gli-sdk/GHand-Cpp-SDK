@@ -33,7 +33,9 @@ typedef LARGE_INTEGER PHYSICAL_ADDRESS;
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <iomanip>
 #include <map>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -52,6 +54,47 @@ const uint8_t kCanfdTail = 0xA5;
 const uint8_t kHeartbeat12Channel = 0xFF;
 const uint8_t kHeartbeat4Channel = 0xFE;
 const int kDefaultSerialBaudrate = 2000000;
+
+// 配置帧(0x42/0x44 等)应答的等待与重试策略。
+// 适配器会回一帧应答, 但到达时刻不固定: 过去只按固定时长去读、读完丢弃,
+// 读不满时剩余字节会留在接收缓冲区里, 而 Receive() 是靠扫描 0x5A 帧头同步的,
+// 这些残留字节会让帧头扫描错位 —— 表现为"连接时好时坏"。
+const int kConfigAckTimeoutMs = 200;    // 单次等待应答的上限
+const int kConfigAckReadSliceMs = 50;   // 逐字节读取时单次等待的上限
+const int kConfigAckRetries = 3;        // 配置帧最大尝试次数(含首次)
+const int kConfigAckRetryDelayMs = 50;  // 两次尝试之间的间隔
+// 收到 0x42(位时序配置)应答后, 再留一点时间给适配器把新时序真正切过去,
+// 之后才发 0x44 启动通道。
+const int kBitrateApplySettleMs = 50;
+
+std::string HexByte(uint8_t value) {
+  std::ostringstream oss;
+  oss << "0x" << std::hex << std::uppercase << std::setw(2)
+      << std::setfill('0') << static_cast<int>(value);
+  return oss.str();
+}
+
+std::string FormatHex(const uint8_t* data, size_t size) {
+  std::ostringstream oss;
+  oss << std::hex << std::uppercase << std::setfill('0');
+  for (size_t i = 0; i < size; ++i) {
+    if (i > 0) oss << ' ';
+    oss << std::setw(2) << static_cast<int>(data[i]);
+  }
+  return oss.str();
+}
+
+// 应答帧是否成形。
+// 只校验能从请求帧几何结构直接推导出来的帧头/帧尾: 应答的功能码、长度字段等
+// 内部布局在当前代码库里没有任何参考实现或厂商文档可依据, 凭空假设字段级格式
+// 会把现在能用的配置校验坏, 所以这里只做帧几何校验, 并把原始字节打出来,
+// 等实测拿到真实应答后再收紧。
+bool LooksLikeConfigAck(const uint8_t* data, size_t size) {
+  const size_t min_size = sizeof(kConfigHead) + sizeof(kConfigTail);
+  return size >= min_size && data[0] == kConfigHead[0] &&
+         data[1] == kConfigHead[1] && data[size - 2] == kConfigTail[0] &&
+         data[size - 1] == kConfigTail[1];
+}
 
 std::map<uint32_t, uint8_t> CommonBitrateCodes() {
   return {{1000000, 0x0}, {800000, 0x1}, {500000, 0x2}, {400000, 0x3},
@@ -232,6 +275,11 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
   }
 
   void Close() override {
+    // 关句柄之前先把适配器的 CAN 通道停掉。停通道是尽力而为: 适配器不应答
+    // 也不能把关闭流程卡住(析构函数也会走这条路)。
+    if (IsOpen() && !SetChannelEnabled(false)) {
+      GHAND_LOG_WARNING("Failed to stop ZQWL CANFD channel before close");
+    }
 #ifdef _WIN32
     if (handle_ != INVALID_HANDLE_VALUE) {
       CloseHandle(handle_);
@@ -392,6 +440,9 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
     timeouts.ReadTotalTimeoutConstant = 20;
     timeouts.WriteTotalTimeoutConstant = 1000;
     SetCommTimeouts(handle_, &timeouts);
+    // 清掉驱动/适配器里可能残留的旧字节(上一次连接遗留的 CAN 帧或没读完的应答):
+    // 这些残留会让 Receive() 的 0x5A 帧头扫描错位, 是新连接刚建立就不稳的常见来源。
+    PurgeInputBuffer();
     return true;
 #else
     fd_ = open(port_name.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
@@ -439,11 +490,59 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
                     << static_cast<int>(bitrate_sample_point)
                     << "% dbitrate=" << dbitrate << "/"
                     << static_cast<int>(dbitrate_sample_point) << "%");
+    // WriteConfig 返回时 0x42 的应答已经被读完(不是靠固定 sleep 去赌),
+    // 这里再留一点时间给适配器把新位时序真正切换过去, 之后才发 0x44 启动通道:
+    // 0x44 早于位时序生效到达, 适配器会停在半配置状态 —— 这正是"从别的档位
+    // 切过来要重启好几次才连上"的来源。
     if (!WriteConfig(0x42, params, sizeof(params))) return false;
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(kBitrateApplySettleMs));
 
+    // 回读校验: 适配器是否真的切到了目标位时序。
+    // 这一步把"写进去了"和"生效了"区分开 —— 之前只能靠固定延时赌, 无法判断
+    // 适配器是否还停在旧档位上。读不到(适配器不支持回读)不算失败, 放行并保持
+    // 原有行为, 避免把现在能用的配置校验坏。
+    uint8_t probe[16] = {0};
+    probe[0] = static_cast<uint8_t>(can_index_ & 0xFF);
+    uint8_t readback[22] = {0};
+    size_t readback_size = ReadConfigProbe(0x42, probe, sizeof(probe), readback,
+                                           sizeof(readback));
+    if (readback_size == 0) {
+      GHAND_LOG_DEBUG("ZQWL bitrate read-back not supported (no answer to "
+                      "func=0x42 read); continuing without verification");
+    } else if (!LooksLikeConfigAck(readback, readback_size) ||
+               readback_size < 7) {
+      GHAND_LOG_WARNING("ZQWL bitrate read-back unparsable: "
+                        << readback_size << " bytes ["
+                        << FormatHex(readback, readback_size)
+                        << "]; continuing without verification");
+    } else {
+      // 应答布局与请求帧一致: [4]=通道, [5]=标志, [6]=位时序编码。
+      uint8_t actual_code = readback[6];
+      if (actual_code != bitrate_code) {
+        GHAND_LOG_WARNING("ZQWL bitrate read-back mismatch: requested="
+                          << HexByte(bitrate_code) << " adapter reports="
+                          << HexByte(actual_code) << " (raw ["
+                          << FormatHex(readback, readback_size)
+                          << "]); re-issuing bitrate config");
+        if (!WriteConfig(0x42, params, sizeof(params))) return false;
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(kBitrateApplySettleMs));
+      } else {
+        GHAND_LOG_INFO("ZQWL bitrate read-back confirmed: bitrate code="
+                       << HexByte(actual_code));
+      }
+    }
+
+    return SetChannelEnabled(true);
+  }
+
+  // 0x44 通道开关: control[0]=0x01 启动, 0x00 停止。
+  // 停止态此前从未被用到 —— Close() 只关主机侧串口句柄, 适配器的 CAN 控制器
+  // 仍按旧位时序挂在总线上, 设备断电重启期间它就一直挂在一条死总线上。
+  bool SetChannelEnabled(bool enabled) {
     uint8_t control[16] = {0};
-    control[0] = 0x01;
+    control[0] = enabled ? 0x01 : 0x00;
     if (can_index_ == 0) {
       control[2] = 0x01;
     } else if (can_index_ == 1) {
@@ -452,24 +551,132 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
       GHAND_LOG_ERROR("ZQWL serial backend supports CAN0/CAN1 only");
       return false;
     }
-    return WriteConfig(0x44, control, sizeof(control));
+    // 停通道尽力而为: 适配器若已不应答, 不要在关闭路径上重试三次。
+    return WriteConfig(0x44, control, sizeof(control),
+                       enabled ? kConfigAckRetries : 1);
   }
 
-  bool WriteConfig(uint8_t func_code, const uint8_t* payload, size_t size) {
-    uint8_t cmd[22] = {0};
+  // 组装一帧 22 字节配置命令。
+  // 第 4 字节是读/写选择: 0x57=写, 0x52=读(与 Python 参考实现的
+  // _write_zqwl_config 一致)。
+  void BuildConfigFrame(uint8_t* cmd, uint8_t func_code, bool write,
+                        const uint8_t* payload, size_t size) {
+    memset(cmd, 0, 22);
     cmd[0] = kConfigHead[0];
     cmd[1] = kConfigHead[1];
     cmd[2] = func_code;
-    cmd[3] = 0x57;
+    cmd[3] = write ? 0x57 : 0x52;
     size_t copy_size = size < 16 ? size : 16;
     memcpy(cmd + 4, payload, copy_size);
     cmd[20] = kConfigTail[0];
     cmd[21] = kConfigTail[1];
-    if (!WriteAll(cmd, sizeof(cmd))) return false;
+  }
+
+  // max_attempts: "尽力而为"的调用(如关闭通道)传 1。适配器已经不应答时,
+  // 走满 3 次重试只会让每次 Close() 白等约 750ms。
+  bool WriteConfig(uint8_t func_code, const uint8_t* payload, size_t size,
+                   int max_attempts = kConfigAckRetries) {
+    uint8_t cmd[22] = {0};
+    BuildConfigFrame(cmd, func_code, true, payload, size);
 
     uint8_t response[22] = {0};
-    ReadBytes(response, sizeof(response), 50);
-    return true;
+    size_t response_size = 0;
+    for (int attempt = 1; attempt <= max_attempts; ++attempt) {
+      // 先丢掉上一次遗留的字节, 保证下面读到的应答确实属于本次请求
+      PurgeInputBuffer();
+      if (!WriteAll(cmd, sizeof(cmd))) {
+        GHAND_LOG_WARNING("ZQWL config frame write failed: func="
+                          << HexByte(func_code) << " attempt=" << attempt << "/"
+                          << max_attempts);
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(kConfigAckRetryDelayMs));
+        continue;
+      }
+
+      response_size = ReadConfigAck(response, sizeof(response));
+      if (LooksLikeConfigAck(response, response_size)) {
+        if (attempt > 1) {
+          GHAND_LOG_INFO("ZQWL config frame acknowledged after retry: func="
+                         << HexByte(func_code) << " attempt=" << attempt);
+        }
+        GHAND_LOG_DEBUG("ZQWL config ack: func="
+                        << HexByte(func_code) << " len=" << response_size
+                        << " [" << FormatHex(response, response_size) << "]");
+        return true;
+      }
+
+      GHAND_LOG_WARNING(
+          "ZQWL config ack not confirmed: func="
+          << HexByte(func_code) << " attempt=" << attempt << "/"
+          << max_attempts << " got=" << response_size << " bytes"
+          << (response_size > 0
+                  ? " [" + FormatHex(response, response_size) + "]"
+                  : " (无应答字节)"));
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(kConfigAckRetryDelayMs));
+    }
+
+    // 整轮重试一个字节都没收到: 适配器可能本来就不回应答(纯写入型), 这种情况
+    // 不算失败, 保持原有语义返回 true —— 但把事实明确打出来, 不再静默放过。
+    if (response_size == 0) {
+      GHAND_LOG_WARNING("ZQWL adapter returned no bytes for config frame func="
+                        << HexByte(func_code)
+                        << "; treating adapter as write-only (ack not validated)");
+      return true;
+    }
+    GHAND_LOG_ERROR("ZQWL config frame func="
+                    << HexByte(func_code) << " not acknowledged after "
+                    << max_attempts << " attempts");
+    return false;
+  }
+
+  // 逐字节读配置应答, 读到帧尾或超时为止, 返回实际读到的字节数。
+  // 逐字节是为了不丢字节: 整块读一旦读不满, ReadBytes() 会把已经读到的部分
+  // 一并丢弃, 而剩下的残字节留在缓冲区里污染后续的 CAN 帧解析。
+  size_t ReadConfigAck(uint8_t* out, size_t capacity) {
+    auto deadline = std::chrono::steady_clock::now() +
+                    std::chrono::milliseconds(kConfigAckTimeoutMs);
+    size_t total = 0;
+    while (total < capacity) {
+      auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      deadline - std::chrono::steady_clock::now())
+                      .count();
+      if (left <= 0) break;
+      int slice = static_cast<int>(left < kConfigAckReadSliceMs
+                                       ? left
+                                       : kConfigAckReadSliceMs);
+      uint8_t byte = 0;
+      if (!ReadByte(&byte, slice)) break;
+      out[total++] = byte;
+      if (total >= 2 && out[total - 2] == kConfigTail[0] &&
+          out[total - 1] == kConfigTail[1]) {
+        break;
+      }
+    }
+    return total;
+  }
+
+  // 用 0x52 读回适配器当前生效的配置, 返回实际读到的字节数(0 = 没有应答)。
+  // 只读探测: 读不到、帧不成形都不是错误, 调用方据此放行而不是报错 ——
+  // 回读是额外的校验依据, 不是连接的必要条件。
+  size_t ReadConfigProbe(uint8_t func_code, const uint8_t* payload, size_t size,
+                         uint8_t* response, size_t capacity) {
+    uint8_t cmd[22] = {0};
+    BuildConfigFrame(cmd, func_code, false, payload, size);
+    PurgeInputBuffer();
+    if (!WriteAll(cmd, sizeof(cmd))) return 0;
+    return ReadConfigAck(response, capacity);
+  }
+
+  // 丢弃接收缓冲区里的残留字节(上一次会话遗留的 CAN 帧、没读完的应答)。
+  void PurgeInputBuffer() {
+#ifdef _WIN32
+    if (handle_ != INVALID_HANDLE_VALUE) {
+      PurgeComm(handle_, PURGE_RXCLEAR | PURGE_RXABORT);
+    }
+#else
+    if (fd_ >= 0) tcflush(fd_, TCIFLUSH);
+#endif
   }
 
   bool WriteAll(const uint8_t* data, size_t size) {

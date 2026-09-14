@@ -62,6 +62,24 @@ bool IsVersionNewer(const std::string& old_ver, const std::string& new_ver) {
   return false;
 }
 
+// Check per-MCU firmware upgrade results. Returns SUCCESS only when every
+// MCU reports success (result == 1); otherwise the first failing MCU maps
+// to its corresponding FirmwareUpdateError.
+ghand::FirmwareUpdateError CheckFirmwareUpdateResults(
+    const ghand::internal::FirmwareUpdateResults& results) {
+  if (results.main == 0)
+    return ghand::FirmwareUpdateError::MAIN_CONTROLLER_FAILED;
+  if (results.position_sensor == 0)
+    return ghand::FirmwareUpdateError::POSITION_SENSOR_FAILED;
+  if (results.tactile_board == 0)
+    return ghand::FirmwareUpdateError::TACTILE_SENSOR_FAILED;
+  if (results.motor_driver == 0)
+    return ghand::FirmwareUpdateError::MOTOR_DRIVER_FAILED;
+  if (results.thumb_tactile == 0 || results.finger_tactile == 0)
+    return ghand::FirmwareUpdateError::TACTILE_SENSOR_FAILED;
+  return ghand::FirmwareUpdateError::SUCCESS;
+}
+
 }  // anonymous namespace
 
 namespace ghand {
@@ -260,6 +278,51 @@ bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
     return false;
   }
   return Connect(device_name, slave_id, static_cast<uint8_t>(timing));
+}
+
+bool GHandImpl::PrepareCANFDBaudrateListener(const std::string& device_name,
+                                             CANFDBitTiming timing) {
+  if (comm_type_ != CommType::CANFD) {
+    GHAND_LOG_ERROR("PrepareCANFDBaudrateListener is only supported for CANFD");
+    SetLastResult(SdkError::NOT_SUPPORTED,
+                  "PrepareCANFDBaudrateListener is only supported for CANFD");
+    return false;
+  }
+
+  const uint8_t baudrate_gear = static_cast<uint8_t>(timing);
+  GHAND_LOG_INFO("op=prepare_listener comm=canfd device="
+                 << device_name << " gear=0x" << std::hex
+                 << static_cast<int>(baudrate_gear) << std::dec);
+
+  // "auto" 与 AutoConnect 一样逐个适配器试过去, 首个成功即返回。
+  // 注意这里不能走 ConnectToDevice(): 它成功后会读设备信息并做产品名匹配,
+  // 而监听态下没有握手, 那一步必然失败。
+  bool prepared = false;
+  if (device_name == "auto") {
+    for (const auto& adapter_pair : SearchAdapters()) {
+      if (comm_->PrepareBaudrateListener(adapter_pair.first, baudrate_gear)) {
+        prepared = true;
+        break;
+      }
+      GHAND_LOG_ERROR("Failed to prepare CANFD listener: "
+                      << adapter_pair.first);
+    }
+  } else {
+    prepared = comm_->PrepareBaudrateListener(device_name, baudrate_gear);
+    if (!prepared) {
+      GHAND_LOG_ERROR("Failed to prepare CANFD listener: " << device_name);
+    }
+  }
+
+  if (!prepared) {
+    SetLastResult(SdkError::TRANSPORT_ERROR,
+                  device_name == "auto"
+                      ? "failed to prepare CANFD listener"
+                      : "failed to prepare CANFD listener " + device_name);
+    return false;
+  }
+  SetLastResult(SdkError::OK, "");
+  return true;
 }
 
 bool GHandImpl::Disconnect() {
@@ -518,23 +581,15 @@ FirmwareUpdateError GHandImpl::BootUpdate(
                        << ", finger_tactile: "
                        << static_cast<int>(results.finger_tactile));
 
-        if (results.main != 1)
-          return FirmwareUpdateError::MAIN_CONTROLLER_FAILED;
-        if (results.position_sensor != 1)
-          return FirmwareUpdateError::POSITION_SENSOR_FAILED;
-        if (results.tactile_board != 1)
-          return FirmwareUpdateError::TACTILE_SENSOR_FAILED;
-        if (results.motor_driver != 1)
-          return FirmwareUpdateError::MOTOR_DRIVER_FAILED;
-        if (results.thumb_tactile != 1)
-          return FirmwareUpdateError::TACTILE_SENSOR_FAILED;
-        if (results.finger_tactile != 1)
-          return FirmwareUpdateError::TACTILE_SENSOR_FAILED;
+        FirmwareUpdateError check = CheckFirmwareUpdateResults(results);
+        if (check != FirmwareUpdateError::SUCCESS) return check;
 
         if (!IsVersionNewer(
                 last_version,
                 comm_->GetDeviceInfo().software_version)) {
           GHAND_LOG_WARNING("Firmware version not updated after upgrade");
+          // GHAND_LOG_WARNING("Current version: " << comm_->GetDeviceInfo().software_version);
+          // GHAND_LOG_WARNING("Last version: " << last_version);
         }
 
         return FirmwareUpdateError::SUCCESS;
