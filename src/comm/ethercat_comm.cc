@@ -40,6 +40,8 @@ constexpr int kSdoWriteSettleMs = 20;
 constexpr int kFirmwareResetReadyPollMs = 500;
 constexpr int kFirmwareResetReadyTimeoutMs = 5 * 60 * 1000;
 constexpr int kFirmwareResetDelayMs = 1000;
+constexpr int kFirmwareQueryPollMs = 500;
+constexpr int kFirmwareQueryTimeoutMs = 10 * 1000;
 
 namespace ghand {
 namespace internal {
@@ -133,13 +135,32 @@ void EtherCATComm::StartThreads() {
 }
 
 void EtherCATComm::StopThreads() {
-  if (threads_started_) {
-    threads_started_ = false;
-    dorun_ = 0;
-    for (int i = 0; i < 50; ++i) {
-      osal_usleep(1000);
+  threads_started_ = false;
+  dorun_ = 0;
+
+  // Wait for the SOEM worker threads to fully exit before the SOEM context
+  // is touched again (Disconnect / ResetContext / next Connect). Without
+  // this, a stale thread may dereference a zeroed or half-initialized
+  // ecx_contextt (access violation 0xc0000005), or run concurrently with a
+  // fresh thread on the same socket during fast connect/disconnect cycles.
+#ifdef _WIN32
+  for (HANDLE* handle : {&soem_->threadrt, &soem_->thread1}) {
+    if (*handle != nullptr) {
+      WaitForSingleObject(*handle, 5000);
+      CloseHandle(*handle);
+      *handle = nullptr;
     }
   }
+#else
+  if (soem_->threadrt != nullptr) {
+    pthread_join(*soem_->threadrt, nullptr);
+    soem_->threadrt = nullptr;
+  }
+  if (soem_->thread1 != nullptr) {
+    pthread_join(*soem_->thread1, nullptr);
+    soem_->thread1 = nullptr;
+  }
+#endif
 }
 
 std::map<std::string, std::string> EtherCATComm::SearchAdapters() {
@@ -584,7 +605,7 @@ FirmwareUpdateError EtherCATComm::CompleteFirmwareResetHandshake(uint16_t slave)
     std::uint8_t command = 0x5B;
     int size = sizeof(std::uint8_t);
     if (SDOWrite(slave, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM) <= 0) {
-      // GHAND_LOG_ERROR("Failed to write firmware reset check command 0x5B");
+      GHAND_LOG_ERROR("Failed to write firmware reset check command 0x5B");
       continue;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
@@ -599,11 +620,23 @@ FirmwareUpdateError EtherCATComm::CompleteFirmwareResetHandshake(uint16_t slave)
         GHAND_LOG_ERROR("Firmware reset command 0x5C failed");
         return FirmwareUpdateError::FIRMWARE_RESET_FAILED;
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(kFirmwareResetDelayMs));
-      return FirmwareUpdateError::SUCCESS;
+      // 0x5C 是否被接受需回读 State 确认(协议:1=已接受,约 200ms 后复位)。
+      // 从机先发应答再复位,20ms 后回读仍在窗口内,不会因设备已重启而误读。
+      std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
+      state = 0xFF;
+      size = sizeof(std::uint8_t);
+      if (SDORead(slave, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM) > 0 &&
+          state == 1) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(kFirmwareResetDelayMs));
+        return FirmwareUpdateError::SUCCESS;
+      }
+      GHAND_LOG_ERROR("Firmware rejected reset command 0x5C (state="
+                      << static_cast<int>(state) << ")");
+      return FirmwareUpdateError::FIRMWARE_RESET_FAILED;
     }
     std::this_thread::sleep_for(
-        std::chrono::milliseconds(kFirmwareResetReadyPollMs));
+        std::chrono::milliseconds(5000));
   }
 
   GHAND_LOG_ERROR("Device firmware reset is unavailable");
@@ -621,7 +654,7 @@ FirmwareUpdateError EtherCATComm::BootUpdate(
   std::uint8_t result = 0xFF;
   int ret = SDOWrite(1, 0x2005, 0x01, size, &command, EC_TIMEOUTRXM);
   if (ret > 0) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+    std::this_thread::sleep_for(std::chrono::milliseconds(8000));
     ret = SDORead(1, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM);
     if (ret > 0 && state == 0) {
       ret = SDORead(1, 0x2005, 0x03, &size, &result, EC_TIMEOUTRXM);
@@ -1472,36 +1505,74 @@ std::string EtherCATComm::ReadFirmwareVersion(uint8_t mcu_id) {
 }
 
 bool EtherCATComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
-  auto read_result = [this](uint8_t cmd, uint8_t* out) -> bool {
-    int size = sizeof(std::uint8_t);
-    if (SDOWrite(1, 0x2005, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
-      return false;
+  auto read_result = [this](uint8_t cmd, uint8_t* out,
+                            bool settle_on_zero) -> bool {
+    const auto deadline = std::chrono::steady_clock::now() +
+                          std::chrono::milliseconds(kFirmwareQueryTimeoutMs);
+    while (std::chrono::steady_clock::now() < deadline) {
+      int size = sizeof(std::uint8_t);
+      if (SDOWrite(1, 0x2005, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(kFirmwareQueryPollMs));
+        continue;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
+
+      std::uint8_t ack = 0;
+      size = sizeof(std::uint8_t);
+      if (SDORead(1, 0x2005, 0x03, &size, &ack, EC_TIMEOUTRXM) <= 0) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(kFirmwareQueryPollMs));
+        continue;
+      }
+      if (ack == 2) {
+        GHAND_LOG_ERROR("Firmware result query rejected (command 0x"
+                        << std::hex << static_cast<int>(cmd) << std::dec
+                        << ", result=2)");
+        return false;
+      }
+      if (ack != 1) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(kFirmwareQueryPollMs));
+        continue;
+      }
+
+      // State 区即模块升级结果:1=成功,2=无需升级,0=失败/无结果。
+      std::uint8_t state = 0xFF;
+      size = sizeof(std::uint8_t);
+      if (SDORead(1, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM) <= 0) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(kFirmwareQueryPollMs));
+        continue;
+      }
+      if (state != 0 || !settle_on_zero) {
+        *out = state;
+        return true;
+      }
+
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(kFirmwareQueryPollMs));
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
-    std::uint8_t state = 0xFF;
-    size = sizeof(std::uint8_t);
-    if (SDORead(1, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM) <= 0) {
-      return false;
+    if (settle_on_zero) {
+      GHAND_LOG_WARNING("Firmware main result still 0 after "
+                        << kFirmwareQueryTimeoutMs
+                        << " ms, reporting as failed/no result");
+      *out = 0;
+      return true;
     }
-    std::uint8_t result = 0xFF;
-    size = sizeof(std::uint8_t);
-    if (SDORead(1, 0x2005, 0x03, &size, &result, EC_TIMEOUTRXM) <= 0) {
-      return false;
-    }
-    if (state == 0) {
-      return false;
-    }
-    *out = result;
-    return true;
+    GHAND_LOG_ERROR("Timed out waiting for firmware update result query "
+                    "(command 0x" << std::hex << static_cast<int>(cmd)
+                    << std::dec << ")");
+    return false;
   };
 
   bool ok = true;
-  ok = read_result(0xA1, &results->main) && ok;
-  ok = read_result(0xA2, &results->position_sensor) && ok;
-  ok = read_result(0xA3, &results->tactile_board) && ok;
-  ok = read_result(0xA4, &results->motor_driver) && ok;
-  ok = read_result(0xA5, &results->thumb_tactile) && ok;
-  ok = read_result(0xA6, &results->finger_tactile) && ok;
+  ok = read_result(0xA1, &results->main, /*settle_on_zero=*/true) && ok;
+  ok = read_result(0xA2, &results->position_sensor, false) && ok;
+  ok = read_result(0xA3, &results->tactile_board, false) && ok;
+  ok = read_result(0xA4, &results->motor_driver, false) && ok;
+  ok = read_result(0xA5, &results->thumb_tactile, false) && ok;
+  ok = read_result(0xA6, &results->finger_tactile, false) && ok;
   return ok;
 }
 
