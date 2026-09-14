@@ -124,6 +124,9 @@ SelfTestErrorInfo BuildSelfTestErrorInfo(const ProductConfig& config,
                      << std::hex << static_cast<int>(info.version) << ")");
     }
   }
+  if (HasSelfTestError(info.summary, SelfTestError::PositionSensorUnmapped)) {
+    GHAND_LOG_INFO("Self-test error: position sensor unmapped");
+  }
   if (HasSelfTestError(info.summary, SelfTestError::PositionSensor)) {
     if (ReadDiagnosticErrorCodes(0xA2, io, &codes)) {
       info.position_sensor = CollectMotorErrors(config, codes);

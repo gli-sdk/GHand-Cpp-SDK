@@ -434,12 +434,48 @@ bool CANFDComm::EstablishConnection(uint8_t slave_id, int timeout_ms) {
   return false;
 }
 
+bool CANFDComm::WaitConnectionResponse(uint8_t target_id, uint8_t func_code,
+                                       int timeout_ms) {
+  auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+  while (std::chrono::steady_clock::now() < deadline) {
+    uint32_t resp_id = 0;
+    uint8_t resp_data[64];
+    uint8_t resp_len = 0;
+    if (!RecvFrame(&resp_id, resp_data, &resp_len, 50)) continue;
+
+    int r_src = 0, r_dst = 0, r_ack = 0, r_fc = 0;
+    UnpackArbitration(resp_id, &r_src, &r_dst, &r_ack, &r_fc, nullptr,
+                       nullptr, nullptr, nullptr);
+
+    if (r_ack != 1 || r_dst != src_id_ || r_src != target_id) continue;
+    if (r_fc == (0x80 | func_code)) {
+      rx_errors_++;
+      return false;
+    }
+    if (r_fc == func_code) {
+      return true;
+    }
+  }
+
+  timeouts_++;
+  return false;
+}
+
 void CANFDComm::DeleteConnection() {
   auto payloads = BuildConnectionPayloads(config_, true);
   for (const auto& data : payloads) {
     uint32_t can_id =
         PackArbitration(src_id_, slave_id_, 0, 0x05, 1, 1, 0, 0);
-    SendFrame(can_id, data.data(), static_cast<uint8_t>(data.size()));
+    if (!SendFrame(can_id, data.data(), static_cast<uint8_t>(data.size()))) {
+      GHAND_LOG_WARNING(
+          "CANFD disconnect failed; please restart the device power");
+      continue;
+    }
+    if (!WaitConnectionResponse(slave_id_, 0x05, 500)) {
+      GHAND_LOG_WARNING(
+          "CANFD disconnect failed; please restart the device power");
+    }
   }
 }
 

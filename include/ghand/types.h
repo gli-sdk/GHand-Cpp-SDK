@@ -399,14 +399,15 @@ GHAND_API std::string ToString(const Joint& joint);
  * @brief A0 self-test summary bit mask. Multiple bits may be set simultaneously.
  */
 enum class SelfTestError : uint8_t {
-  None              = 0x00,
-  Motor             = 0x01,
-  Zeroing           = 0x04,
-  Fan               = 0x08,
-  TemperatureSensor = 0x10,
-  TactileSensor     = 0x20,
-  PositionSensor    = 0x40,
-  Version           = 0x80,
+  None                   = 0x00,
+  Motor                  = 0x01,
+  PositionSensorUnmapped = 0x02,
+  Zeroing                = 0x04,
+  Fan                    = 0x08,
+  TemperatureSensor      = 0x10,
+  TactileSensor          = 0x20,
+  PositionSensor         = 0x40,
+  Version                = 0x80,
 };
 
 inline uint8_t operator&(uint8_t lhs, SelfTestError rhs) {

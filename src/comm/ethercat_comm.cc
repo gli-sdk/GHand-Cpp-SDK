@@ -1157,6 +1157,9 @@ SelfTestErrorInfo EtherCATComm::GetSelfTestErrorInfo() {
     info.version = GetVersionCheckErrorCode();
     GHAND_LOG_INFO("Self-test error: version mismatch (0x%02X)", info.version);
   }
+  if (HasSelfTestError(info.summary, SelfTestError::PositionSensorUnmapped)) {
+    GHAND_LOG_INFO("Self-test error: position sensor unmapped");
+  }
   if (HasSelfTestError(info.summary, SelfTestError::PositionSensor)) {
     info.position_sensor = CollectMotorErrors(GetPositionSensorErrorCodes());
     GHAND_LOG_INFO("Self-test error: position sensor (%zu motors)",
