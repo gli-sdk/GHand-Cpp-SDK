@@ -294,9 +294,6 @@ bool GHandImpl::PrepareCANFDBaudrateListener(const std::string& device_name,
                  << device_name << " gear=0x" << std::hex
                  << static_cast<int>(baudrate_gear) << std::dec);
 
-  // "auto" 与 AutoConnect 一样逐个适配器试过去, 首个成功即返回。
-  // 注意这里不能走 ConnectToDevice(): 它成功后会读设备信息并做产品名匹配,
-  // 而监听态下没有握手, 那一步必然失败。
   bool prepared = false;
   if (device_name == "auto") {
     for (const auto& adapter_pair : SearchAdapters()) {

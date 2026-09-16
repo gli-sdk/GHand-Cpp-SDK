@@ -1075,8 +1075,6 @@ bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
                                      << ": state read failed");
       return false;
     }
-    // State 只用于判断事务是否结束(2 或 3 都算结束);
-    // 查询成败由 SubIndex 0x04 Result 决定。
     if (state == kSelfTestStateSuccess || state == kSelfTestStateFailed) {
       break;
     }
@@ -1089,7 +1087,6 @@ bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
     return false;
   }
 
-  // Result 不判断,只读取 error_code 数据。
   int codes_size = static_cast<int>(codes->size());
   if (SDORead(1, kSelfTestIndex, kSelfTestSubErrorCode, &codes_size,
               codes->data(), EC_TIMEOUTRXM) <= 0) {
@@ -1536,7 +1533,6 @@ bool EtherCATComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
         continue;
       }
 
-      // State 区即模块升级结果:1=成功,2=无需升级,0=失败/无结果。
       std::uint8_t state = 0xFF;
       size = sizeof(std::uint8_t);
       if (SDORead(1, 0x2005, 0x02, &size, &state, EC_TIMEOUTRXM) <= 0) {

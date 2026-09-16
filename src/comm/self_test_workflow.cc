@@ -56,8 +56,6 @@ bool ReadDiagnosticErrorCodes(uint8_t command, const SelfTestRegisterIO& io,
   }
 
   uint8_t state = kSelfTestStateIdle;
-  // State 只用于判断事务是否结束(2 或 3 都算结束);
-  // Result 不判断,只读取 error_code 数据。
   if (!PollUntilSettled(command, io, &state)) {
     return false;
   }

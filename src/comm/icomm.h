@@ -50,9 +50,6 @@ class IComm {
   virtual void UpdateConfig(const ProductConfig& config) = 0;
   virtual bool SetSlaveId(uint8_t slave_id) = 0;
   virtual bool SetBaudrateConfig(uint8_t baudrate_gear) = 0;
-  // 以指定波特率打开 CANFD 适配器但不与手部握手。写入新的波特率配置后使用:
-  // 保持该监听打开、给手部断电重启, 然后以相同波特率 Connect()。
-  // 不支持该能力的通讯后端走默认实现, 返回 false。
   virtual bool PrepareBaudrateListener(const std::string& device_name,
                                        uint8_t baudrate_gear) {
     return false;

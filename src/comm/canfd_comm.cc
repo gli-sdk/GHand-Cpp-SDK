@@ -25,8 +25,6 @@ static const uint8_t kCanfdLengths[] = {0,  1,  2,  3,  4,  5,  6,  7,
                                          8,  12, 16, 20, 24, 32, 48, 64};
 static const int kBaudrateConfigRegister = 0x002C;
 static const uint8_t kDefaultBaudrateGear = 0x05;
-// 关掉适配器到允许重开之间的最小间隔。适配器驱动释放串口句柄需要时间,
-// 关掉后立刻重开会撞上驱动还没放手(对齐 Python 的 _MIN_REOPEN_INTERVAL_SEC)。
 static const int kMinReopenIntervalMs = 500;
 
 struct CANFDBaudrateConfig {
@@ -502,9 +500,6 @@ int CANFDComm::Connect(const std::string& device_name, uint8_t slave_id,
     return -1;
   }
 
-  // 监听态进 Connect 时 adapter 句柄已经被占用, driver_->Open() 内部会先
-  // Close() 再重开 —— 那正撞上"驱动还没放开句柄"的时间窗。首次连接时间戳
-  // 未初始化, 这里直接跳过, 不影响正常路径。
   WaitReopenWindow();
   if (driver_->Open(device_name, baudrate_config.bitrate,
                     baudrate_config.dbitrate,
@@ -561,10 +556,6 @@ int CANFDComm::Disconnect() {
   return 0;
 }
 
-// 只打开适配器, 不与手部握手。手部可能正处于断电重启过程中, 此刻握手必然失败;
-// 这里要做的是让适配器以新位时序在总线上待着, 等设备起来。
-// 监听态下 connected_ 保持 false, 所以 IsConnected() 如实报否, 而既有的
-// Disconnect() 仍会走到 driver_->Close() 把它清理干净。
 bool CANFDComm::PrepareBaudrateListener(const std::string& device_name,
                                         uint8_t baudrate_gear) {
   if (!driver_) {
@@ -600,8 +591,6 @@ bool CANFDComm::PrepareBaudrateListener(const std::string& device_name,
   return true;
 }
 
-// 适配器驱动释放串口句柄需要时间, 关掉后立刻重开会撞上驱动还没放手 ——
-// 这正是"刚断开就马上以新档率重开"时好时坏的来源之一。
 void CANFDComm::WaitReopenWindow() {
   if (last_close_at_ == std::chrono::steady_clock::time_point()) return;
 

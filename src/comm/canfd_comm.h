@@ -115,13 +115,10 @@ class CANFDComm : public IComm {
   void EnsurePollStarted();
   void StopPoll();
   void PollLoop();
-
-  // 距上次关闭适配器不足 kMinReopenIntervalMs 时补睡差额。
   void WaitReopenWindow();
 
   std::unique_ptr<CANFDDriver> driver_;
   std::mutex io_mutex_;
-  // 最近一次关闭适配器的时刻(默认值表示从未关闭过)。
   std::chrono::steady_clock::time_point last_close_at_{};
   uint8_t src_id_ = 0x0A;
   uint8_t slave_id_ = 0x31;
