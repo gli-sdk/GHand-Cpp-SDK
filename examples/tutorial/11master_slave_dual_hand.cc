@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -14,11 +15,16 @@ namespace {
 
 void PrintUsage(const char* program) {
   std::cout << "Usage:\n"
-            << "  " << program << " [adapter]\n\n"
+            << "  " << program << " [adapter] [left_slave] [right_slave]\n\n"
             << "Examples:\n"
-            << "  " << program << " enp4s0\n"
+            << "  " << program << "                 (auto adapter, auto left/right)\n"
+            << "  " << program << " enp4s0          (fixed adapter, auto left/right)\n"
+            << "  " << program << " enp4s0 3 2      (fixed adapter and slaves)\n\n"
             << "The PC runs as one EtherCAT master on the selected adapter.\n"
-            << "Both dexterous hands are EtherCAT slaves on the same bus.\n";
+            << "Both dexterous hands are EtherCAT slaves on the same bus.\n"
+            << "An EtherCAT junction may sit in front of them; it is a slave too\n"
+            << "and is skipped automatically. Without an explicit slave number the\n"
+            << "left/right hands are identified by their reported hand type.\n";
 }
 
 std::vector<ghand::JointCommand> BuildPose(float mcp, float pip) {
@@ -30,43 +36,19 @@ std::vector<ghand::JointCommand> BuildPose(float mcp, float pip) {
   };
 }
 
-bool IsLikelyEthercatAdapter(const std::string& name) {
-  if (name.empty()) return false;
-  if (name == "lo") return false;
-  if (name.find("Loopback") != std::string::npos) return false;
-  if (name.find("Mihomo") != std::string::npos) return false;
-  if (name.find("docker") == 0 || name.find("br-") == 0 ||
-      name.find("veth") == 0 || name.find("virbr") == 0 ||
-      name.find("vmnet") == 0) {
-    return false;
-  }
-  if (name.find("wl") == 0 || name.find("wifi") != std::string::npos ||
-      name.find("wlan") == 0) {
-    return false;
-  }
-  return name.find("en") == 0 || name.find("eth") == 0 ||
-         name.find("eno") == 0 || name.find("ens") == 0 ||
-         name.find("enp") == 0 || name.find("enx") == 0;
+// EtherCAT slave indices start at 1.
+bool ParseSlave(const char* text, uint16_t* slave) {
+  if (text == nullptr || *text == '\0') return false;
+  char* end = nullptr;
+  long value = std::strtol(text, &end, 10);
+  if (end == text || *end != '\0' || value < 1 || value > 65535) return false;
+  *slave = static_cast<uint16_t>(value);
+  return true;
 }
 
-std::string SearchFirstEthercatAdapter() {
-  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                   ghand::CommType::ETHERCAT);
-  if (!hand) return "";
-
-  std::map<std::string, std::string> adapters = hand->SearchAdapters();
-  std::set<std::string> adapter_bases;
-  for (const auto& adapter : adapters) {
-    const std::string& name = adapter.first;
-    std::string base = name.substr(0, name.find(':'));
-    bool likely_ethercat = IsLikelyEthercatAdapter(base);
-    std::cout << (likely_ethercat ? "Candidate adapter: "
-                                  : "Skipping adapter: ")
-              << name << " - " << adapter.second << '\n';
-    if (!likely_ethercat) continue;
-    if (adapter_bases.insert(base).second) return name;
-  }
-  return "";
+bool MarkAdapterBase(std::set<std::string>* seen, const std::string& name) {
+  const std::string base = name.substr(0, name.find(':'));
+  return seen->insert(base).second;
 }
 
 uint16_t FindHand(const std::vector<ghand::ConnectedHand>& hands,
@@ -78,6 +60,73 @@ uint16_t FindHand(const std::vector<ghand::ConnectedHand>& hands,
     slave_index = hand.slave_index;
   }
   return slave_index;
+}
+
+bool HasSlave(const std::vector<ghand::ConnectedHand>& hands,
+              uint16_t slave_index) {
+  for (const auto& hand : hands) {
+    if (hand.slave_index == slave_index) return true;
+  }
+  return false;
+}
+
+void PrintHands(const std::vector<ghand::ConnectedHand>& hands) {
+  if (hands.empty()) {
+    std::cout << "  (no hand detected on this bus)\n";
+    return;
+  }
+  for (const auto& hand : hands) {
+    std::cout << "  slave " << hand.slave_index << ": "
+              << ghand::ToString(hand.hand_type)
+              << " device=" << hand.device_info.device_name
+              << " serial=" << hand.device_info.serial_number << '\n';
+  }
+}
+
+// Connect one adapter and keep it only when the bus actually carries a hand.
+std::unique_ptr<ghand::GHand> OpenBus(const std::string& adapter,
+                                      std::vector<ghand::ConnectedHand>* hands) {
+  std::cout << "Connecting EtherCAT bus on " << adapter << "...\n";
+  auto master = ghand::GHand::Create(ghand::ProductType::GHand5,
+                                     ghand::CommType::ETHERCAT);
+  if (!master) {
+    std::cerr << "Failed to create EtherCAT master\n";
+    return nullptr;
+  }
+  if (!master->Connect(adapter)) {
+    std::cout << "  No EtherCAT bus: " << master->GetLastErrorMessage() << '\n';
+    return nullptr;
+  }
+  *hands = master->GetConnectedHands();
+  if (hands->empty()) {
+    std::cout << "  Bus has no hand on it\n";
+    master->Disconnect();
+    return nullptr;
+  }
+  return master;
+}
+
+// Probe every adapter and return the first bus that carries a hand.
+std::unique_ptr<ghand::GHand> OpenFirstBus(
+    std::vector<ghand::ConnectedHand>* hands, std::string* adapter) {
+  auto probe = ghand::GHand::Create(ghand::ProductType::GHand5,
+                                    ghand::CommType::ETHERCAT);
+  if (!probe) {
+    std::cerr << "Failed to create EtherCAT master\n";
+    return nullptr;
+  }
+
+  std::map<std::string, std::string> adapters = probe->SearchAdapters();
+  std::set<std::string> seen_bases;
+  for (const auto& entry : adapters) {
+    if (!MarkAdapterBase(&seen_bases, entry.first)) continue;
+    auto master = OpenBus(entry.first, hands);
+    if (master) {
+      *adapter = entry.first;
+      return master;
+    }
+  }
+  return nullptr;
 }
 
 void MoveBoth(ghand::GHand* master, uint16_t left_slave, uint16_t right_slave,
@@ -104,45 +153,52 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  std::string adapter = argc > 1 ? argv[1] : SearchFirstEthercatAdapter();
+  const bool adapter_given = argc > 1;
+  std::string adapter = adapter_given ? argv[1] : "";
 
-  if (adapter.empty()) {
-    std::cerr << "No EtherCAT wired adapter found.\n\n";
+  uint16_t left_slave = 0;
+  uint16_t right_slave = 0;
+  const bool slaves_given =
+      argc > 3 && ParseSlave(argv[2], &left_slave) &&
+      ParseSlave(argv[3], &right_slave);
+
+  std::cout << "GHand EtherCAT master-slave dual-hand demo\n";
+  std::cout << "Master: this process / SOEM\n";
+
+  std::vector<ghand::ConnectedHand> hands;
+  std::unique_ptr<ghand::GHand> master =
+      adapter_given ? OpenBus(adapter, &hands) : OpenFirstBus(&hands, &adapter);
+  if (!master) {
+    std::cerr << "\nNo hand found on "
+              << (adapter_given ? adapter : std::string("any adapter"))
+              << ".\n\n";
     PrintUsage(argv[0]);
     return 1;
   }
 
-  std::cout << "GHand EtherCAT master-slave dual-hand demo\n";
-  std::cout << "Master: this process / SOEM\n";
   std::cout << "Adapter: " << adapter << '\n';
+  std::cout << "Slaves on the bus:\n";
+  PrintHands(hands);
 
-  auto master = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                     ghand::CommType::ETHERCAT);
-  if (!master) {
-    std::cerr << "Failed to create EtherCAT master\n";
-    return 1;
-  }
-
-  std::cout << "Connecting EtherCAT bus...\n";
-  if (!master->Connect(adapter)) {
-    std::cerr << "Failed to connect EtherCAT bus on " << adapter << ": "
-              << master->GetLastErrorMessage() << '\n';
-    return 1;
-  }
-
-  std::vector<ghand::ConnectedHand> hands = master->GetConnectedHands();
-  for (const auto& hand : hands) {
-    std::cout << "Slave " << hand.slave_index << ": hand="
-              << ghand::ToString(hand.hand_type)
-              << " serial=" << hand.device_info.serial_number << '\n';
-  }
-
-  uint16_t left_slave = FindHand(hands, ghand::HandType::LEFT);
-  uint16_t right_slave = FindHand(hands, ghand::HandType::RIGHT);
-  if (left_slave == 0 || right_slave == 0) {
-    std::cerr << "Expected exactly one left hand and one right hand.\n";
-    master->Disconnect();
-    return 1;
+  if (!slaves_given) {
+    // No explicit slave numbers: identify the hands by their reported type.
+    left_slave = FindHand(hands, ghand::HandType::LEFT);
+    right_slave = FindHand(hands, ghand::HandType::RIGHT);
+    if (left_slave == 0 || right_slave == 0) {
+      std::cerr << "Expected exactly one left hand and one right hand; pass "
+                   "explicit slave numbers instead:\n";
+      PrintUsage(argv[0]);
+      master->Disconnect();
+      return 1;
+    }
+    std::cout << "Auto-detected slaves - left: " << left_slave
+              << ", right: " << right_slave << '\n';
+  } else {
+    std::cout << "Slaves from command line - left: " << left_slave
+              << ", right: " << right_slave << '\n';
+    if (!HasSlave(hands, left_slave) || !HasSlave(hands, right_slave)) {
+      std::cout << "Warning: one of the given slaves did not report as a hand\n";
+    }
   }
 
   std::cout << "\nMove both hands to a light grasp pose...\n";

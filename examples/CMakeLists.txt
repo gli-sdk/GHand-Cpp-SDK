@@ -90,6 +90,11 @@ add_executable(master_slave_dual_hand tutorial/11master_slave_dual_hand.cc)
 target_link_libraries(master_slave_dual_hand ghand)
 copy_runtime_for_target(master_slave_dual_hand)
 
+# 12. Unified EtherCAT auto-detect example (all four connection topologies)
+add_executable(connect_hands tutorial/12connect_hands.cc)
+target_link_libraries(connect_hands ghand)
+copy_runtime_for_target(connect_hands)
+
 # Gesture dance demo
 add_executable(gesture_dance demo/gesture_dance.cc)
 target_link_libraries(gesture_dance ghand)
