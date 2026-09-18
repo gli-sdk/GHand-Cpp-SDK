@@ -234,13 +234,11 @@ int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
     return -3;
   }
 
-  target_slave_index_ = slave_id;
-  if (target_slave_index_ > soem_->ctx.slavecount) {
-    GHAND_LOG_ERROR("Invalid EtherCAT target slave index: "
-                    << target_slave_index_ << " (slavecount="
-                    << soem_->ctx.slavecount << ")");
-    device_lock_.Release();
-    return -7;
+  target_slave_index_ = 0;
+  if (slave_id > 0 && slave_id <= soem_->ctx.slavecount) {
+    target_slave_index_ = slave_id;
+  } else if (soem_->ctx.slavecount == 1) {
+    target_slave_index_ = 1;
   }
 
   rxpdo_buffers_.assign(static_cast<size_t>(soem_->ctx.slavecount) + 1,
@@ -872,16 +870,10 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
   return fallback;
 }
 
-HandType EtherCATComm::GetHandType() {
-  if (target_slave_index_ == 0) {
-    GetDeviceInfo();
-  }
-  if (target_slave_index_ == 0) return HandType::NONE;
-
+HandType EtherCATComm::GetHandTypeFromSlave(uint16_t slave) {
   std::uint8_t value = 0;
   int size = sizeof(value);
-  int result = SDORead(target_slave_index_, 0x2001, 0x00, &size, &value,
-                       EC_TIMEOUTRXM);
+  int result = SDORead(slave, 0x2001, 0x00, &size, &value, EC_TIMEOUTRXM);
 
   if (result == 1) {
     switch (value) {
@@ -894,6 +886,42 @@ HandType EtherCATComm::GetHandType() {
     }
   }
   return HandType::NONE;
+}
+
+HandType EtherCATComm::GetHandType() {
+  if (target_slave_index_ == 0) {
+    GetDeviceInfo();
+  }
+  if (target_slave_index_ == 0) return HandType::NONE;
+  return GetHandTypeFromSlave(target_slave_index_);
+}
+
+std::vector<ConnectedHand> EtherCATComm::GetConnectedHands() {
+  std::vector<ConnectedHand> hands;
+  if (!IsConnected()) return hands;
+
+  for (int si = 1; si <= soem_->ctx.slavecount; ++si) {
+    ConnectedHand hand;
+    hand.slave_index = static_cast<uint16_t>(si);
+    hand.device_info = GetDeviceInfoFromSlave(hand.slave_index);
+    hand.hand_type = GetHandTypeFromSlave(hand.slave_index);
+    if (hand.device_info.device_name.empty() ||
+        hand.device_info.device_name == "N/A") {
+      continue;
+    }
+    hands.push_back(hand);
+  }
+  return hands;
+}
+
+bool EtherCATComm::SelectHand(uint16_t slave_index) {
+  if (!IsConnected()) return false;
+  if (slave_index == 0 || slave_index > soem_->ctx.slavecount) {
+    GHAND_LOG_ERROR("Invalid EtherCAT slave index: " << slave_index);
+    return false;
+  }
+  target_slave_index_ = slave_index;
+  return true;
 }
 
 bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,

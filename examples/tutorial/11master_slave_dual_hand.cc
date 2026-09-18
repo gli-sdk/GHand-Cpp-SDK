@@ -1,6 +1,5 @@
 #include <chrono>
 #include <cstdint>
-#include <cstdlib>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -15,10 +14,9 @@ namespace {
 
 void PrintUsage(const char* program) {
   std::cout << "Usage:\n"
-            << "  " << program << " [adapter] [left_slave] [right_slave]\n\n"
+            << "  " << program << " [adapter]\n\n"
             << "Examples:\n"
             << "  " << program << " enp4s0\n"
-            << "  " << program << " enp4s0 1 2\n\n"
             << "The PC runs as one EtherCAT master on the selected adapter.\n"
             << "Both dexterous hands are EtherCAT slaves on the same bus.\n";
 }
@@ -71,24 +69,25 @@ std::string SearchFirstEthercatAdapter() {
   return "";
 }
 
-uint16_t ParseSlaveIndex(const char* text, uint16_t fallback) {
-  if (text == nullptr) return fallback;
-  char* end = nullptr;
-  long value = std::strtol(text, &end, 0);
-  if (end == text || *end != '\0' || value <= 0 || value > 65535) {
-    return fallback;
+uint16_t FindHand(const std::vector<ghand::ConnectedHand>& hands,
+                  ghand::HandType hand_type) {
+  uint16_t slave_index = 0;
+  for (const auto& hand : hands) {
+    if (hand.hand_type != hand_type) continue;
+    if (slave_index != 0) return 0;
+    slave_index = hand.slave_index;
   }
-  return static_cast<uint16_t>(value);
+  return slave_index;
 }
 
 void MoveBoth(ghand::GHand* master, uint16_t left_slave, uint16_t right_slave,
               const std::vector<ghand::JointCommand>& left_pose,
               const std::vector<ghand::JointCommand>& right_pose) {
-  if (!master->MoveJointsToSlave(left_slave, left_pose)) {
+  if (!master->SelectHand(left_slave) || !master->MoveJoints(left_pose)) {
     std::cerr << "Failed to move slave " << left_slave << ": "
               << master->GetLastErrorMessage() << '\n';
   }
-  if (!master->MoveJointsToSlave(right_slave, right_pose)) {
+  if (!master->SelectHand(right_slave) || !master->MoveJoints(right_pose)) {
     std::cerr << "Failed to move slave " << right_slave << ": "
               << master->GetLastErrorMessage() << '\n';
   }
@@ -106,8 +105,6 @@ int main(int argc, char* argv[]) {
   }
 
   std::string adapter = argc > 1 ? argv[1] : SearchFirstEthercatAdapter();
-  uint16_t left_slave = ParseSlaveIndex(argc > 2 ? argv[2] : nullptr, 1);
-  uint16_t right_slave = ParseSlaveIndex(argc > 3 ? argv[3] : nullptr, 2);
 
   if (adapter.empty()) {
     std::cerr << "No EtherCAT wired adapter found.\n\n";
@@ -118,8 +115,6 @@ int main(int argc, char* argv[]) {
   std::cout << "GHand EtherCAT master-slave dual-hand demo\n";
   std::cout << "Master: this process / SOEM\n";
   std::cout << "Adapter: " << adapter << '\n';
-  std::cout << "Left slave: " << left_slave << '\n';
-  std::cout << "Right slave: " << right_slave << "\n\n";
 
   auto master = ghand::GHand::Create(ghand::ProductType::GHand5,
                                      ghand::CommType::ETHERCAT);
@@ -129,15 +124,26 @@ int main(int argc, char* argv[]) {
   }
 
   std::cout << "Connecting EtherCAT bus...\n";
-  if (!master->Connect(adapter, static_cast<uint8_t>(left_slave))) {
+  if (!master->Connect(adapter)) {
     std::cerr << "Failed to connect EtherCAT bus on " << adapter << ": "
               << master->GetLastErrorMessage() << '\n';
     return 1;
   }
 
-  std::cout << "Connected. Device info for slave " << left_slave
-            << ": serial="
-            << master->GetDeviceInfo().serial_number << '\n';
+  std::vector<ghand::ConnectedHand> hands = master->GetConnectedHands();
+  for (const auto& hand : hands) {
+    std::cout << "Slave " << hand.slave_index << ": hand="
+              << ghand::ToString(hand.hand_type)
+              << " serial=" << hand.device_info.serial_number << '\n';
+  }
+
+  uint16_t left_slave = FindHand(hands, ghand::HandType::LEFT);
+  uint16_t right_slave = FindHand(hands, ghand::HandType::RIGHT);
+  if (left_slave == 0 || right_slave == 0) {
+    std::cerr << "Expected exactly one left hand and one right hand.\n";
+    master->Disconnect();
+    return 1;
+  }
 
   std::cout << "\nMove both hands to a light grasp pose...\n";
   MoveBoth(master.get(), left_slave, right_slave, BuildPose(25.0f, 35.0f),
@@ -154,8 +160,8 @@ int main(int argc, char* argv[]) {
            BuildPose(0.0f, 0.0f));
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
-  master->StopSlave(right_slave);
-  master->StopSlave(left_slave);
+  if (master->SelectHand(right_slave)) master->Stop();
+  if (master->SelectHand(left_slave)) master->Stop();
   master->Disconnect();
 
   std::cout << "Demo completed.\n";

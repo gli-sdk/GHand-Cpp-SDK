@@ -79,22 +79,21 @@ HandType GHand::GetHandType() { return impl_->GetHandType(); }
 
 DeviceInfo GHand::GetDeviceInfo() { return impl_->GetDeviceInfo(); }
 
+std::vector<ConnectedHand> GHand::GetConnectedHands() {
+  return impl_->GetConnectedHands();
+}
+
+bool GHand::SelectHand(uint16_t slave_index) {
+  return impl_->SelectHand(slave_index);
+}
+
 void GHand::SetControlMode(ControlMode mode) { impl_->SetControlMode(mode); }
 
 bool GHand::MoveJoints(const std::vector<JointCommand>& joints) {
   return impl_->MoveJoints(joints);
 }
 
-bool GHand::MoveJointsToSlave(
-    uint16_t slave_index, const std::vector<JointCommand>& joints) {
-  return impl_->MoveJointsToSlave(slave_index, joints);
-}
-
 void GHand::Stop() { impl_->Stop(); }
-
-bool GHand::StopSlave(uint16_t slave_index) {
-  return impl_->StopSlave(slave_index);
-}
 
 bool GHand::ClearFault() { return impl_->ClearFault(); }
 

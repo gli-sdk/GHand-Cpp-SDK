@@ -311,6 +311,12 @@ struct DeviceInfo {
   std::string serial_number = "N/A";
 };
 
+struct ConnectedHand {
+  uint16_t slave_index = 0;
+  HandType hand_type = HandType::NONE;
+  DeviceInfo device_info;
+};
+
 /**
  * @brief Hand state data structure
  */

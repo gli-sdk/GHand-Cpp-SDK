@@ -343,6 +343,31 @@ HandType GHandImpl::GetHandType() const { return comm_->GetHandType(); }
 
 DeviceInfo GHandImpl::GetDeviceInfo() const { return comm_->GetDeviceInfo(); }
 
+std::vector<ConnectedHand> GHandImpl::GetConnectedHands() {
+  EtherCATComm* ethercat = dynamic_cast<EtherCATComm*>(comm_.get());
+  if (ethercat == nullptr) {
+    SetLastResult(SdkError::NOT_SUPPORTED,
+                  "GetConnectedHands is only supported on EtherCAT");
+    return {};
+  }
+  auto hands = ethercat->GetConnectedHands();
+  SetLastResult(SdkError::OK, "");
+  return hands;
+}
+
+bool GHandImpl::SelectHand(uint16_t slave_index) {
+  EtherCATComm* ethercat = dynamic_cast<EtherCATComm*>(comm_.get());
+  if (ethercat == nullptr) {
+    SetLastResult(SdkError::NOT_SUPPORTED,
+                  "SelectHand is only supported on EtherCAT");
+    return false;
+  }
+  bool result = ethercat->SelectHand(slave_index);
+  SetLastResult(result ? SdkError::OK : SdkError::INVALID_ARGUMENT,
+                result ? "" : "invalid EtherCAT slave index");
+  return result;
+}
+
 void GHandImpl::SetControlMode(ControlMode mode) { control_mode_ = mode; }
 
 bool GHandImpl::MoveJoints(const std::vector<JointCommand>& joints) {
@@ -393,72 +418,9 @@ bool GHandImpl::MoveJoints(const std::vector<JointCommand>& joints) {
   return result;
 }
 
-bool GHandImpl::MoveJointsToSlave(
-    uint16_t slave_index, const std::vector<JointCommand>& joints) {
-  if (!IsConnected()) {
-    GHAND_LOG_ERROR("Cannot move slave joints: device not connected");
-    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
-    return false;
-  }
-  if (joints.empty()) {
-    GHAND_LOG_WARNING("MoveJointsToSlave called with empty joint list");
-    SetLastResult(SdkError::INVALID_ARGUMENT, "joint command list is empty");
-    return false;
-  }
-
-  EtherCATComm* ethercat = dynamic_cast<EtherCATComm*>(comm_.get());
-  if (ethercat == nullptr) {
-    SetLastResult(SdkError::NOT_SUPPORTED,
-                  "MoveJointsToSlave is only supported on EtherCAT");
-    return false;
-  }
-
-  std::vector<JointCommand> ordered_joints;
-  ordered_joints.reserve(joints.size());
-  for (const auto& joint_id : config_.valid_joints) {
-    if (config_.joint_limits.find(joint_id) == config_.joint_limits.end())
-      continue;
-    for (const auto& joint : joints) {
-      if (joint.id == joint_id) {
-        JointCommand limited = joint;
-        ClampJointAngle(limited);
-        ClampJointVelocity(limited);
-        ClampJointTorque(limited);
-        ordered_joints.push_back(limited);
-        break;
-      }
-    }
-  }
-
-  if (ordered_joints.empty()) {
-    SetLastResult(SdkError::INVALID_ARGUMENT,
-                  "joint command list contains no controllable joints");
-    return false;
-  }
-
-  bool result =
-      ethercat->MoveJointsToSlave(slave_index, ordered_joints, control_mode_);
-  SetLastResult(result ? SdkError::OK : SdkError::TRANSPORT_ERROR,
-                result ? "" : "move joints command failed");
-  return result;
-}
-
 void GHandImpl::Stop() {
   GHAND_LOG_INFO("op=stop comm=" << ToString(comm_type_));
   comm_->Stop();
-}
-
-bool GHandImpl::StopSlave(uint16_t slave_index) {
-  EtherCATComm* ethercat = dynamic_cast<EtherCATComm*>(comm_.get());
-  if (ethercat == nullptr) {
-    SetLastResult(SdkError::NOT_SUPPORTED,
-                  "StopSlave is only supported on EtherCAT");
-    return false;
-  }
-  bool result = ethercat->StopSlave(slave_index);
-  SetLastResult(result ? SdkError::OK : SdkError::TRANSPORT_ERROR,
-                result ? "" : "stop slave command failed");
-  return result;
 }
 
 bool GHandImpl::ClearFault() {

@@ -47,14 +47,12 @@ class EtherCATComm : public IComm {
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;
+  std::vector<ConnectedHand> GetConnectedHands();
+  bool SelectHand(uint16_t slave_index);
 
   bool MoveJoints(const std::vector<JointCommand>& joints,
                   ControlMode mode) override;
-  bool MoveJointsToSlave(uint16_t slave_index,
-                         const std::vector<JointCommand>& joints,
-                         ControlMode mode);
   void Stop() override;
-  bool StopSlave(uint16_t slave_index);
 
   bool ClearFault() override;
   bool InitJoint() override;
@@ -117,7 +115,7 @@ class EtherCATComm : public IComm {
   std::vector<size_t> rxpdo_sizes_;
   uint8_t rxpdo_buffer_[80] = {0};
   size_t rxpdo_size_ = 0;
-  uint16_t target_slave_index_ = 1;
+  uint16_t target_slave_index_ = 0;
 
   std::mutex context_mutex_;
   std::mutex rt_context_mutex_;
@@ -160,6 +158,11 @@ class EtherCATComm : public IComm {
   std::string ReadFirmwareVersion(uint8_t mcu_id);
   std::string ReadFirmwareVersionFromSlave(uint16_t slave, uint8_t mcu_id);
   DeviceInfo GetDeviceInfoFromSlave(uint16_t slave);
+  HandType GetHandTypeFromSlave(uint16_t slave);
+  bool MoveJointsToSlave(uint16_t slave_index,
+                         const std::vector<JointCommand>& joints,
+                         ControlMode mode);
+  bool StopSlave(uint16_t slave_index);
   FirmwareUpdateError CompleteFirmwareResetHandshake(uint16_t slave);
 
   // Static helper methods
