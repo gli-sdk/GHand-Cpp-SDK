@@ -133,14 +133,33 @@ Diagnostics GHandImpl::GetDiagnostics() const {
 }
 
 void GHandImpl::SetupCallbacks() {
+  if (dynamic_cast<EtherCATComm*>(comm_.get()) != nullptr) {
+    // EtherCAT buses carry one feedback frame per slave (junction/splitter
+    // at slave 1, hands at slaves 2..N), so route each slave's frame into
+    // its own cache.
+    comm_->SetSlaveJointsCallback(
+        [this](uint16_t slave, const std::vector<Joint>& joints) {
+          callback_manager_->UpdateJoints(slave, joints);
+        });
+    comm_->SetSlaveHandStateCallback(
+        [this](uint16_t slave, const HandState& state) {
+          callback_manager_->UpdateTemperature(slave, state);
+        });
+    comm_->SetSlaveTactileDataCallback(
+        [this](uint16_t slave, const TactileData& data) {
+          callback_manager_->UpdateTactileData(slave, data);
+        });
+    return;
+  }
+  // Single-slave backends (RS485/CANFD) deliver under slave 1.
   comm_->SetJointsCallback([this](const std::vector<Joint>& joints) {
-    callback_manager_->UpdateJoints(joints);
+    callback_manager_->UpdateJoints(1, joints);
   });
   comm_->SetHandStateCallback([this](const HandState& state) {
-    callback_manager_->UpdateTemperature(state);
+    callback_manager_->UpdateTemperature(1, state);
   });
   comm_->SetTactileDataCallback([this](const TactileData& data) {
-    callback_manager_->UpdateTactileData(data);
+    callback_manager_->UpdateTactileData(1, data);
   });
 }
 
@@ -363,6 +382,10 @@ bool GHandImpl::SelectHand(uint16_t slave_index) {
     return false;
   }
   bool result = ethercat->SelectHand(slave_index);
+  if (result) {
+    target_slave_index_ = slave_index;
+    callback_manager_->SetSelectedSlave(slave_index);
+  }
   SetLastResult(result ? SdkError::OK : SdkError::INVALID_ARGUMENT,
                 result ? "" : "invalid EtherCAT slave index");
   return result;
@@ -481,15 +504,18 @@ void GHandImpl::SetTactileDataCallback(
 }
 
 HandState GHandImpl::GetHandData() const {
-  return callback_manager_->GetHandData();
+  const uint16_t slave = target_slave_index_ != 0 ? target_slave_index_ : 1;
+  return callback_manager_->GetHandData(slave);
 }
 
 std::vector<Joint> GHandImpl::GetJointsData() const {
-  return callback_manager_->GetJointsData();
+  const uint16_t slave = target_slave_index_ != 0 ? target_slave_index_ : 1;
+  return callback_manager_->GetJointsData(slave);
 }
 
 TactileData GHandImpl::GetTactileData() const {
-  return callback_manager_->GetTactileData();
+  const uint16_t slave = target_slave_index_ != 0 ? target_slave_index_ : 1;
+  return callback_manager_->GetTactileData(slave);
 }
 
 SelfTestErrorInfo GHandImpl::GetSelfTestErrorInfo() const {

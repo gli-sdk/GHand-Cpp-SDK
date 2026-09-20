@@ -109,6 +109,9 @@ class GHandImpl {
   std::unique_ptr<GHandCallbackManager> callback_manager_;
 
   ControlMode control_mode_;
+  // EtherCAT slave selected via SelectHand(); 0 = not selected yet, in which
+  // case the Get* data polls fall back to slave 1.
+  uint16_t target_slave_index_ = 0;
   CommType comm_type_;
   ProductType product_type_;
   std::string device_name_;

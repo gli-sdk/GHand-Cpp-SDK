@@ -64,6 +64,9 @@ class EtherCATComm : public IComm {
   void SetJointsCallback(JointsCallback cb) override;
   void SetHandStateCallback(HandStateCallback cb) override;
   void SetTactileDataCallback(TactileDataCallback cb) override;
+  void SetSlaveJointsCallback(SlaveJointsCallback cb) override;
+  void SetSlaveHandStateCallback(SlaveHandStateCallback cb) override;
+  void SetSlaveTactileDataCallback(SlaveTactileDataCallback cb) override;
 
   FirmwareUpdateError BootUpdate(
       const std::string& filename,
@@ -129,6 +132,9 @@ class EtherCATComm : public IComm {
   JointsCallback joints_callback_;
   HandStateCallback hand_state_callback_;
   TactileDataCallback tactile_callback_;
+  SlaveJointsCallback slave_joints_callback_;
+  SlaveHandStateCallback slave_hand_state_callback_;
+  SlaveTactileDataCallback slave_tactile_callback_;
   // Protects callback registration/copy only.
   // Never hold this mutex while invoking user callbacks.
   mutable std::mutex callback_mutex_;
@@ -175,7 +181,7 @@ class EtherCATComm : public IComm {
                           HandState* parsed_temperature) const;
   TactileData ParseTactileData(const uint8_t* data, size_t size,
                                size_t* offset) const;
-  void ParseAndNotify(const uint8_t* data, size_t size);
+  void ParseAndNotify(const uint8_t* data, size_t size, uint16_t slave_index);
 
   // Self-test error helpers (object dictionary 0x2008). A1~A8 are internal.
   bool ReadDiagnosticErrorCodes(uint8_t command,

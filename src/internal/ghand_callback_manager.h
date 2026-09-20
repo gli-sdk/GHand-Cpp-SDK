@@ -5,7 +5,9 @@
 #define SRC_INTERNAL_GHAND_CALLBACK_MANAGER_H_
 
 #include <chrono>
+#include <cstdint>
 #include <functional>
+#include <map>
 #include <mutex>
 #include <vector>
 
@@ -22,7 +24,12 @@ namespace internal {
  * 2. Detect data changes
  * 3. Trigger corresponding callbacks when data changes
  * 4. Ensure data freshness (forced update every 100 ms)
- * 5. Cache the latest data to support polled access
+ * 5. Cache the latest data per EtherCAT slave to support polled access
+ *
+ * Multi-slave EtherCAT buses deliver one feedback frame per slave (e.g. a
+ * junction/splitter at slave 1 with the hands at slaves 2..N). Each slave's
+ * frame is cached under its own slave index; user callbacks are only fired
+ * for the currently selected slave so single-hand semantics stay intact.
  */
 class GHandCallbackManager {
  public:
@@ -44,35 +51,48 @@ class GHandCallbackManager {
   void SetHandStateCallback(HandStateCallback callback);
   void SetTactileDataCallback(TactileDataCallback callback);
 
+  // Slave selection: user callbacks fire only for the selected slave.
+  void SetSelectedSlave(uint16_t slave);
+
   // Data update methods (called by GHand)
-  void UpdateJoints(const std::vector<Joint>& joints);
-  void UpdateTemperature(const HandState& temperature);
-  void UpdateTactileData(const TactileData& data);
+  void UpdateJoints(uint16_t slave, const std::vector<Joint>& joints);
+  void UpdateTemperature(uint16_t slave, const HandState& temperature);
+  void UpdateTactileData(uint16_t slave, const TactileData& data);
 
   // Polled access methods (thread-safe)
-  HandState GetHandData() const;
-  std::vector<Joint> GetJointsData() const;
-  TactileData GetTactileData() const;
+  HandState GetHandData(uint16_t slave) const;
+  std::vector<Joint> GetJointsData(uint16_t slave) const;
+  TactileData GetTactileData(uint16_t slave) const;
 
  private:
+  // Per-slave cache: latest data + change detection state.
+  struct SlaveCache {
+    std::vector<Joint> joints;
+    std::vector<Joint> delivered_joints;  // as change detection baseline
+    HandState state{State::STOPPED, ErrorCode::NORMAL, 0};
+    TactileData tactile;
+    bool has_tactile = false;
+    std::chrono::steady_clock::time_point last_joint_callback_time{
+        std::chrono::steady_clock::now()};
+    std::chrono::steady_clock::time_point last_temp_callback_time{
+        std::chrono::steady_clock::now()};
+  };
+
   // Change detection methods
-  bool HasJointDataChanged(const std::vector<Joint>& joints);
-  bool HasTemperatureChanged(const HandState& temperature);
+  bool HasJointDataChanged(const SlaveCache& cache,
+                           const std::vector<Joint>& joints);
+  bool HasTemperatureChanged(const SlaveCache& cache,
+                             const HandState& temperature);
 
   // Callback member variables
   JointsCallback joints_callback_;
   HandStateCallback hand_state_callback_;
   TactileDataCallback tactile_data_callback_;
 
-  // Last data cache (used for change detection + polled access)
+  // Last data caches (used for change detection + polled access)
   mutable std::mutex data_mutex_;
-  std::vector<Joint> last_joints_;
-  std::vector<Joint> last_delivered_joints_;  // as change detection baseline
-  HandState last_state_;
-  TactileData last_tactile_data_;
-  bool has_tactile_data_ = false;
-  std::chrono::steady_clock::time_point last_joint_callback_time_;
-  std::chrono::steady_clock::time_point last_temp_callback_time_;
+  std::map<uint16_t, SlaveCache> caches_;
+  uint16_t selected_slave_ = 1;
 
   // Change detection threshold constants
   static constexpr float kJointAngleThreshold = 1.0f;   // 1 degree
