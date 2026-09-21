@@ -799,22 +799,7 @@ void EtherCATComm::SetTactileDataCallback(TactileDataCallback cb) {
   tactile_callback_ = cb;
 }
 
-void EtherCATComm::SetSlaveJointsCallback(SlaveJointsCallback cb) {
-  std::lock_guard<std::mutex> lock(callback_mutex_);
-  slave_joints_callback_ = cb;
-}
-
-void EtherCATComm::SetSlaveHandStateCallback(SlaveHandStateCallback cb) {
-  std::lock_guard<std::mutex> lock(callback_mutex_);
-  slave_hand_state_callback_ = cb;
-}
-
-void EtherCATComm::SetSlaveTactileDataCallback(SlaveTactileDataCallback cb) {
-  std::lock_guard<std::mutex> lock(callback_mutex_);
-  slave_tactile_callback_ = cb;
-}
-
-DeviceInfo EtherCATComm::GetDeviceInfoFromSlave(uint16_t slave) {
+DeviceInfo EtherCATComm::ReadDeviceInfo(uint16_t slave) {
   DeviceInfo info;
   std::uint8_t value[255] = {0};
   int size = sizeof(value);
@@ -873,24 +858,8 @@ DeviceInfo EtherCATComm::GetDeviceInfoFromSlave(uint16_t slave) {
 }
 
 DeviceInfo EtherCATComm::GetDeviceInfo() {
-  if (target_slave_index_ > 0) {
-    return GetDeviceInfoFromSlave(target_slave_index_);
-  }
-
-  DeviceInfo fallback;
-  for (int si = 1; si <= soem_->ctx.slavecount; ++si) {
-    DeviceInfo info = GetDeviceInfoFromSlave(static_cast<uint16_t>(si));
-    if (info.device_name.empty() || info.device_name == "N/A") {
-      if (fallback.device_name.empty()) fallback = info;
-      continue;
-    }
-    target_slave_index_ = static_cast<uint16_t>(si);
-    GHAND_LOG_INFO("Auto-selected EtherCAT slave " << target_slave_index_
-                                                   << " by device name "
-                                                   << info.device_name);
-    return info;
-  }
-  return fallback;
+  if (target_slave_index_ == 0) return DeviceInfo{};
+  return ReadDeviceInfo(target_slave_index_);
 }
 
 HandType EtherCATComm::GetHandTypeFromSlave(uint16_t slave) {
@@ -912,9 +881,6 @@ HandType EtherCATComm::GetHandTypeFromSlave(uint16_t slave) {
 }
 
 HandType EtherCATComm::GetHandType() {
-  if (target_slave_index_ == 0) {
-    GetDeviceInfo();
-  }
   if (target_slave_index_ == 0) return HandType::NONE;
   return GetHandTypeFromSlave(target_slave_index_);
 }
@@ -926,12 +892,9 @@ std::vector<ConnectedHand> EtherCATComm::GetConnectedHands() {
   for (int si = 1; si <= soem_->ctx.slavecount; ++si) {
     ConnectedHand hand;
     hand.slave_index = static_cast<uint16_t>(si);
-    hand.device_info = GetDeviceInfoFromSlave(hand.slave_index);
     hand.hand_type = GetHandTypeFromSlave(hand.slave_index);
-    if (hand.device_info.device_name.empty() ||
-        hand.device_info.device_name == "N/A") {
-      continue;
-    }
+    if (hand.hand_type == HandType::NONE) continue;
+    hand.device_info = ReadDeviceInfo(hand.slave_index);
     hands.push_back(hand);
   }
   return hands;
@@ -941,6 +904,10 @@ bool EtherCATComm::SelectHand(uint16_t slave_index) {
   if (!IsConnected()) return false;
   if (slave_index == 0 || slave_index > soem_->ctx.slavecount) {
     GHAND_LOG_ERROR("Invalid EtherCAT slave index: " << slave_index);
+    return false;
+  }
+  if (GetHandTypeFromSlave(slave_index) == HandType::NONE) {
+    GHAND_LOG_ERROR("EtherCAT slave " << slave_index << " is not a hand");
     return false;
   }
   target_slave_index_ = slave_index;
@@ -1546,32 +1513,17 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size,
   JointsCallback joints_cb;
   HandStateCallback hand_state_cb;
   TactileDataCallback tactile_cb;
-  SlaveJointsCallback slave_joints_cb;
-  SlaveHandStateCallback slave_hand_state_cb;
-  SlaveTactileDataCallback slave_tactile_cb;
   {
     std::lock_guard<std::mutex> lock(callback_mutex_);
     joints_cb = joints_callback_;
     hand_state_cb = hand_state_callback_;
     tactile_cb = tactile_callback_;
-    slave_joints_cb = slave_joints_callback_;
-    slave_hand_state_cb = slave_hand_state_callback_;
-    slave_tactile_cb = slave_tactile_callback_;
   }
-
-  // Legacy single-hand callbacks mirror only the selected slave's frames so
-  // they keep their historical semantics on single-slave buses.
-  const bool legacy_selected =
-      slave_index == (target_slave_index_ != 0 ? target_slave_index_ : 1);
 
   bool dispatched = false;
   try {
-    if (slave_joints_cb) {
-      slave_joints_cb(slave_index, parsed_joints);
-      dispatched = true;
-    }
-    if (legacy_selected && joints_cb) {
-      joints_cb(parsed_joints);
+    if (joints_cb) {
+      joints_cb(slave_index, parsed_joints);
       dispatched = true;
     }
   } catch (const std::exception& e) {
@@ -1583,12 +1535,8 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size,
   }
 
   try {
-    if (slave_hand_state_cb) {
-      slave_hand_state_cb(slave_index, parsed_temperature);
-      dispatched = true;
-    }
-    if (legacy_selected && hand_state_cb) {
-      hand_state_cb(parsed_temperature);
+    if (hand_state_cb) {
+      hand_state_cb(slave_index, parsed_temperature);
       dispatched = true;
     }
   } catch (const std::exception& e) {
@@ -1602,12 +1550,8 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size,
   if (config_.has_tactile && offset < size) {
     TactileData tactile_data = ParseTactileData(data, size, &offset);
     try {
-      if (slave_tactile_cb) {
-        slave_tactile_cb(slave_index, tactile_data);
-        dispatched = true;
-      }
-      if (legacy_selected && tactile_cb) {
-        tactile_cb(tactile_data);
+      if (tactile_cb) {
+        tactile_cb(slave_index, tactile_data);
         dispatched = true;
       }
     } catch (const std::exception& e) {

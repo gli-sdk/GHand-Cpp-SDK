@@ -38,7 +38,7 @@ class GHandCallbackManager {
   using HandStateCallback = std::function<void(const HandState&)>;
   using TactileDataCallback = std::function<void(const TactileData&)>;
 
-  GHandCallbackManager();
+  GHandCallbackManager() = default;
   ~GHandCallbackManager() = default;
 
   GHandCallbackManager(const GHandCallbackManager&) = delete;
@@ -60,9 +60,9 @@ class GHandCallbackManager {
   void UpdateTactileData(uint16_t slave, const TactileData& data);
 
   // Polled access methods (thread-safe)
-  HandState GetHandData(uint16_t slave) const;
-  std::vector<Joint> GetJointsData(uint16_t slave) const;
-  TactileData GetTactileData(uint16_t slave) const;
+  HandState GetHandData() const;
+  std::vector<Joint> GetJointsData() const;
+  TactileData GetTactileData() const;
 
  private:
   // Per-slave cache: latest data + change detection state.
@@ -71,7 +71,6 @@ class GHandCallbackManager {
     std::vector<Joint> delivered_joints;  // as change detection baseline
     HandState state{State::STOPPED, ErrorCode::NORMAL, 0};
     TactileData tactile;
-    bool has_tactile = false;
     std::chrono::steady_clock::time_point last_joint_callback_time{
         std::chrono::steady_clock::now()};
     std::chrono::steady_clock::time_point last_temp_callback_time{
@@ -92,7 +91,7 @@ class GHandCallbackManager {
   // Last data caches (used for change detection + polled access)
   mutable std::mutex data_mutex_;
   std::map<uint16_t, SlaveCache> caches_;
-  uint16_t selected_slave_ = 1;
+  uint16_t selected_slave_ = 0;
 
   // Change detection threshold constants
   static constexpr float kJointAngleThreshold = 1.0f;   // 1 degree

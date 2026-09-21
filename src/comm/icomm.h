@@ -16,18 +16,11 @@
 namespace ghand {
 namespace internal {
 
-using JointsCallback = std::function<void(const std::vector<Joint>&)>;
-using HandStateCallback = std::function<void(const HandState&)>;
-using TactileDataCallback = std::function<void(const TactileData&)>;
-
-// Slave-tagged feedback callbacks: used by multi-slave EtherCAT buses where
-// every slave carries its own TxPDO feedback frame (e.g. a junction/splitter
-// at slave 1 with the hands at slaves 2..N).
-using SlaveJointsCallback =
+using JointsCallback =
     std::function<void(std::uint16_t slave, const std::vector<Joint>&)>;
-using SlaveHandStateCallback =
+using HandStateCallback =
     std::function<void(std::uint16_t slave, const HandState&)>;
-using SlaveTactileDataCallback =
+using TactileDataCallback =
     std::function<void(std::uint16_t slave, const TactileData&)>;
 
 struct FirmwareUpdateResults {
@@ -66,6 +59,11 @@ class IComm {
   virtual DeviceInfo GetDeviceInfo() = 0;
   virtual HandType GetHandType() = 0;
 
+  // Hand enumeration. slaver_index is transport-specific: an EtherCAT slave
+  // index starting from 1, or the RS485/CANFD slave address (e.g. 0x31).
+  virtual std::vector<ConnectedHand> GetConnectedHands() = 0;
+  virtual bool SelectHand(uint16_t slave_index) = 0;
+
   // Motion control
   virtual bool MoveJoints(const std::vector<JointCommand>& joints,
                           ControlMode mode) = 0;
@@ -84,13 +82,6 @@ class IComm {
   virtual void SetJointsCallback(JointsCallback cb) = 0;
   virtual void SetHandStateCallback(HandStateCallback cb) = 0;
   virtual void SetTactileDataCallback(TactileDataCallback cb) = 0;
-
-  // Per-slave feedback callbacks. Default no-ops keep single-slave backends
-  // (RS485/CANFD) working through the legacy callbacks above; EtherCAT
-  // overrides them so each slave's frame reaches its own cache.
-  virtual void SetSlaveJointsCallback(SlaveJointsCallback cb) {}
-  virtual void SetSlaveHandStateCallback(SlaveHandStateCallback cb) {}
-  virtual void SetSlaveTactileDataCallback(SlaveTactileDataCallback cb) {}
 
   // Firmware update
   virtual FirmwareUpdateError BootUpdate(

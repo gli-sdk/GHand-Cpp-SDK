@@ -1,9 +1,5 @@
 #include <chrono>
-#include <cstdint>
 #include <iostream>
-#include <map>
-#include <memory>
-#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -12,25 +8,26 @@
 
 namespace {
 
-// One EtherCAT bus: a single adapter driven by a single master object.
-struct Bus {
-  std::unique_ptr<ghand::GHand> master;
-  std::string adapter;
-  std::vector<ghand::ConnectedHand> hands;
-};
-
 void PrintUsage(const char* program) {
-  std::cout << "Usage:\n"
-            << "  " << program << " [adapter]\n\n"
-            << "Without arguments every adapter is probed and every hand found on\n"
-            << "any bus is detected automatically. Pass an adapter name to probe\n"
-            << "only that one (faster, and useful when another NIC is busy).\n\n"
-            << "Supported topologies:\n"
-            << "  no junction,  single hand : PC -> hand            hand = slave1\n"
-            << "  no junction,  dual hand   : PC -> handA, handB    each = slave1\n"
-            << "  with junction, single hand: PC -> junction -> hand\n"
-            << "  with junction, dual hand  : PC -> junction -> {handA, handB}\n"
-            << "The EtherCAT junction is itself a slave and is skipped here.\n";
+  std::cout
+      << "Usage:\n"
+      << "  " << program << " [ethcat|canfd|rs485] [device]\n\n"
+      << "Examples:\n"
+      << "  " << program << "                    (EtherCAT, auto adapter)\n"
+      << "  " << program << " ethcat <adapter>\n"
+      << "  " << program << " canfd COM17:0\n"
+      << "  " << program << " rs485 /dev/ttyUSB0\n\n"
+      << "Without a device every adapter is probed and the first bus that\n"
+      << "carries a hand is used. Every hand found is driven through the poses\n"
+      << "below with SelectHand() + MoveJoints(), whatever the transport.\n\n"
+      << "EtherCAT topologies all handled by the same code below:\n"
+      << "  no junction,   single hand : PC -> hand\n"
+      << "  no junction,   dual hand   : PC -> {handA, handB}\n"
+      << "  with junction, single hand : PC -> junction -> hand\n"
+      << "  with junction, dual hand   : PC -> junction -> {handA, handB}\n"
+      << "The EtherCAT junction is a slave too, but it is not a hand, so\n"
+      << "Connect() skips it. On CAN-FD and RS485 both hands share one bus\n"
+      << "(1-in 2-out) and Connect() scans the default addresses 0x31/0x32.\n";
 }
 
 std::vector<ghand::JointCommand> BuildPose(float mcp, float pip) {
@@ -42,160 +39,95 @@ std::vector<ghand::JointCommand> BuildPose(float mcp, float pip) {
   };
 }
 
-std::map<std::string, std::string> SearchAdapters() {
-  auto probe = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                    ghand::CommType::ETHERCAT);
-  if (!probe) {
-    std::cerr << "Failed to create GHand for adapter discovery\n";
-    return {};
-  }
-  return probe->SearchAdapters();
-}
-
-// Deduplicate Windows multi-channel adapters (one NIC is reported once per
-// channel, e.g. "\Device\NPF_{GUID}:0" and "\Device\NPF_{GUID}:1").
-bool MarkAdapterBase(std::set<std::string>* seen, const std::string& name) {
-  const std::string base = name.substr(0, name.find(':'));
-  return seen->insert(base).second;
-}
-
-// Probe one adapter: connect the bus, then enumerate every slave on it.
-// Returns false when the adapter carries no hand, so the caller can drop it.
-bool ProbeBus(const std::string& adapter, Bus* bus) {
-  std::cout << "Probing adapter: " << adapter << '\n';
-
-  auto master = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                     ghand::CommType::ETHERCAT);
-  if (!master) {
-    std::cerr << "  Failed to create EtherCAT master\n";
-    return false;
-  }
-  if (!master->Connect(adapter)) {
-    std::cout << "  No EtherCAT bus here: " << master->GetLastErrorMessage()
-              << '\n';
-    return false;
-  }
-
-  // A single connect scans the whole chain and returns every slave at once;
-  // slaves reporting a non-hand device name (the junction) are filtered out.
-  std::vector<ghand::ConnectedHand> hands = master->GetConnectedHands();
-  if (hands.empty()) {
-    std::cout << "  Bus has no hand on it\n";
-    master->Disconnect();
-    return false;
-  }
-
-  bus->master = std::move(master);
-  bus->adapter = adapter;
-  bus->hands = std::move(hands);
-  return true;
-}
-
-void PrintTopology(const std::vector<Bus>& buses) {
-  size_t total_hands = 0;
-  std::cout << "\n========== Detected topology ==========\n";
-  for (const auto& bus : buses) {
-    std::cout << "Adapter " << bus.adapter << " (" << bus.hands.size()
-              << " hand(s)):\n";
-    for (const auto& hand : bus.hands) {
-      total_hands++;
-      std::cout << "  slave " << hand.slave_index << ": "
-                << ghand::ToString(hand.hand_type)
-                << " device=" << hand.device_info.device_name
-                << " serial=" << hand.device_info.serial_number << '\n';
-    }
-  }
-  std::cout << "Total: " << buses.size() << " bus(es), " << total_hands
-            << " hand(s)\n";
-}
-
-bool MoveAll(const std::vector<Bus>& buses,
-             const std::vector<ghand::JointCommand>& pose,
-             const std::string& label) {
-  std::cout << "\n" << label << '\n';
-  bool ok = true;
-  for (const auto& bus : buses) {
-    for (const auto& hand : bus.hands) {
-      if (!bus.master->SelectHand(hand.slave_index) ||
-          !bus.master->MoveJoints(pose)) {
-        std::cerr << "  Failed on " << bus.adapter << " slave "
-                  << hand.slave_index << ": "
-                  << bus.master->GetLastErrorMessage() << '\n';
-        ok = false;
-      }
-    }
-  }
-  return ok;
-}
-
 }  // namespace
 
 int main(int argc, char* argv[]) {
   if (argc > 1) {
-    std::string arg = argv[1];
+    const std::string arg = argv[1];
     if (arg == "-h" || arg == "--help") {
       PrintUsage(argv[0]);
       return 0;
     }
   }
 
-  std::cout << "GHand EtherCAT auto-detect demo\n";
-  std::cout << "Master: this process / SOEM\n";
-
-  std::vector<std::string> adapters;
+  ghand::CommType comm_type = ghand::CommType::ETHERCAT;
+  int first_device_arg = 1;
   if (argc > 1) {
-    adapters.push_back(argv[1]);
-    std::cout << "Adapter (from command line): " << argv[1] << '\n';
-  } else {
-    std::map<std::string, std::string> found = SearchAdapters();
-    std::set<std::string> seen_bases;
-    for (const auto& adapter : found) {
-      if (MarkAdapterBase(&seen_bases, adapter.first)) {
-        adapters.push_back(adapter.first);
-      }
+    const std::string arg = argv[1];
+    if (arg == "ethcat") {
+      first_device_arg = 2;
+    } else if (arg == "canfd") {
+      comm_type = ghand::CommType::CANFD;
+      first_device_arg = 2;
+    } else if (arg == "rs485") {
+      comm_type = ghand::CommType::RS485;
+      first_device_arg = 2;
+    } else if (!arg.empty() && arg.front() == '-') {
+      PrintUsage(argv[0]);
+      return 1;
     }
-    std::cout << "Adapters to probe: " << adapters.size() << '\n';
   }
 
-  if (adapters.empty()) {
-    std::cerr << "No network adapter available.\n\n";
+  const std::string device =
+      argc > first_device_arg ? argv[first_device_arg] : "auto";
+
+  auto master = ghand::GHand::Create(ghand::ProductType::GHand5, comm_type);
+  if (!master) {
+    std::cerr << "Failed to create GHand\n";
+    return 1;
+  }
+
+  // This single call covers every transport and topology listed above: "auto"
+  // probes the adapters until one carries a controllable hand, and a named
+  // device is used directly. Nothing here knows or cares which transport is
+  // in use, or whether a junction is present.
+  const std::vector<ghand::ConnectedHand> connected_hands =
+      master->Connect(device);
+  if (connected_hands.empty()) {
+    std::cerr << "Connect failed on " << device << ": "
+              << master->GetLastErrorMessage() << "\n\n";
     PrintUsage(argv[0]);
     return 1;
   }
 
-  std::cout << "\nConnecting every adapter...\n";
-  std::vector<Bus> buses;
-  for (const std::string& adapter : adapters) {
-    Bus bus;
-    if (ProbeBus(adapter, &bus)) {
-      std::cout << "  Connected: " << adapter << '\n';
-      buses.push_back(std::move(bus));
-    }
+  std::cout << "Connected on " << device << " - " << connected_hands.size()
+            << " hand(s):\n";
+  for (const auto& hand : connected_hands) {
+    std::cout << "  slave 0x" << std::hex << hand.slave_index << std::dec
+              << ": " << ghand::ToString(hand.hand_type)
+              << " device=" << hand.device_info.device_name
+              << " serial=" << hand.device_info.serial_number << '\n';
   }
 
-  if (buses.empty()) {
-    std::cerr << "\nNo hand found on any adapter.\n";
-    PrintUsage(argv[0]);
-    return 1;
+  // MoveJoints() and every other single-hand API act on whichever hand
+  // SelectHand() picked last, so one SelectHand() per hand is all it takes.
+  std::cout << "\nMove the hands to a light grasp pose...\n";
+  for (const auto& hand : connected_hands) {
+    master->SelectHand(hand.slave_index);
+    master->MoveJoints(BuildPose(25.0f, 35.0f));
   }
-
-  PrintTopology(buses);
-
-  MoveAll(buses, BuildPose(25.0f, 35.0f), "Moving all hands to a light grasp pose...");
   std::this_thread::sleep_for(std::chrono::seconds(2));
 
-  MoveAll(buses, BuildPose(45.0f, 60.0f), "Closing all hands...");
+  std::cout << "Mirror the index/middle finger pose...\n";
+  for (const auto& hand : connected_hands) {
+    const bool is_left = hand.hand_type == ghand::HandType::LEFT;
+    master->SelectHand(hand.slave_index);
+    master->MoveJoints(is_left ? BuildPose(45.0f, 60.0f)
+                               : BuildPose(10.0f, 15.0f));
+  }
   std::this_thread::sleep_for(std::chrono::seconds(2));
 
-  MoveAll(buses, BuildPose(0.0f, 0.0f), "Resetting all hands...");
+  std::cout << "Reset the hands...\n";
+  for (const auto& hand : connected_hands) {
+    master->SelectHand(hand.slave_index);
+    master->MoveJoints(BuildPose(0.0f, 0.0f));
+  }
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
-  for (const auto& bus : buses) {
-    for (const auto& hand : bus.hands) {
-      if (bus.master->SelectHand(hand.slave_index)) bus.master->Stop();
-    }
-    bus.master->Disconnect();
+  for (const auto& hand : connected_hands) {
+    if (master->SelectHand(hand.slave_index)) master->Stop();
   }
+  master->Disconnect();
 
   std::cout << "\nDemo completed.\n";
   return 0;

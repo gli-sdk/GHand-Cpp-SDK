@@ -137,7 +137,7 @@ int main() {
     // auto hand = ghand::GHand::Create(ghand::ProductType::AUTO,
     //                                    ghand::CommType::ETHERCAT);
 
-    if (!hand || !hand->Connect("auto")) {
+    if (!hand || hand->Connect("auto").empty()) {
         printf("Connection failed\n");
         return -1;
     }
@@ -171,7 +171,7 @@ int main() {
 auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                    ghand::CommType::RS485);
 auto adapters = hand->SearchAdapters();
-if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
+if (!adapters.empty() && !hand->Connect(adapters.begin()->first).empty()) {
     auto info = hand->GetDeviceInfo();
     printf("Device: %s\n", info.device_name.c_str());
     hand->Disconnect();
@@ -248,16 +248,35 @@ canfd_hand->Connect("/dev/ttyACM0:0");
 timing parameters:
 
 ```cpp
-// RS485: slave_id = 0 scans the default IDs 0x31 and 0x32.
+// RS485: slave_id = 0 scans the default IDs 0x31 and 0x32 and manages
+// every hand it finds.
 hand->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
 
 // CAN-FD: use a predefined bit timing profile.
 hand->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
 ```
 
+After connecting with `slave_id = 0`, `Connect()` returns every hand it found on
+the bus; use `SelectHand()` to switch the controlled hand: `slave_index` is the
+RS485/CANFD slave address (e.g. `0x31`), and the following single-hand APIs all
+act on the selected hand. Passing an explicit `slave_id` connects that slave
+only. `OpenTactile()`, `CloseTactile()`, `ClearFault()` and
+`InitJoint()` likewise act on the selected hand only, so call them once per hand.
+
+```cpp
+// Two hands on one bus (1-in 2-out): 0x31 and 0x32.
+auto hands = hand->Connect("COM17:0", 0, ghand::CANFDBitTiming::TIMING_1M_5M);
+for (const auto& h : hands) {
+  hand->SelectHand(h.slave_index);
+  hand->MoveJoints(pose);  // acts on h only
+}
+```
+
 `SetSlaveId()` writes a new RS485/CANFD slave ID to holding register `0x0000`.
-`SetBaudrateConfig()` writes the enum-mapped protocol gear to holding register
-`0x002C`; the device stores it and applies it after the next power-up.
+The ID is not persisted: the device returns to the default 0x31/0x32 after a
+power cycle. `SetBaudrateConfig()` writes the enum-mapped protocol gear to
+holding register `0x002C`; the device stores it and applies it after the next
+power-up.
 
 ```cpp
 hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_1000000);

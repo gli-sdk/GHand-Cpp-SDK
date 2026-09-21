@@ -5,6 +5,7 @@
 #define SRC_COMM_CANFD_COMM_H_
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -50,6 +51,8 @@ class CANFDComm : public IComm {
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;
+  std::vector<ConnectedHand> GetConnectedHands() override;
+  bool SelectHand(uint16_t slave_index) override;
 
   bool MoveJoints(const std::vector<JointCommand>& joints,
                   ControlMode mode) override;
@@ -88,23 +91,32 @@ class CANFDComm : public IComm {
   bool RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len,
                  int timeout_ms);
 
-  bool ReadRegisters(int addr, int count, std::vector<uint8_t>* out_bytes,
-                     int func_code = 0x04, int timeout_ms = 500);
-  bool WriteRegisters(int addr, const std::vector<uint8_t>& data,
+  bool ReadRegisters(uint8_t slave, int addr, int count,
+                     std::vector<uint8_t>* out_bytes, int func_code = 0x04,
+                     int timeout_ms = 500);
+  bool WriteRegisters(uint8_t slave, int addr,
+                      const std::vector<uint8_t>& data,
                       int timeout_ms = 5000);
 
-  bool WriteSingleRegister(int addr, uint16_t value, int timeout_ms = 500);
-  bool WaitHoldingResult(int addr, int timeout_ms = 2000,
+  bool WriteSingleRegister(uint8_t slave, int addr, uint16_t value,
+                           int timeout_ms = 500);
+  bool WaitHoldingResult(uint8_t slave, int addr, int timeout_ms = 2000,
                          int interval_ms = 50);
 
   bool NodeIdDetection(int timeout_ms = 500);
   bool EstablishConnection(uint8_t slave_id, int timeout_ms = 500);
+  bool TryConnectSlave(uint8_t target,
+                       const std::vector<std::vector<uint8_t>>& payloads,
+                       int timeout_ms);
   void DeleteConnection();
 
-  bool ReadInputBytes(int addr, int count, std::vector<uint8_t>* bytes);
-  std::vector<Joint> GetJoints();
-  HandState GetHandInfo();
-  TactileData GetTactileData();
+  bool ReadInputBytes(uint8_t slave, int addr, int count,
+                      std::vector<uint8_t>* bytes);
+  std::vector<Joint> GetJoints(uint8_t slave, bool* ok = nullptr);
+  HandState GetHandInfo(uint8_t slave, bool* ok = nullptr);
+  TactileData GetTactileData(uint8_t slave, bool* ok = nullptr);
+  DeviceInfo GetDeviceInfoForSlave(uint8_t slave);
+  HandType GetHandTypeForSlave(uint8_t slave);
 
   bool WriteTactileControl(uint16_t command);
   void EnsurePollStarted();
@@ -114,8 +126,20 @@ class CANFDComm : public IComm {
   std::unique_ptr<CANFDDriver> driver_;
   std::mutex io_mutex_;
   uint8_t src_id_ = 0x0A;
+  // Currently selected hand; business APIs address this slave implicitly.
   uint8_t slave_id_ = 0x31;
   std::atomic<bool> connected_{false};
+
+  // Hands found on the bus, in enumeration order. Guarded by hands_mutex_.
+  std::vector<ConnectedHand> hands_;
+  // Per-hand polling health, keyed by slave address. Guarded by hands_mutex_.
+  struct HandHealth {
+    int fail_count = 0;
+    std::chrono::steady_clock::time_point last_tactile_time{};
+    std::chrono::steady_clock::time_point skip_until{};
+  };
+  std::map<uint8_t, HandHealth> health_;
+  mutable std::mutex hands_mutex_;
 
   std::thread poll_thread_;
   std::atomic<bool> poll_running_{false};

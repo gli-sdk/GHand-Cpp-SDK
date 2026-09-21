@@ -52,42 +52,42 @@ class GHAND_API GHand {
 
   // Connection management
   /**
-   * @brief Auto-connect to device
-   * @return true on success; call GetLastResult() when false
-   */
-  bool AutoConnect();
-
-  /**
    * @brief Connect to specified device.
-   * @param device_name Device name ("auto" for auto-discovery)
+   * @param device_name Device name; "auto" probes every adapter and uses the
+   *     first one that carries a hand
    * @param slave_id RS485/CANFD slave ID used for this connection; 0 scans
-   *     default IDs 0x31 and 0x32
-   * @return true on success; call GetLastResult() when false
+   *     the default IDs 0x31 and 0x32 and manages every hand it finds
+   * @return The hands found on the bus. The first one is selected, so
+   *     single-hand APIs work right away; use SelectHand() to switch between
+   *     hands. Empty when the connection failed; call GetLastErrorMessage()
+   *     for the reason.
    */
-  bool Connect(const std::string& device_name = "auto",
-               uint8_t slave_id = 0);
+  std::vector<ConnectedHand> Connect(const std::string& device_name = "auto",
+                                     uint8_t slave_id = 0);
 
   /**
    * @brief Connect to an RS485 device using a typed baud-rate selection.
-   * @param device_name Device name ("auto" for auto-discovery)
-   * @param slave_id RS485 slave ID used for this connection; 0 scans default
-   *     IDs 0x31 and 0x32
+   * @param device_name Device name; "auto" probes every adapter
+   * @param slave_id RS485 slave ID used for this connection; 0 scans the
+   *     default IDs 0x31 and 0x32 and manages every hand it finds
    * @param baud_rate RS485 baud rate used for this connection
-   * @return true on success; call GetLastResult() when false
+   * @return The hands found on the bus; empty when the connection failed
    */
-  bool Connect(const std::string& device_name, uint8_t slave_id,
-               RS485BaudRate baud_rate);
+  std::vector<ConnectedHand> Connect(const std::string& device_name,
+                                     uint8_t slave_id,
+                                     RS485BaudRate baud_rate);
 
   /**
    * @brief Connect to a CAN-FD device using a typed bit-timing profile.
-   * @param device_name Device name ("auto" for auto-discovery)
-   * @param slave_id CAN-FD slave ID used for this connection; 0 scans default
-   *     IDs 0x31 and 0x32
+   * @param device_name Device name; "auto" probes every adapter
+   * @param slave_id CAN-FD slave ID used for this connection; 0 scans the
+   *     default IDs 0x31 and 0x32 and manages every hand it finds
    * @param timing CAN-FD bit timing profile used for this connection
-   * @return true on success; call GetLastResult() when false
+   * @return The hands found on the bus; empty when the connection failed
    */
-  bool Connect(const std::string& device_name, uint8_t slave_id,
-               CANFDBitTiming timing);
+  std::vector<ConnectedHand> Connect(const std::string& device_name,
+                                     uint8_t slave_id,
+                                     CANFDBitTiming timing);
 
   /**
    * @brief Disconnect
@@ -101,6 +101,10 @@ class GHAND_API GHand {
 
   /**
    * @brief Set RS485/CANFD slave ID on the connected device.
+   *
+   * Takes effect immediately but is not persisted: the device returns to the
+   * default 0x31/0x32 after the next power-up.
+   *
    * @param slave_id New slave ID written to holding register 0x0000
    * @return true on success; call GetLastResult() when false
    */
@@ -173,15 +177,10 @@ class GHAND_API GHand {
   DeviceInfo GetDeviceInfo();
 
   /**
-   * @brief Get hands found on the connected EtherCAT bus.
-   *
-   * For non-EtherCAT transports this returns an empty list.
-   */
-  std::vector<ConnectedHand> GetConnectedHands();
-
-  /**
-   * @brief Select the EtherCAT slave used by following single-hand APIs.
-   * @param slave_index EtherCAT slave index, starting from 1
+   * @brief Select the hand used by following single-hand APIs.
+   * @param slave_index Transport-specific hand identifier: an EtherCAT slave
+   *     index starting from 1, or the RS485/CANFD slave address (e.g. 0x31).
+   *     Use ConnectedHand::slave_index as returned by Connect().
    * @return true on success; call GetLastResult() when false
    */
   bool SelectHand(uint16_t slave_index);

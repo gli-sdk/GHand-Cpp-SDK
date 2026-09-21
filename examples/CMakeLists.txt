@@ -85,12 +85,7 @@ add_executable(switch_baud_rate tutorial/10switch_baud_rate.cc)
 target_link_libraries(switch_baud_rate ghand)
 copy_runtime_for_target(switch_baud_rate)
 
-# 11. EtherCAT master-slave dual-hand example
-add_executable(master_slave_dual_hand tutorial/11master_slave_dual_hand.cc)
-target_link_libraries(master_slave_dual_hand ghand)
-copy_runtime_for_target(master_slave_dual_hand)
-
-# 12. Unified EtherCAT auto-detect example (all four connection topologies)
+# 11. Multi-hand example: EtherCAT / CAN-FD / RS485 (auto-detect + control)
 add_executable(connect_hands tutorial/12connect_hands.cc)
 target_link_libraries(connect_hands ghand)
 copy_runtime_for_target(connect_hands)

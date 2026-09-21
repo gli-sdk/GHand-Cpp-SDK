@@ -312,6 +312,8 @@ struct DeviceInfo {
 };
 
 struct ConnectedHand {
+  // Transport-specific hand identifier accepted by SelectHand(): an EtherCAT
+  // slave index starting from 1, or the RS485/CANFD slave address (e.g. 0x31).
   uint16_t slave_index = 0;
   HandType hand_type = HandType::NONE;
   DeviceInfo device_info;

@@ -47,8 +47,8 @@ class EtherCATComm : public IComm {
 
   DeviceInfo GetDeviceInfo() override;
   HandType GetHandType() override;
-  std::vector<ConnectedHand> GetConnectedHands();
-  bool SelectHand(uint16_t slave_index);
+  std::vector<ConnectedHand> GetConnectedHands() override;
+  bool SelectHand(uint16_t slave_index) override;
 
   bool MoveJoints(const std::vector<JointCommand>& joints,
                   ControlMode mode) override;
@@ -64,9 +64,6 @@ class EtherCATComm : public IComm {
   void SetJointsCallback(JointsCallback cb) override;
   void SetHandStateCallback(HandStateCallback cb) override;
   void SetTactileDataCallback(TactileDataCallback cb) override;
-  void SetSlaveJointsCallback(SlaveJointsCallback cb) override;
-  void SetSlaveHandStateCallback(SlaveHandStateCallback cb) override;
-  void SetSlaveTactileDataCallback(SlaveTactileDataCallback cb) override;
 
   FirmwareUpdateError BootUpdate(
       const std::string& filename,
@@ -132,9 +129,6 @@ class EtherCATComm : public IComm {
   JointsCallback joints_callback_;
   HandStateCallback hand_state_callback_;
   TactileDataCallback tactile_callback_;
-  SlaveJointsCallback slave_joints_callback_;
-  SlaveHandStateCallback slave_hand_state_callback_;
-  SlaveTactileDataCallback slave_tactile_callback_;
   // Protects callback registration/copy only.
   // Never hold this mutex while invoking user callbacks.
   mutable std::mutex callback_mutex_;
@@ -163,7 +157,7 @@ class EtherCATComm : public IComm {
   // Firmware version helper
   std::string ReadFirmwareVersion(uint8_t mcu_id);
   std::string ReadFirmwareVersionFromSlave(uint16_t slave, uint8_t mcu_id);
-  DeviceInfo GetDeviceInfoFromSlave(uint16_t slave);
+  DeviceInfo ReadDeviceInfo(uint16_t slave);
   HandType GetHandTypeFromSlave(uint16_t slave);
   bool MoveJointsToSlave(uint16_t slave_index,
                          const std::vector<JointCommand>& joints,

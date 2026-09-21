@@ -89,7 +89,7 @@ void RegisterTactileCallback(ghand::GHand* hand) {
 
 void RunTactileDemo(ghand::GHand* hand) {
   std::cout << "Connecting to dexterous hand..." << '\n';
-  if (!hand->AutoConnect()) {
+  if (hand->Connect("auto").empty()) {
     std::cout << "Failed to connect to the dexterous hand!" << '\n';
     return;
   }

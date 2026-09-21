@@ -23,19 +23,20 @@ GHand::GHand(ProductType pt, CommType ct)
 
 GHand::~GHand() {}
 
-bool GHand::AutoConnect() { return impl_->AutoConnect(); }
-
-bool GHand::Connect(const std::string& device_name, uint8_t slave_id) {
+std::vector<ConnectedHand> GHand::Connect(const std::string& device_name,
+                                          uint8_t slave_id) {
   return impl_->Connect(device_name, slave_id);
 }
 
-bool GHand::Connect(const std::string& device_name, uint8_t slave_id,
-                    RS485BaudRate baud_rate) {
+std::vector<ConnectedHand> GHand::Connect(const std::string& device_name,
+                                          uint8_t slave_id,
+                                          RS485BaudRate baud_rate) {
   return impl_->Connect(device_name, slave_id, baud_rate);
 }
 
-bool GHand::Connect(const std::string& device_name, uint8_t slave_id,
-                    CANFDBitTiming timing) {
+std::vector<ConnectedHand> GHand::Connect(const std::string& device_name,
+                                          uint8_t slave_id,
+                                          CANFDBitTiming timing) {
   return impl_->Connect(device_name, slave_id, timing);
 }
 
@@ -78,10 +79,6 @@ std::map<std::string, std::string> GHand::SearchAdapters() {
 HandType GHand::GetHandType() { return impl_->GetHandType(); }
 
 DeviceInfo GHand::GetDeviceInfo() { return impl_->GetDeviceInfo(); }
-
-std::vector<ConnectedHand> GHand::GetConnectedHands() {
-  return impl_->GetConnectedHands();
-}
 
 bool GHand::SelectHand(uint16_t slave_index) {
   return impl_->SelectHand(slave_index);

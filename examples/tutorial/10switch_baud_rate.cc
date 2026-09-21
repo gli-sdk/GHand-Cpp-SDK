@@ -48,7 +48,7 @@ bool RunCanfdExample() {
 
   std::cout << "Connecting with current CANFD timing "
             << CanfdTimingName(current_timing) << "..." << '\n';
-  if (!hand->Connect(kDeviceName, kSlaveId, current_timing)) {
+  if (hand->Connect(kDeviceName, kSlaveId, current_timing).empty()) {
     std::cerr << "Connection failed" << '\n';
     PrintLastError(*hand);
     return false;

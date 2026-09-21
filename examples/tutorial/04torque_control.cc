@@ -34,7 +34,7 @@ int main() {
   }
 
   std::cout << "Connecting to dexterous hand..." << '\n';
-  if (!hand->AutoConnect()) {
+  if (hand->Connect("auto").empty()) {
     std::cerr << "Failed to connect to the dexterous hand!" << '\n';
     return 1;
   }

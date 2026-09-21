@@ -143,7 +143,7 @@ std::unique_ptr<ghand::GHand> CreateConnectedHand() {
     std::cerr << "Failed to create GHand" << '\n';
     return nullptr;
   }
-  if (!hand->Connect("auto")) {
+  if (hand->Connect("auto").empty()) {
     std::cout << "\n[Scan complete] Failed to connect to dexterous hand."
               << '\n';
     return nullptr;

@@ -62,7 +62,7 @@ int main() {
     std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
-  bool connected = hand->Connect("auto");
+  bool connected = !hand->Connect("auto").empty();
   if (!connected) {
     std::cout << "\n[Scan complete] Failed to connect to dexterous hand."
               << '\n';

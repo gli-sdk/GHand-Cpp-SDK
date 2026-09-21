@@ -42,14 +42,17 @@ class GHandImpl {
   bool IsValid() const { return comm_ != nullptr; }
 
   // Connection management
-  bool AutoConnect();
-  bool AutoConnect(uint8_t slave_id, uint8_t baudrate_gear);
-  bool Connect(const std::string& device_name, uint8_t slave_id = 0,
-               uint8_t baudrate_gear = 0x05);
-  bool Connect(const std::string& device_name, uint8_t slave_id,
-               RS485BaudRate baud_rate);
-  bool Connect(const std::string& device_name, uint8_t slave_id,
-               CANFDBitTiming timing);
+  std::vector<ConnectedHand> AutoConnect(uint8_t slave_id,
+                                         uint8_t baudrate_gear);
+  std::vector<ConnectedHand> Connect(const std::string& device_name,
+                                     uint8_t slave_id = 0,
+                                     uint8_t baudrate_gear = 0x05);
+  std::vector<ConnectedHand> Connect(const std::string& device_name,
+                                     uint8_t slave_id,
+                                     RS485BaudRate baud_rate);
+  std::vector<ConnectedHand> Connect(const std::string& device_name,
+                                     uint8_t slave_id,
+                                     CANFDBitTiming timing);
   bool Disconnect();
   bool IsConnected() const;
   bool SetSlaveId(uint8_t slave_id);
@@ -62,7 +65,6 @@ class GHandImpl {
   std::map<std::string, std::string> SearchAdapters() const;
   HandType GetHandType() const;
   DeviceInfo GetDeviceInfo() const;
-  std::vector<ConnectedHand> GetConnectedHands();
   bool SelectHand(uint16_t slave_index);
 
   // Control operations
@@ -109,9 +111,6 @@ class GHandImpl {
   std::unique_ptr<GHandCallbackManager> callback_manager_;
 
   ControlMode control_mode_;
-  // EtherCAT slave selected via SelectHand(); 0 = not selected yet, in which
-  // case the Get* data polls fall back to slave 1.
-  uint16_t target_slave_index_ = 0;
   CommType comm_type_;
   ProductType product_type_;
   std::string device_name_;

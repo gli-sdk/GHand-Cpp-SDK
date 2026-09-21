@@ -136,7 +136,7 @@ int main() {
     // auto hand = ghand::GHand::Create(ghand::ProductType::AUTO,
     //                                    ghand::CommType::ETHERCAT);
 
-    if (!hand || !hand->Connect("auto")) {
+    if (!hand || hand->Connect("auto").empty()) {
         printf("Connection failed\n");
         return -1;
     }
@@ -170,7 +170,7 @@ int main() {
 auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                    ghand::CommType::RS485);
 auto adapters = hand->SearchAdapters();
-if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
+if (!adapters.empty() && !hand->Connect(adapters.begin()->first).empty()) {
     auto info = hand->GetDeviceInfo();
     printf("Device: %s\n", info.device_name.c_str());
     hand->Disconnect();
@@ -246,16 +246,31 @@ canfd_hand->Connect("/dev/ttyACM0:0");
 `Connect()` 支持可选的 RS485/CANFD 从站 ID 与波特率（或位时序）参数：
 
 ```cpp
-// RS485：slave_id = 0 时扫描默认 ID 0x31 和 0x32。
+// RS485：slave_id = 0 时扫描默认 ID 0x31 和 0x32，并把找到的手都纳入管理。
 hand->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
 
 // CAN-FD：使用预定义位时序配置。
 hand->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
 ```
 
+`slave_id = 0` 连接后，`Connect()` 返回总线上找到的全部手，用
+`SelectHand()` 切换当前受控手：`slave_index` 即 RS485/CANFD 从站地址（如
+`0x31`），之后的单手 API 都作用于当前选中的手。显式传入 `slave_id` 时只连接
+该从站。`OpenTactile()`、`CloseTactile()`、`ClearFault()`、`InitJoint()` 同样
+只作用于当前选中的手，双手需各调用一次。
+
+```cpp
+// 一条总线挂两只手（1进2出）：0x31 与 0x32。
+auto hands = hand->Connect("COM17:0", 0, ghand::CANFDBitTiming::TIMING_1M_5M);
+for (const auto& h : hands) {
+  hand->SelectHand(h.slave_index);
+  hand->MoveJoints(pose);  // 只作用于 h 这一只手
+}
+```
+
 `SetSlaveId()` 将新的 RS485/CANFD 从站 ID 写入保持寄存器 `0x0000`。
-`SetBaudrateConfig()` 将枚举映射的协议挡位写入保持寄存器
-`0x002C`；设备保存该值并在下次上电后生效。
+该地址不持久化，断电重启后恢复默认 0x31/0x32。`SetBaudrateConfig()` 将枚举
+映射的协议挡位写入保持寄存器 `0x002C`；设备保存该值并在下次上电后生效。
 
 ```cpp
 hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_1000000);

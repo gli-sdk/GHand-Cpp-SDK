@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "ghand/ghand.h"
 
@@ -36,51 +37,49 @@ int main() {
 
   // Try to connect to the dexterous hand
   std::cout << "Connecting to dexterous hand..." << '\n';
-  bool success = hand->AutoConnect();
-
-  if (success) {
-    std::cout << "Successfully connected to the dexterous hand!" << '\n';
-
-    // Register joint status callback to display joint data in real time
-    hand->SetJointsCallback(DisplayJoints);
-    std::cout << "Joint display callback registered." << '\n';
-
-    // Set control mode to position mode (default)
-    hand->SetControlMode(ghand::ControlMode::POSITION);
-
-    // Define joint commands: control all 13 joints
-    // DIP joints will be automatically skipped, no need to control
-    std::vector<ghand::JointCommand> joints = {
-        {ghand::JointId::FF_MCP, 30.0f, 100, 100},
-        {ghand::JointId::FF_PIP, 45.0f, 100, 100},
-    };
-
-    std::cout << "Moving joints..." << '\n';
-    bool move_success = hand->MoveJoints(joints);
-
-    if (move_success) {
-      std::cout << "Joints moved successfully!" << '\n';
-
-      // Hold pose for 5 seconds
-      std::this_thread::sleep_for(std::chrono::seconds(5));
-
-      // Reset joint positions
-      std::vector<ghand::JointCommand> reset_joints = {
-          {ghand::JointId::FF_MCP, 0.0f, 100, 100},
-          {ghand::JointId::FF_PIP, 0.0f, 100, 100}};
-
-      std::cout << "Resetting joint positions..." << '\n';
-      hand->MoveJoints(reset_joints);
-      std::this_thread::sleep_for(std::chrono::seconds(2));
-    } else {
-      std::cout << "Failed to move joints!" << '\n';
-    }
-
-    hand->Disconnect();
-    std::cout << "Connection closed." << '\n';
-  } else {
+  std::vector<ghand::ConnectedHand> connected_hands = hand->Connect("auto");
+  if (connected_hands.empty()) {
     std::cout << "Failed to connect to the dexterous hand!" << '\n';
+    return 1;
   }
+
+  std::cout << "Successfully connected to the dexterous hand!" << '\n';
+
+  // Register joint status callback to display joint data in real time
+  hand->SetJointsCallback(DisplayJoints);
+  std::cout << "Joint display callback registered." << '\n';
+
+  // Set control mode to position mode (default)
+  hand->SetControlMode(ghand::ControlMode::POSITION);
+
+  // Define joint commands: control all 13 joints
+  // DIP joints will be automatically skipped, no need to control
+  std::vector<ghand::JointCommand> joints = {
+      {ghand::JointId::FF_MCP, 30.0f, 100, 100},
+      {ghand::JointId::FF_PIP, 45.0f, 100, 100},
+  };
+
+  std::cout << "Moving joints..." << '\n';
+  if (hand->MoveJoints(joints)) {
+    std::cout << "Joints moved successfully!" << '\n';
+
+    // Hold pose for 5 seconds
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+
+    // Reset joint positions
+    std::vector<ghand::JointCommand> reset_joints = {
+        {ghand::JointId::FF_MCP, 0.0f, 100, 100},
+        {ghand::JointId::FF_PIP, 0.0f, 100, 100}};
+
+    std::cout << "Resetting joint positions..." << '\n';
+    hand->MoveJoints(reset_joints);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+  } else {
+    std::cout << "Failed to move joints!" << '\n';
+  }
+
+  hand->Disconnect();
+  std::cout << "Connection closed." << '\n';
 
   return 0;
 }

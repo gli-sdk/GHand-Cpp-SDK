@@ -52,7 +52,7 @@ void ConnectHands(
 
     auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
                                         ghand::CommType::ETHERCAT);
-    if (hand->Connect(name)) {
+    if (!hand->Connect(name).empty()) {
       hands->push_back(std::move(hand));
       connected_adapter_bases.insert(adapter_base);
       std::cout << "Connected device: " << name << '\n';
