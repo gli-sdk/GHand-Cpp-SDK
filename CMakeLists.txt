@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(GHandSDK VERSION 2.2.2 LANGUAGES C CXX)
+project(GHandSDK VERSION 3.0.0 LANGUAGES C CXX)
 include(CMakePackageConfigHelpers)
 
 # Set C++ standard
@@ -167,7 +167,7 @@ target_link_libraries(ghand PRIVATE
 set_target_properties(ghand PROPERTIES
     OUTPUT_NAME ghand
     VERSION ${PROJECT_VERSION}
-    SOVERSION 1
+    SOVERSION 2
 )
 
 if(MSVC)

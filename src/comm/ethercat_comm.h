@@ -41,25 +41,24 @@ class EtherCATComm : public IComm {
   bool IsConnected() const override { return is_connected_; }
   std::map<std::string, std::string> SearchAdapters() override;
   void UpdateConfig(const ProductConfig& config) override;
-  bool SetSlaveId(uint8_t slave_id) override;
-  bool SetBaudrateConfig(uint8_t baudrate_gear) override;
+  bool SetSlaveId(uint16_t slave_index, uint8_t new_slave_id) override;
+  bool SetBaudrateConfig(uint16_t slave_index, uint8_t baudrate_gear) override;
   Diagnostics GetDiagnostics() const override;
 
-  DeviceInfo GetDeviceInfo() override;
-  HandType GetHandType() override;
+  DeviceInfo GetDeviceInfo(uint16_t slave_index) override;
+  HandType GetHandType(uint16_t slave_index) override;
   std::vector<ConnectedHand> GetConnectedHands() override;
-  bool SelectHand(uint16_t slave_index) override;
 
-  bool MoveJoints(const std::vector<JointCommand>& joints,
+  bool MoveJoints(uint16_t slave_index,
+                  const std::vector<JointCommand>& joints,
                   ControlMode mode) override;
-  void Stop() override;
+  void Stop(uint16_t slave_index) override;
 
-  bool ClearFault() override;
-  bool InitJoint() override;
+  bool ClearFault(uint16_t slave_index) override;
 
-  bool OpenTactile() override;
-  bool CloseTactile() override;
-  bool ZeroTactile() override;
+  bool OpenTactile(uint16_t slave_index) override;
+  bool CloseTactile(uint16_t slave_index) override;
+  bool ZeroTactile(uint16_t slave_index) override;
 
   void SetJointsCallback(JointsCallback cb) override;
   void SetHandStateCallback(HandStateCallback cb) override;
@@ -70,8 +69,8 @@ class EtherCATComm : public IComm {
       std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
-  SelfTestErrorInfo GetSelfTestErrorInfo() override;
-  uint8_t GetSelfTestStatus() override;
+  SelfTestErrorInfo GetSelfTestErrorInfo(uint16_t slave_index) override;
+  uint8_t GetSelfTestStatus(uint16_t slave_index) override;
 
   // Low-level EtherCAT API (retained for internal use)
   int SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,
@@ -87,6 +86,10 @@ class EtherCATComm : public IComm {
 
  private:
   struct SoemState;
+
+  // Resolve the slaves a call targets. slave_index 0 expands to every hand on
+  // the bus; a slave that is not a hand is rejected.
+  std::vector<uint16_t> TargetSlaves(uint16_t slave_index);
 
   // Instance state
   std::unique_ptr<SoemState> soem_;
@@ -115,7 +118,6 @@ class EtherCATComm : public IComm {
   std::vector<size_t> rxpdo_sizes_;
   uint8_t rxpdo_buffer_[80] = {0};
   size_t rxpdo_size_ = 0;
-  uint16_t target_slave_index_ = 0;
 
   std::mutex context_mutex_;
   std::mutex rt_context_mutex_;
@@ -155,7 +157,7 @@ class EtherCATComm : public IComm {
   static void EcatcheckWrapper(void* arg);
 
   // Firmware version helper
-  std::string ReadFirmwareVersion(uint8_t mcu_id);
+  std::string ReadFirmwareVersion(uint16_t slave, uint8_t mcu_id);
   std::string ReadFirmwareVersionFromSlave(uint16_t slave, uint8_t mcu_id);
   DeviceInfo ReadDeviceInfo(uint16_t slave);
   HandType GetHandTypeFromSlave(uint16_t slave);
@@ -163,6 +165,11 @@ class EtherCATComm : public IComm {
                          const std::vector<JointCommand>& joints,
                          ControlMode mode);
   bool StopSlave(uint16_t slave_index);
+  // Per-slave bodies of the multi-hand aware operations.
+  bool ClearFaultOnSlave(uint16_t slave_index);
+  bool OpenTactileOnSlave(uint16_t slave_index);
+  bool CloseTactileOnSlave(uint16_t slave_index);
+  bool ZeroTactileOnSlave(uint16_t slave_index);
   FirmwareUpdateError CompleteFirmwareResetHandshake(uint16_t slave);
 
   // Static helper methods
@@ -178,16 +185,16 @@ class EtherCATComm : public IComm {
   void ParseAndNotify(const uint8_t* data, size_t size, uint16_t slave_index);
 
   // Self-test error helpers (object dictionary 0x2008). A1~A8 are internal.
-  bool ReadDiagnosticErrorCodes(uint8_t command,
+  bool ReadDiagnosticErrorCodes(uint16_t slave, uint8_t command,
                                 std::array<uint8_t, 13>* codes);
-  uint8_t GetSelfTestSummaryErrorCode();
-  uint8_t GetVersionCheckErrorCode();
-  std::array<uint8_t, 13> GetPositionSensorErrorCodes();
-  std::array<uint8_t, 13> GetTactileSensorErrorCodes();
-  uint8_t GetTemperatureSensorErrorCode();
-  uint8_t GetFanErrorCode();
-  std::array<uint8_t, 13> GetZeroingErrorCodes();
-  std::array<uint8_t, 13> GetMotorErrorCodes();
+  uint8_t GetSelfTestSummaryErrorCode(uint16_t slave);
+  uint8_t GetVersionCheckErrorCode(uint16_t slave);
+  std::array<uint8_t, 13> GetPositionSensorErrorCodes(uint16_t slave);
+  std::array<uint8_t, 13> GetTactileSensorErrorCodes(uint16_t slave);
+  uint8_t GetTemperatureSensorErrorCode(uint16_t slave);
+  uint8_t GetFanErrorCode(uint16_t slave);
+  std::array<uint8_t, 13> GetZeroingErrorCodes(uint16_t slave);
+  std::array<uint8_t, 13> GetMotorErrorCodes(uint16_t slave);
 
   JointId MotorIndexToJoint(uint8_t motor_index) const;
   std::vector<MotorDiagnosticError> CollectMotorErrors(

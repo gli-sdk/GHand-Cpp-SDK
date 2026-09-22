@@ -7,7 +7,8 @@
 
 #include "ghand/ghand.h"
 
-// Joint status display callback function
+// Joint status display callback function. It is registered on one hand, so it
+// only ever receives that hand's data.
 void DisplayJoints(const std::vector<ghand::Joint>& joints) {
   std::cout << "\n========== Joint Status ==========" << '\n';
   std::cout << std::left << std::setw(20) << "Joint" << std::setw(10)
@@ -28,29 +29,27 @@ void DisplayJoints(const std::vector<ghand::Joint>& joints) {
 }
 
 int main() {
-  auto hand =
-      ghand::GHand::Create(ghand::ProductType::GHand5, ghand::CommType::ETHERCAT);
-  if (!hand) {
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                      ghand::CommType::ETHERCAT);
+  if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
 
   // Try to connect to the dexterous hand
   std::cout << "Connecting to dexterous hand..." << '\n';
-  std::vector<ghand::ConnectedHand> connected_hands = hand->Connect("auto");
-  if (connected_hands.empty()) {
-    std::cout << "Failed to connect to the dexterous hand!" << '\n';
+  const auto connected = master->Connect("auto");
+  if (!connected) {
+    std::cout << "Failed to connect: " << connected.message << '\n';
     return 1;
   }
 
   std::cout << "Successfully connected to the dexterous hand!" << '\n';
+  ghand::GHand* hand = connected.value.front();
 
   // Register joint status callback to display joint data in real time
   hand->SetJointsCallback(DisplayJoints);
   std::cout << "Joint display callback registered." << '\n';
-
-  // Set control mode to position mode (default)
-  hand->SetControlMode(ghand::ControlMode::POSITION);
 
   // Define joint commands: control all 13 joints
   // DIP joints will be automatically skipped, no need to control
@@ -60,7 +59,8 @@ int main() {
   };
 
   std::cout << "Moving joints..." << '\n';
-  if (hand->MoveJoints(joints)) {
+  const auto move_result = hand->MoveJoints(joints);
+  if (move_result) {
     std::cout << "Joints moved successfully!" << '\n';
 
     // Hold pose for 5 seconds
@@ -75,10 +75,10 @@ int main() {
     hand->MoveJoints(reset_joints);
     std::this_thread::sleep_for(std::chrono::seconds(2));
   } else {
-    std::cout << "Failed to move joints!" << '\n';
+    std::cout << "Failed to move joints: " << move_result.message << '\n';
   }
 
-  hand->Disconnect();
+  master->Disconnect();
   std::cout << "Connection closed." << '\n';
 
   return 0;

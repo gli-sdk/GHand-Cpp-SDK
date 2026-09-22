@@ -23,6 +23,16 @@ using HandStateCallback =
 using TactileDataCallback =
     std::function<void(std::uint16_t slave, const TactileData&)>;
 
+// One hand found on the bus. Internal: the public API exposes hands as GHand
+// objects instead.
+struct ConnectedHand {
+  // Transport-specific hand identifier: an EtherCAT slave index starting from
+  // 1, or the RS485/CANFD slave address (e.g. 0x31).
+  uint16_t slave_index = 0;
+  HandType hand_type = HandType::NONE;
+  DeviceInfo device_info;
+};
+
 struct FirmwareUpdateResults {
   uint8_t main = 0;
   uint8_t position_sensor = 0;
@@ -51,32 +61,34 @@ class IComm {
   virtual bool IsConnected() const = 0;
   virtual std::map<std::string, std::string> SearchAdapters() = 0;
   virtual void UpdateConfig(const ProductConfig& config) = 0;
-  virtual bool SetSlaveId(uint8_t slave_id) = 0;
-  virtual bool SetBaudrateConfig(uint8_t baudrate_gear) = 0;
+  virtual bool SetSlaveId(uint16_t slave_index, uint8_t new_slave_id) = 0;
+  virtual bool SetBaudrateConfig(uint16_t slave_index,
+                                 uint8_t baudrate_gear) = 0;
   virtual Diagnostics GetDiagnostics() const { return Diagnostics(); }
 
   // Device info
-  virtual DeviceInfo GetDeviceInfo() = 0;
-  virtual HandType GetHandType() = 0;
+  virtual DeviceInfo GetDeviceInfo(uint16_t slave_index) = 0;
+  virtual HandType GetHandType(uint16_t slave_index) = 0;
 
   // Hand enumeration. slaver_index is transport-specific: an EtherCAT slave
   // index starting from 1, or the RS485/CANFD slave address (e.g. 0x31).
   virtual std::vector<ConnectedHand> GetConnectedHands() = 0;
-  virtual bool SelectHand(uint16_t slave_index) = 0;
 
-  // Motion control
-  virtual bool MoveJoints(const std::vector<JointCommand>& joints,
+  // Motion control. slave_index == 0 acts on every hand on the bus: an
+  // EtherCAT bus writes each slave's buffer, RS485/CANFD send one broadcast
+  // frame without a response.
+  virtual bool MoveJoints(uint16_t slave_index,
+                          const std::vector<JointCommand>& joints,
                           ControlMode mode) = 0;
-  virtual void Stop() = 0;
+  virtual void Stop(uint16_t slave_index) = 0;
 
   // System operations
-  virtual bool ClearFault() = 0;
-  virtual bool InitJoint() = 0;
+  virtual bool ClearFault(uint16_t slave_index) = 0;
 
   // Tactile sensor
-  virtual bool OpenTactile() = 0;
-  virtual bool CloseTactile() = 0;
-  virtual bool ZeroTactile() = 0;
+  virtual bool OpenTactile(uint16_t slave_index) = 0;
+  virtual bool CloseTactile(uint16_t slave_index) = 0;
+  virtual bool ZeroTactile(uint16_t slave_index) = 0;
 
   // Data callbacks
   virtual void SetJointsCallback(JointsCallback cb) = 0;
@@ -91,10 +103,16 @@ class IComm {
 
   // Self-test error query (object dictionary 0x2008). Default implementation
   // returns an empty result for backends that do not support the query.
-  virtual SelfTestErrorInfo GetSelfTestErrorInfo() { return SelfTestErrorInfo{}; }
+  virtual SelfTestErrorInfo GetSelfTestErrorInfo(uint16_t slave_index) {
+    (void)slave_index;
+    return SelfTestErrorInfo{};
+  }
   // Self-test status: 0 idle, 1 processing, 2 command processed successfully,
   // 3 failed.
-  virtual uint8_t GetSelfTestStatus() { return 0; }
+  virtual uint8_t GetSelfTestStatus(uint16_t slave_index) {
+    (void)slave_index;
+    return 0;
+  }
 };
 
 }  // namespace internal

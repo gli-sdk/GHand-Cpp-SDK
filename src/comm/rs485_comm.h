@@ -51,25 +51,24 @@ class RS485Comm : public IComm {
   bool IsConnected() const override { return connected_.load(); }
   std::map<std::string, std::string> SearchAdapters() override;
   void UpdateConfig(const ProductConfig& config) override;
-  bool SetSlaveId(uint8_t slave_id) override;
-  bool SetBaudrateConfig(uint8_t baudrate_gear) override;
+  bool SetSlaveId(uint16_t slave_index, uint8_t new_slave_id) override;
+  bool SetBaudrateConfig(uint16_t slave_index, uint8_t baudrate_gear) override;
   Diagnostics GetDiagnostics() const override;
 
-  DeviceInfo GetDeviceInfo() override;
-  HandType GetHandType() override;
+  DeviceInfo GetDeviceInfo(uint16_t slave_index) override;
+  HandType GetHandType(uint16_t slave_index) override;
   std::vector<ConnectedHand> GetConnectedHands() override;
-  bool SelectHand(uint16_t slave_index) override;
 
-  bool MoveJoints(const std::vector<JointCommand>& joints,
+  bool MoveJoints(uint16_t slave_index,
+                  const std::vector<JointCommand>& joints,
                   ControlMode mode) override;
-  void Stop() override;
+  void Stop(uint16_t slave_index) override;
 
-  bool ClearFault() override;
-  bool InitJoint() override;
+  bool ClearFault(uint16_t slave_index) override;
 
-  bool OpenTactile() override;
-  bool CloseTactile() override;
-  bool ZeroTactile() override;
+  bool OpenTactile(uint16_t slave_index) override;
+  bool CloseTactile(uint16_t slave_index) override;
+  bool ZeroTactile(uint16_t slave_index) override;
 
   void SetJointsCallback(JointsCallback cb) override;
   void SetHandStateCallback(HandStateCallback cb) override;
@@ -80,17 +79,23 @@ class RS485Comm : public IComm {
       std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
-  SelfTestErrorInfo GetSelfTestErrorInfo() override;
-  uint8_t GetSelfTestStatus() override;
+  SelfTestErrorInfo GetSelfTestErrorInfo(uint16_t slave_index) override;
+  uint8_t GetSelfTestStatus(uint16_t slave_index) override;
 
  private:
+  // Resolve the slaves a call targets. slave_index 0 expands to every hand on
+  // the bus; an unknown hand is rejected.
+  bool TargetSlaves(uint16_t slave_index, std::vector<uint8_t>* slaves);
   bool ProbeSlave(int sid, int attempt, const std::string& device_name);
   void CloseContext();
   int ReadInputRegistersCounted(int addr, int count, uint16_t* dest);
   int ReadHoldingRegistersCounted(int addr, int count, uint16_t* dest);
   int WriteRegisterCounted(int addr, uint16_t value);
   int WriteRegistersCounted(int addr, int count, const uint16_t* data);
-  bool WriteTactileControl(uint16_t command);
+  // One Modbus broadcast write (address 0). No response is expected, so a
+  // positive return only means the frame left the port.
+  int SendBroadcastRegisters(int addr, int count, const uint16_t* data);
+  bool WriteTactileControl(uint8_t slave, uint16_t command);
   bool WaitHoldingResult(uint8_t slave, int addr, int timeout_ms = 2000,
                          int interval_ms = 50);
   bool HasCallbacks();
@@ -107,8 +112,6 @@ class RS485Comm : public IComm {
   HandType GetHandTypeForSlave(uint8_t slave);
 
   modbus_t* ctx_ = nullptr;
-  // Currently selected hand; business APIs address this slave implicitly.
-  uint8_t slave_id_ = 0x31;
   std::atomic<bool> connected_{false};
 
   // Hands found on the bus, in enumeration order. Guarded by hands_mutex_.

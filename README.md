@@ -1,5 +1,5 @@
 # GHand SDK C++
-[![Version](https://img.shields.io/badge/version-v2.2.2-blue.svg)](include/ghand/version.h)
+[![Version](https://img.shields.io/badge/version-v3.0.0-blue.svg)](include/ghand/version.h)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 [![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
@@ -129,28 +129,36 @@ target_link_libraries(your_target PRIVATE GHand::ghand)
 #include "ghand/ghand.h"
 
 int main() {
-    // Explicit product type
-    auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                       ghand::CommType::ETHERCAT);
+    // One Master per bus; it owns the hands it finds.
+    auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                        ghand::CommType::ETHERCAT);
 
     // Or auto-detect (matches config by device name after connection)
-    // auto hand = ghand::GHand::Create(ghand::ProductType::AUTO,
-    //                                    ghand::CommType::ETHERCAT);
+    // auto master = ghand::Master::Create(ghand::ProductType::AUTO,
+    //                                     ghand::CommType::ETHERCAT);
 
-    if (!hand || hand->Connect("auto").empty()) {
-        printf("Connection failed\n");
+    auto connected = master->Connect("auto");
+    if (!connected) {
+        printf("Connection failed: %s\n", connected.message.c_str());
         return -1;
     }
+    ghand::GHand* hand = connected.value.front();
 
-    // Pull mode: query latest cached data
+    // Pull mode: latest cached data. The value is only meaningful when the
+    // call succeeded; message says what went wrong otherwise.
     auto state   = hand->GetHandData();     // Hand state
     auto joints  = hand->GetJointsData();   // Joint data
     auto tactile = hand->GetTactileData();  // Tactile data
+    if (joints) {
+        printf("%zu joints, first angle %.1f deg\n", joints.value.size(),
+               joints.value.front().angle);
+    }
 
-    // Push mode: register callbacks
+    // Push mode: register a callback on the hand. It only receives that
+    // hand's data, so no hand index is passed to it.
     hand->SetJointsCallback([](const std::vector<ghand::Joint>& joints) {
         for (const auto& j : joints) {
-            printf("Joint %d: %.1f deg\n", static_cast<int>(j.id), j.angle);
+            printf("joint %d: %.1f deg\n", static_cast<int>(j.id), j.angle);
         }
     });
 
@@ -159,22 +167,30 @@ int main() {
         {ghand::JointId::FF_PIP, 45.0f, 50, 50},
         {ghand::JointId::FF_MCP,    30.0f, 50, 50},
     };
-    hand->MoveJoints(cmds);
+    const auto moved = hand->MoveJoints(cmds);
+    if (!moved) {
+        printf("MoveJoints failed: %s\n", moved.message.c_str());
+    }
 
-    hand->Disconnect();
+    master->Disconnect();
 }
 ```
 
 ### RS485 Example
 
 ```cpp
-auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                   ghand::CommType::RS485);
-auto adapters = hand->SearchAdapters();
-if (!adapters.empty() && !hand->Connect(adapters.begin()->first).empty()) {
-    auto info = hand->GetDeviceInfo();
-    printf("Device: %s\n", info.device_name.c_str());
-    hand->Disconnect();
+auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                    ghand::CommType::RS485);
+auto adapters = master->SearchAdapters();
+if (!adapters.empty()) {
+    auto connected = master->Connect(adapters.begin()->first);
+    if (connected) {
+        auto info = connected.value.front()->QueryDeviceInfo();
+        if (info) {
+            printf("Device: %s\n", info.value.device_name.c_str());
+        }
+        master->Disconnect();
+    }
 }
 ```
 
@@ -231,17 +247,17 @@ newgrp dialout
 For RS485 debugging, specify the USB-RS485 adapter explicitly. Common device names are `/dev/ttyUSB0` or `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`:
 
 ```cpp
-auto rs485_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                         ghand::CommType::RS485);
-rs485_hand->Connect("/dev/ttyUSB0");
+auto rs485_master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                          ghand::CommType::RS485);
+rs485_master->Connect("/dev/ttyUSB0");
 ```
 
 For CANFD, use the ZQWL USB-CDC adapter and append the channel number to the device name, for example `:0`:
 
 ```cpp
-auto canfd_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                         ghand::CommType::CANFD);
-canfd_hand->Connect("/dev/ttyACM0:0");
+auto canfd_master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                          ghand::CommType::CANFD);
+canfd_master->Connect("/dev/ttyACM0:0");
 ```
 
 `Connect()` accepts optional RS485/CANFD slave ID and typed baud-rate or bit
@@ -250,27 +266,35 @@ timing parameters:
 ```cpp
 // RS485: slave_id = 0 scans the default IDs 0x31 and 0x32 and manages
 // every hand it finds.
-hand->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
+master->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
 
 // CAN-FD: use a predefined bit timing profile.
-hand->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
+master->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
 ```
 
 After connecting with `slave_id = 0`, `Connect()` returns every hand it found on
-the bus; use `SelectHand()` to switch the controlled hand: `slave_index` is the
-RS485/CANFD slave address (e.g. `0x31`), and the following single-hand APIs all
-act on the selected hand. Passing an explicit `slave_id` connects that slave
-only. `OpenTactile()`, `CloseTactile()`, `ClearFault()` and
-`InitJoint()` likewise act on the selected hand only, so call them once per hand.
+the bus as a `GHand*`. A hand carries its own identity — `slave_index()`,
+`hand_type()` and `device_info()` — and every call on it addresses that hand
+alone, so no API takes a `slave_index`. Passing an explicit `slave_id` connects
+that slave only.
+
+The `GHand*` stays valid until the next `Connect()`/`Disconnect()` on the same
+`Master`, or until the `Master` is destroyed.
 
 ```cpp
 // Two hands on one bus (1-in 2-out): 0x31 and 0x32.
-auto hands = hand->Connect("COM17:0", 0, ghand::CANFDBitTiming::TIMING_1M_5M);
-for (const auto& h : hands) {
-  hand->SelectHand(h.slave_index);
-  hand->MoveJoints(pose);  // acts on h only
+auto connected = master->Connect("COM17:0", 0, ghand::CANFDBitTiming::TIMING_1M_5M);
+std::vector<ghand::GHand*> hands = connected.value;
+
+master->MoveJoints(pose);      // session-level: one broadcast frame for both
+for (ghand::GHand* h : hands) {
+  h->MoveJoints(pose_for(h));  // or drive each hand on its own
 }
 ```
+
+A session-level call is sent as a broadcast without a response on CAN-FD/RS485,
+so it is best effort: the feedback callbacks, or a hand's `GetJointsData()`,
+confirm what the hands actually did.
 
 `SetSlaveId()` writes a new RS485/CANFD slave ID to holding register `0x0000`.
 The ID is not persisted: the device returns to the default 0x31/0x32 after a
@@ -279,8 +303,9 @@ holding register `0x002C`; the device stores it and applies it after the next
 power-up.
 
 ```cpp
+hand->SetSlaveId(0x31);
 hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_1000000);
-hand->SetBaudrateConfig(ghand::CANFDBitTiming::TIMING_1M_5M);
+other_hand->SetBaudrateConfig(ghand::CANFDBitTiming::TIMING_1M_5M);
 ```
 
 RS485 baud-rate gears:

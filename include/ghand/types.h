@@ -166,18 +166,6 @@ enum class SdkError : uint8_t {
 
 GHAND_API const char* ToString(SdkError error);  // NOLINT(runtime/string)
 
-struct OperationResult {
-  SdkError code;
-  std::string message;
-  CommType comm;
-
-  OperationResult()
-      : code(SdkError::OK), message(), comm(CommType::ETHERCAT) {}
-  OperationResult(SdkError error_code, const std::string& error_message,
-                  CommType comm_type)
-      : code(error_code), message(error_message), comm(comm_type) {}
-};
-
 struct ConnectionDiagnostics {
   bool connected;
   CommType comm_type;
@@ -231,20 +219,11 @@ struct SubscriptionDiagnostics {
         callback_errors(0) {}
 };
 
-struct ErrorDiagnostics {
-  SdkError last_sdk_error;
-  std::string last_error_message;
-
-  ErrorDiagnostics()
-      : last_sdk_error(SdkError::OK), last_error_message() {}
-};
-
 struct Diagnostics {
   ConnectionDiagnostics connection;
   IdentityDiagnostics identity;
   TransportDiagnostics transport;
   SubscriptionDiagnostics subscription;
-  ErrorDiagnostics error;
 };
 
 enum class JointId : uint8_t {
@@ -309,14 +288,6 @@ struct DeviceInfo {
   std::string thumb_tactile_sensor_version = "N/A";
   std::string finger_tactile_sensor_version = "N/A";
   std::string serial_number = "N/A";
-};
-
-struct ConnectedHand {
-  // Transport-specific hand identifier accepted by SelectHand(): an EtherCAT
-  // slave index starting from 1, or the RS485/CANFD slave address (e.g. 0x31).
-  uint16_t slave_index = 0;
-  HandType hand_type = HandType::NONE;
-  DeviceInfo device_info;
 };
 
 /**

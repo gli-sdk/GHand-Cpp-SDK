@@ -234,21 +234,23 @@ void ConfigureReceiveTimeout(SOCKET sock) {
 #endif
 }
 
-std::unique_ptr<ghand::GHand> CreateConnectedHand() {
-  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+std::unique_ptr<ghand::Master> CreateConnectedMaster() {
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
-  if (!hand) {
+  if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return nullptr;
   }
   std::cout << "\nConnecting to dexterous hand..." << '\n';
-  if (hand->Connect("auto").empty()) {
-    std::cerr << "Error: Unable to connect to dexterous hand!" << '\n';
+  const auto connected = master->Connect("auto");
+  if (!connected) {
+    std::cerr << "Error: Unable to connect to dexterous hand: "
+              << connected.message << '\n';
     return nullptr;
   }
 
   std::cout << "OK Successfully connected to dexterous hand!" << '\n';
-  return hand;
+  return master;
 }
 
 std::vector<ghand::JointCommand> BuildJointCommands(const HandData& hand) {
@@ -385,17 +387,18 @@ int main() {
   }
 
   ConfigureReceiveTimeout(sock);
-  auto hand = CreateConnectedHand();
-  if (!hand) {
+  auto master = CreateConnectedMaster();
+  if (!master) {
     closesocket(sock);
     CleanupSocketApi();
     return 1;
   }
+  ghand::GHand* hand = master->hands().front();
 
   ReceiveLoop(sock, *hand);
 
   std::cout << "\nCleaning up resources..." << '\n';
-  hand->Disconnect();
+  master->Disconnect();
   closesocket(sock);
   CleanupSocketApi();
 

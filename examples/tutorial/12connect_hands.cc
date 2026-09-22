@@ -1,5 +1,7 @@
 #include <chrono>
 #include <iostream>
+#include <map>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -19,7 +21,9 @@ void PrintUsage(const char* program) {
       << "  " << program << " rs485 /dev/ttyUSB0\n\n"
       << "Without a device every adapter is probed and the first bus that\n"
       << "carries a hand is used. Every hand found is driven through the poses\n"
-      << "below with SelectHand() + MoveJoints(), whatever the transport.\n\n"
+      << "below with MoveJoints(), whatever the transport: calling it on the\n"
+      << "session drives every hand, calling it on one hand drives only that\n"
+      << "hand.\n\n"
       << "EtherCAT topologies all handled by the same code below:\n"
       << "  no junction,   single hand : PC -> hand\n"
       << "  no junction,   dual hand   : PC -> {handA, handB}\n"
@@ -71,7 +75,7 @@ int main(int argc, char* argv[]) {
   const std::string device =
       argc > first_device_arg ? argv[first_device_arg] : "auto";
 
-  auto master = ghand::GHand::Create(ghand::ProductType::GHand5, comm_type);
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5, comm_type);
   if (!master) {
     std::cerr << "Failed to create GHand\n";
     return 1;
@@ -81,52 +85,77 @@ int main(int argc, char* argv[]) {
   // probes the adapters until one carries a controllable hand, and a named
   // device is used directly. Nothing here knows or cares which transport is
   // in use, or whether a junction is present.
-  const std::vector<ghand::ConnectedHand> connected_hands =
-      master->Connect(device);
-  if (connected_hands.empty()) {
-    std::cerr << "Connect failed on " << device << ": "
-              << master->GetLastErrorMessage() << "\n\n";
+  const auto connected = master->Connect(device);
+  if (!connected) {
+    std::cerr << "Connect failed on " << device << ": " << connected.message
+              << "\n\n";
     PrintUsage(argv[0]);
     return 1;
   }
+  const std::vector<ghand::GHand*>& hands = connected.value;
 
-  std::cout << "Connected on " << device << " - " << connected_hands.size()
+  std::cout << "Connected on " << device << " - " << hands.size()
             << " hand(s):\n";
-  for (const auto& hand : connected_hands) {
-    std::cout << "  slave 0x" << std::hex << hand.slave_index << std::dec
-              << ": " << ghand::ToString(hand.hand_type)
-              << " device=" << hand.device_info.device_name
-              << " serial=" << hand.device_info.serial_number << '\n';
+  for (ghand::GHand* hand : hands) {
+    std::cout << "  slave 0x" << std::hex << hand->slave_index() << std::dec
+              << ": " << ghand::ToString(hand->hand_type())
+              << " device=" << hand->device_info().device_name
+              << " serial=" << hand->device_info().serial_number << '\n';
   }
 
-  // MoveJoints() and every other single-hand API act on whichever hand
-  // SelectHand() picked last, so one SelectHand() per hand is all it takes.
+  // Each callback is registered on one hand and only receives that hand's
+  // data, so the latest joints are kept per hand instead of in one shared
+  // variable.
+  std::mutex state_mutex;
+  std::map<uint16_t, std::vector<ghand::Joint>> joints_by_hand;
+  for (ghand::GHand* hand : hands) {
+    hand->SetJointsCallback(
+        [&state_mutex, &joints_by_hand, hand](
+            const std::vector<ghand::Joint>& joints) {
+          std::lock_guard<std::mutex> lock(state_mutex);
+          joints_by_hand[hand->slave_index()] = joints;
+        });
+  }
+
+  auto print_feedback = [&]() {
+    std::lock_guard<std::mutex> lock(state_mutex);
+    for (ghand::GHand* hand : hands) {
+      const auto it = joints_by_hand.find(hand->slave_index());
+      if (it == joints_by_hand.end() || it->second.empty()) {
+        std::cout << "  slave " << hand->slave_index() << ": no feedback yet\n";
+        continue;
+      }
+      const ghand::Joint& first = it->second.front();
+      std::cout << "  slave " << hand->slave_index() << ": "
+                << it->second.size() << " joints, "
+                << ghand::ToString(first.id) << " = " << first.angle
+                << " deg\n";
+    }
+  };
+
+  // A session-level call drives every hand at once, so a shared pose needs no
+  // loop at all.
   std::cout << "\nMove the hands to a light grasp pose...\n";
-  for (const auto& hand : connected_hands) {
-    master->SelectHand(hand.slave_index);
-    master->MoveJoints(BuildPose(25.0f, 35.0f));
-  }
+  master->MoveJoints(BuildPose(25.0f, 35.0f));
   std::this_thread::sleep_for(std::chrono::seconds(2));
+  print_feedback();
 
+  // A pose that differs per hand is sent hand by hand.
   std::cout << "Mirror the index/middle finger pose...\n";
-  for (const auto& hand : connected_hands) {
-    const bool is_left = hand.hand_type == ghand::HandType::LEFT;
-    master->SelectHand(hand.slave_index);
-    master->MoveJoints(is_left ? BuildPose(45.0f, 60.0f)
-                               : BuildPose(10.0f, 15.0f));
+  for (ghand::GHand* hand : hands) {
+    const bool is_left = hand->hand_type() == ghand::HandType::LEFT;
+    hand->MoveJoints(is_left ? BuildPose(45.0f, 60.0f)
+                             : BuildPose(10.0f, 15.0f));
   }
   std::this_thread::sleep_for(std::chrono::seconds(2));
+  print_feedback();
 
   std::cout << "Reset the hands...\n";
-  for (const auto& hand : connected_hands) {
-    master->SelectHand(hand.slave_index);
-    master->MoveJoints(BuildPose(0.0f, 0.0f));
-  }
+  master->MoveJoints(BuildPose(0.0f, 0.0f));
   std::this_thread::sleep_for(std::chrono::seconds(1));
+  print_feedback();
 
-  for (const auto& hand : connected_hands) {
-    if (master->SelectHand(hand.slave_index)) master->Stop();
-  }
+  master->Stop();
   master->Disconnect();
 
   std::cout << "\nDemo completed.\n";

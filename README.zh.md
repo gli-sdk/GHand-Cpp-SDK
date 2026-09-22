@@ -1,6 +1,6 @@
 # GHand SDK C++
 
-[![Version](https://img.shields.io/badge/version-v2.2.2-blue.svg)](include/ghand/version.h)
+[![Version](https://img.shields.io/badge/version-v3.0.0-blue.svg)](include/ghand/version.h)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 [![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
@@ -128,28 +128,36 @@ target_link_libraries(your_target PRIVATE GHand::ghand)
 #include "ghand/ghand.h"
 
 int main() {
-    // 显式指定产品类型
-    auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                       ghand::CommType::ETHERCAT);
+    // 一条总线一个 Master，由它持有连接后找到的手。
+    auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                        ghand::CommType::ETHERCAT);
 
     // 或自动识别（连接后按设备名称匹配配置）
-    // auto hand = ghand::GHand::Create(ghand::ProductType::AUTO,
-    //                                    ghand::CommType::ETHERCAT);
+    // auto master = ghand::Master::Create(ghand::ProductType::AUTO,
+    //                                     ghand::CommType::ETHERCAT);
 
-    if (!hand || hand->Connect("auto").empty()) {
-        printf("Connection failed\n");
+    auto connected = master->Connect("auto");
+    if (!connected) {
+        printf("Connection failed: %s\n", connected.message.c_str());
         return -1;
     }
+    ghand::GHand* hand = connected.value.front();
 
-    // 拉取模式：查询最新缓存数据
+    // 拉取模式：最新缓存数据。只有调用成功时 value 才有意义，
+    // 失败原因在 message 里。
     auto state   = hand->GetHandData();     // 手部状态
     auto joints  = hand->GetJointsData();   // 关节数据
     auto tactile = hand->GetTactileData();  // 触觉数据
+    if (joints) {
+        printf("%zu joints, first angle %.1f deg\n", joints.value.size(),
+               joints.value.front().angle);
+    }
 
-    // 推送模式：注册回调
+    // 推送模式：回调注册在哪只手上，就只收到那只手的数据，
+    // 因此回调不带手号参数。
     hand->SetJointsCallback([](const std::vector<ghand::Joint>& joints) {
         for (const auto& j : joints) {
-            printf("Joint %d: %.1f deg\n", static_cast<int>(j.id), j.angle);
+            printf("joint %d: %.1f deg\n", static_cast<int>(j.id), j.angle);
         }
     });
 
@@ -158,22 +166,30 @@ int main() {
         {ghand::JointId::FF_PIP, 45.0f, 50, 50},
         {ghand::JointId::FF_MCP,    30.0f, 50, 50},
     };
-    hand->MoveJoints(cmds);
+    const auto moved = hand->MoveJoints(cmds);
+    if (!moved) {
+        printf("MoveJoints failed: %s\n", moved.message.c_str());
+    }
 
-    hand->Disconnect();
+    master->Disconnect();
 }
 ```
 
 ### RS485 示例
 
 ```cpp
-auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                   ghand::CommType::RS485);
-auto adapters = hand->SearchAdapters();
-if (!adapters.empty() && !hand->Connect(adapters.begin()->first).empty()) {
-    auto info = hand->GetDeviceInfo();
-    printf("Device: %s\n", info.device_name.c_str());
-    hand->Disconnect();
+auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                    ghand::CommType::RS485);
+auto adapters = master->SearchAdapters();
+if (!adapters.empty()) {
+    auto connected = master->Connect(adapters.begin()->first);
+    if (connected) {
+        auto info = connected.value.front()->QueryDeviceInfo();
+        if (info) {
+            printf("Device: %s\n", info.value.device_name.c_str());
+        }
+        master->Disconnect();
+    }
 }
 ```
 
@@ -230,51 +246,59 @@ newgrp dialout
 RS485 调试时请显式指定 USB-RS485 适配器。常见设备名为 `/dev/ttyUSB0` 或 `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`：
 
 ```cpp
-auto rs485_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                         ghand::CommType::RS485);
-rs485_hand->Connect("/dev/ttyUSB0");
+auto rs485_master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                          ghand::CommType::RS485);
+rs485_master->Connect("/dev/ttyUSB0");
 ```
 
 CANFD 请使用 ZQWL USB-CDC 适配器，并在设备名后追加通道号，例如 `:0`：
 
 ```cpp
-auto canfd_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                         ghand::CommType::CANFD);
-canfd_hand->Connect("/dev/ttyACM0:0");
+auto canfd_master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                          ghand::CommType::CANFD);
+canfd_master->Connect("/dev/ttyACM0:0");
 ```
 
 `Connect()` 支持可选的 RS485/CANFD 从站 ID 与波特率（或位时序）参数：
 
 ```cpp
 // RS485：slave_id = 0 时扫描默认 ID 0x31 和 0x32，并把找到的手都纳入管理。
-hand->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
+master->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
 
 // CAN-FD：使用预定义位时序配置。
-hand->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
+master->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
 ```
 
-`slave_id = 0` 连接后，`Connect()` 返回总线上找到的全部手，用
-`SelectHand()` 切换当前受控手：`slave_index` 即 RS485/CANFD 从站地址（如
-`0x31`），之后的单手 API 都作用于当前选中的手。显式传入 `slave_id` 时只连接
-该从站。`OpenTactile()`、`CloseTactile()`、`ClearFault()`、`InitJoint()` 同样
-只作用于当前选中的手，双手需各调用一次。
+`slave_id = 0` 连接后，`Connect()` 返回总线上找到的全部手，每只手是一个
+`GHand*`。手的身份由它自己提供（`slave_index()`、`hand_type()`、
+`device_info()`），在它上面的每次调用都只针对这只手，不再有任何接口接收
+`slave_index`。显式传入 `slave_id` 时只连接该从站。
+
+`GHand*` 自 `Connect()` 成功起有效，到对同一个 `Master` 的下一次
+`Connect()`/`Disconnect()`，或 `Master` 析构为止。
 
 ```cpp
 // 一条总线挂两只手（1进2出）：0x31 与 0x32。
-auto hands = hand->Connect("COM17:0", 0, ghand::CANFDBitTiming::TIMING_1M_5M);
-for (const auto& h : hands) {
-  hand->SelectHand(h.slave_index);
-  hand->MoveJoints(pose);  // 只作用于 h 这一只手
+auto connected = master->Connect("COM17:0", 0, ghand::CANFDBitTiming::TIMING_1M_5M);
+std::vector<ghand::GHand*> hands = connected.value;
+
+master->MoveJoints(pose);      // 会话级：一帧广播，两只手同时收到
+for (ghand::GHand* h : hands) {
+  h->MoveJoints(pose_for(h));  // 也可以逐只下发
 }
 ```
+
+CAN-FD/RS485 上的会话级调用不等应答，属尽力而为：用反馈回调或某只手的
+`GetJointsData()` 确认手实际执行的结果。
 
 `SetSlaveId()` 将新的 RS485/CANFD 从站 ID 写入保持寄存器 `0x0000`。
 该地址不持久化，断电重启后恢复默认 0x31/0x32。`SetBaudrateConfig()` 将枚举
 映射的协议挡位写入保持寄存器 `0x002C`；设备保存该值并在下次上电后生效。
 
 ```cpp
+hand->SetSlaveId(0x31);
 hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_1000000);
-hand->SetBaudrateConfig(ghand::CANFDBitTiming::TIMING_1M_5M);
+other_hand->SetBaudrateConfig(ghand::CANFDBitTiming::TIMING_1M_5M);
 ```
 
 RS485 波特率挡位：

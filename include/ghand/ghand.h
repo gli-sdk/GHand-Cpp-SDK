@@ -12,278 +12,226 @@
 #include <vector>
 
 #include "ghand/export.h"
+#include "ghand/result.h"
 #include "ghand/types.h"
 #include "ghand/version.h"
 
 namespace ghand {
 
-// Forward declaration of internal implementation class
+// Forward declarations of internal implementation types
 namespace internal {
 class GHandImpl;
+struct HandFactory;
 }  // namespace internal
 
-// Callback type definitions
-using JointsCallback = std::function<void(const std::vector<Joint>&)>;
-using HandStateCallback = std::function<void(const HandState&)>;
-using TactileDataCallback = std::function<void(const TactileData&)>;
+class Master;
 
-/**
- * @brief GHand robotic hand control interface
- *
- * This is the sole public API class, providing full control of the robotic
- * hand.
- */
+// Callback type definitions. A callback is registered on one hand (see
+// GHand::SetJointsCallback) and only receives that hand's data.
+using JointsCallback = std::function<void(const std::vector<Joint>& joints)>;
+using HandStateCallback = std::function<void(const HandState& state)>;
+using TactileDataCallback = std::function<void(const TactileData& data)>;
+
 #ifdef _WIN32
 #pragma warning(push)
 #pragma warning(disable : 4251)
 #endif
+
+/**
+ * @brief One dexterous hand on a connected bus.
+ *
+ * Hands belong to the Master that discovered them; user code only holds a
+ * non-owning pointer. A GHand* stays valid from the Connect() that returned it
+ * until the next Connect()/Disconnect() on that Master, or until the Master is
+ * destroyed.
+ *
+ * Every action names its hand through the object itself, so no slave index is
+ * passed to the calls.
+ */
 class GHAND_API GHand {
  public:
-  static std::unique_ptr<GHand> Create(
-      ProductType product_type = ProductType::AUTO,
-      CommType comm_type = CommType::ETHERCAT);
   ~GHand();
 
-  // GHand owns device state and is not copyable or movable.
   GHand(const GHand&) = delete;
   GHand& operator=(const GHand&) = delete;
   GHand(GHand&&) = delete;
   GHand& operator=(GHand&&) = delete;
 
-  // Connection management
-  /**
-   * @brief Connect to specified device.
-   * @param device_name Device name; "auto" probes every adapter and uses the
-   *     first one that carries a hand
-   * @param slave_id RS485/CANFD slave ID used for this connection; 0 scans
-   *     the default IDs 0x31 and 0x32 and manages every hand it finds
-   * @return The hands found on the bus. The first one is selected, so
-   *     single-hand APIs work right away; use SelectHand() to switch between
-   *     hands. Empty when the connection failed; call GetLastErrorMessage()
-   *     for the reason.
-   */
-  std::vector<ConnectedHand> Connect(const std::string& device_name = "auto",
-                                     uint8_t slave_id = 0);
+  // Identity, as reported when the hand was discovered.
+  uint16_t slave_index() const { return slave_index_; }
+  HandType hand_type() const { return hand_type_; }
+  DeviceInfo device_info() const { return device_info_; }
 
   /**
-   * @brief Connect to an RS485 device using a typed baud-rate selection.
-   * @param device_name Device name; "auto" probes every adapter
-   * @param slave_id RS485 slave ID used for this connection; 0 scans the
-   *     default IDs 0x31 and 0x32 and manages every hand it finds
-   * @param baud_rate RS485 baud rate used for this connection
-   * @return The hands found on the bus; empty when the connection failed
+   * @brief Re-read this hand's device info from the device (bus round-trip).
    */
-  std::vector<ConnectedHand> Connect(const std::string& device_name,
-                                     uint8_t slave_id,
-                                     RS485BaudRate baud_rate);
-
-  /**
-   * @brief Connect to a CAN-FD device using a typed bit-timing profile.
-   * @param device_name Device name; "auto" probes every adapter
-   * @param slave_id CAN-FD slave ID used for this connection; 0 scans the
-   *     default IDs 0x31 and 0x32 and manages every hand it finds
-   * @param timing CAN-FD bit timing profile used for this connection
-   * @return The hands found on the bus; empty when the connection failed
-   */
-  std::vector<ConnectedHand> Connect(const std::string& device_name,
-                                     uint8_t slave_id,
-                                     CANFDBitTiming timing);
-
-  /**
-   * @brief Disconnect
-   */
-  bool Disconnect();
-
-  /**
-   * @brief Check if connected
-   */
-  bool IsConnected() const;
-
-  /**
-   * @brief Set RS485/CANFD slave ID on the connected device.
-   *
-   * Takes effect immediately but is not persisted: the device returns to the
-   * default 0x31/0x32 after the next power-up.
-   *
-   * @param slave_id New slave ID written to holding register 0x0000
-   * @return true on success; call GetLastResult() when false
-   */
-  bool SetSlaveId(uint8_t slave_id);
-
-  /**
-   * @brief Set RS485 baud-rate on the connected device.
-   *
-   * The mapped protocol gear is written to holding register 0x002C, saved by
-   * the device, and takes effect after the next power-up.
-   *
-   * @param baud_rate RS485 baud rate
-   * @return true on success; call GetLastResult() when false
-   */
-  bool SetBaudrateConfig(RS485BaudRate baud_rate);
-
-  /**
-   * @brief Set CAN-FD bit timing on the connected device.
-   *
-   * The mapped protocol gear is written to holding register 0x002C, saved by
-   * the device, and takes effect after the next power-up.
-   *
-   * @param timing CAN-FD bit timing profile
-   * @return true on success; call GetLastResult() when false
-   */
-  bool SetBaudrateConfig(CANFDBitTiming timing);
-
-  /**
-   * @brief Return the most recent SDK operation result.
-   *
-   * This is a compatibility extension for bool-returning APIs. The result is
-   * updated by core connection and control operations and is safe to query from
-   * user callbacks.
-   */
-  OperationResult GetLastResult() const;
-
-  /**
-   * @brief Return the most recent SDK error code.
-   */
-  SdkError GetLastError() const;
-
-  /**
-   * @brief Return the most recent SDK error message.
-   */
-  std::string GetLastErrorMessage() const;
-
-  /**
-   * @brief Return a structured SDK state snapshot for diagnostics.
-   *
-   * Diagnostics are machine-readable state and do not depend on log parsing.
-   * Transport counters are reserved for protocol-level instrumentation.
-   */
-  Diagnostics GetDiagnostics() const;
-
-  // Device info
-  /**
-   * @brief Search available communication adapters
-   * @return Adapter name mapping table
-   */
-  std::map<std::string, std::string> SearchAdapters();
-
-  /**
-   * @brief Get hand type
-   */
-  HandType GetHandType();
-
-  /**
-   * @brief Get device info
-   */
-  DeviceInfo GetDeviceInfo();
-
-  /**
-   * @brief Select the hand used by following single-hand APIs.
-   * @param slave_index Transport-specific hand identifier: an EtherCAT slave
-   *     index starting from 1, or the RS485/CANFD slave address (e.g. 0x31).
-   *     Use ConnectedHand::slave_index as returned by Connect().
-   * @return true on success; call GetLastResult() when false
-   */
-  bool SelectHand(uint16_t slave_index);
+  ResultOf<DeviceInfo> QueryDeviceInfo();
 
   // Motion control
   /**
-   * @brief Set control mode
+   * @brief Control joint movement on this hand.
+   *
+   * The whole control block is written in one transfer: joints that are not in
+   * the command are commanded to 0 degrees. Which fields of the command are
+   * meaningful depends on the mode: angle in degrees (POSITION), velocity
+   * (SPEED) or torque (TORQUE).
+   *
+   * @param joints Joint command list
+   * @param mode How the command is interpreted. Defaults to POSITION.
    */
-  void SetControlMode(ControlMode mode);
+  Result MoveJoints(const std::vector<JointCommand>& joints,
+                    ControlMode mode = ControlMode::POSITION);
 
   /**
-   * @brief Control joint movement
-   * @param joints Joint command list, angle in degrees (deg)
-   * @return true on success; call GetLastResult() when false
+   * @brief Stop this hand's motion immediately
    */
-  bool MoveJoints(const std::vector<JointCommand>& joints);
+  Result Stop();
 
   /**
-   * @brief Stop all motion immediately
+   * @brief Clear this hand's fault state
    */
-  void Stop();
-
-  /**
-   * @brief Clear fault state
-   */
-  bool ClearFault();
-
-  /**
-   * @brief Initialize joints
-   */
-  bool InitJoint();
+  Result ClearFault();
 
   // Tactile sensor
-  /**
-   * @brief Open tactile sensor
-   */
-  bool OpenTactile();
+  Result OpenTactile();
+  Result CloseTactile();
+  Result ZeroTactile();
 
+  // Configuration
   /**
-   * @brief Close tactile sensor
-   */
-  bool CloseTactile();
-
-  /**
-   * @brief Zero tactile sensor
-   */
-  bool ZeroTactile();
-
-  // Data access
-  /**
-   * @brief Get hand state (latest cached data, no hardware read triggered)
-   */
-  HandState GetHandData();
-
-  /**
-   * @brief Get joint data (latest cached data, no hardware read triggered)
-   */
-  std::vector<Joint> GetJointsData();
-
-  /**
-   * @brief Get tactile data (latest cached data, no hardware read triggered)
-   */
-  TactileData GetTactileData();
-
-  /**
-   * @brief Read structured self-test error information from the device.
+   * @brief Rename this hand's RS485/CANFD slave ID.
    *
-   * Reads only the already-latched self-test result stored on the device
-   * (object dictionary ``0x2008``). This method does NOT trigger a manual
-   * self-test or manual zeroing. Only categories flagged by the A0 summary
-   * are queried in detail.
+   * Takes effect immediately but is not persisted: the device returns to the
+   * default 0x31/0x32 after the next power-up.
    */
-  SelfTestErrorInfo GetSelfTestErrorInfo();
+  Result SetSlaveId(uint8_t new_slave_id);
 
   /**
-   * @brief Read the current self-test status byte.
-   *
-   * EtherCAT reads 0x2008:0x02. CANFD and RS485 read the low byte of holding
-   * register 0x0038.
-   *
-   * Status values: 0 idle, 1 processing, 2 command processed successfully,
-   * 3 failed.
+   * @brief Set this hand's RS485 baud rate (saved, effective after power-up)
    */
-  uint8_t GetSelfTestStatus();
+  Result SetBaudrateConfig(RS485BaudRate baud_rate);
 
-  // Callback registration
   /**
-   * @brief Register joint data callback
-   * @param cb Callback function
+   * @brief Set this hand's CAN-FD bit timing (saved, effective after power-up)
    */
+  Result SetBaudrateConfig(CANFDBitTiming timing);
+
+  // Data (push): the callback fires only for this hand.
   void SetJointsCallback(JointsCallback cb);
-
-  /**
-   * @brief Register hand state callback
-   * @param cb Callback function
-   */
   void SetHandStateCallback(HandStateCallback cb);
+  void SetTactileDataCallback(TactileDataCallback cb);
+
+  // Data (pull): latest cached data, no hardware read triggered.
+  ResultOf<HandState> GetHandData();
+  ResultOf<std::vector<Joint>> GetJointsData();
+  ResultOf<TactileData> GetTactileData();
+
+  // Self-test
+  /**
+   * @brief Read the already-latched self-test error information (0x2008).
+   *
+   * Does not trigger a manual self-test or zeroing.
+   */
+  ResultOf<SelfTestErrorInfo> GetSelfTestErrorInfo();
 
   /**
-   * @brief Register tactile data callback
-   * @param cb Callback function
+   * @brief Read the current self-test status byte (0 idle, 1 processing,
+   *     2 command processed successfully, 3 failed).
    */
-  void SetTactileDataCallback(TactileDataCallback cb);
+  ResultOf<uint8_t> GetSelfTestStatus();
+
+ private:
+  friend class Master;
+  friend struct internal::HandFactory;
+  GHand(internal::GHandImpl* impl, uint16_t slave_index, HandType hand_type,
+        const DeviceInfo& device_info);
+
+  internal::GHandImpl* impl_;
+  uint16_t slave_index_;
+  HandType hand_type_;
+  DeviceInfo device_info_;
+};
+
+/**
+ * @brief Session with one GHand bus.
+ *
+ * Owns the connection, the hands found on it, and the actions that apply to
+ * the whole bus. Connection-level calls (connect, disconnect, discovery,
+ * diagnostics) live here; everything a single hand does lives on GHand.
+ */
+class GHAND_API Master {
+ public:
+  static std::unique_ptr<Master> Create(
+      ProductType product_type = ProductType::AUTO,
+      CommType comm_type = CommType::ETHERCAT);
+  ~Master();
+
+  Master(const Master&) = delete;
+  Master& operator=(const Master&) = delete;
+  Master(Master&&) = delete;
+  Master& operator=(Master&&) = delete;
+
+  // Connection management
+  /**
+   * @brief Connect to a bus and enumerate the hands on it.
+   * @param device_name Device name; "auto" probes every adapter and uses the
+   *     first bus that carries a hand
+   * @param slave_id RS485/CANFD slave ID used for this connection; 0 scans
+   *     the default IDs 0x31 and 0x32 and manages every hand it finds
+   * @return The hands found on the bus. Empty on failure, with the reason in
+   *     code/message.
+   */
+  ResultOf<std::vector<GHand*>> Connect(const std::string& device_name = "auto",
+                                        uint8_t slave_id = 0);
+
+  /**
+   * @brief Connect to an RS485 device using a typed baud-rate selection.
+   */
+  ResultOf<std::vector<GHand*>> Connect(const std::string& device_name,
+                                        uint8_t slave_id,
+                                        RS485BaudRate baud_rate);
+
+  /**
+   * @brief Connect to a CAN-FD device using a typed bit-timing profile.
+   */
+  ResultOf<std::vector<GHand*>> Connect(const std::string& device_name,
+                                        uint8_t slave_id,
+                                        CANFDBitTiming timing);
+
+  Result Disconnect();
+  bool IsConnected() const;
+
+  // Discovery and diagnostics
+  std::map<std::string, std::string> SearchAdapters();
+  Diagnostics GetDiagnostics() const;
+
+  // Hands of the current connection; the list is the snapshot taken by the
+  // Connect() that found them.
+  std::vector<GHand*> hands() const;
+  GHand* hand(HandType type) const;
+  GHand* hand(uint16_t slave_index) const;
+
+  // Whole-bus actions: every hand on the bus.
+  /**
+   * @brief Control joint movement on every hand.
+   *
+   * On CAN-FD/RS485 this is one broadcast frame (slave address 0) sent without
+   * a response, so it is best effort: the feedback callbacks, or a hand's
+   * GetJointsData(), confirm what the hands actually did. On a bus with a
+   * single hand it stays an acknowledged write.
+   */
+  Result MoveJoints(const std::vector<JointCommand>& joints,
+                    ControlMode mode = ControlMode::POSITION);
+
+  /**
+   * @brief Stop every hand's motion immediately
+   */
+  Result Stop();
+
+  /**
+   * @brief Clear the fault state of every hand
+   */
+  Result ClearFault();
 
   // Firmware update
   FirmwareUpdateError BootUpdate(
@@ -291,8 +239,10 @@ class GHAND_API GHand {
       std::function<void(int)> progress_callback);
 
  private:
-  GHand(ProductType product_type, CommType comm_type);
+  Master(ProductType product_type, CommType comm_type);
+
   std::unique_ptr<internal::GHandImpl> impl_;
+  std::vector<std::unique_ptr<GHand>> hands_;
 };
 
 }  // namespace ghand
