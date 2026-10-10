@@ -252,7 +252,8 @@ class GHAND_API GHand {
    * Reads only the already-latched self-test result stored on the device
    * (object dictionary ``0x2008``). This method does NOT trigger a manual
    * self-test or manual zeroing. Only categories flagged by the A0 summary
-   * are queried in detail.
+   * are queried in detail (Motor: A8, Sensor: A2, Joint: A6).
+   * Throws std::runtime_error on query failure or timeout.
    */
   SelfTestErrorInfo GetSelfTestErrorInfo();
 

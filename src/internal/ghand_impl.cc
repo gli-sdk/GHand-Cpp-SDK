@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -530,7 +531,7 @@ TactileData GHandImpl::GetTactileData() const {
 SelfTestErrorInfo GHandImpl::GetSelfTestErrorInfo() const {
   if (!IsConnected()) {
     GHAND_LOG_ERROR("GetSelfTestErrorInfo called while disconnected");
-    return SelfTestErrorInfo{};
+    throw std::runtime_error("Device is not connected");
   }
   return comm_->GetSelfTestErrorInfo();
 }

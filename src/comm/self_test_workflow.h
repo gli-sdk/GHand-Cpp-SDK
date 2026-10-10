@@ -40,12 +40,11 @@ struct SelfTestRegisterIO {
 };
 
 /**
- * @brief Execute the A0 summary + on-demand A1~A8 flow.
+ * @brief Execute the A0 summary + on-demand A2/A6/A8 flow.
  *
- * Only categories flagged by the A0 summary are queried in detail. Returns
- * an empty ``SelfTestErrorInfo{}`` (summary=0) on any transport error, since
- * the query transaction failing is not the same as the device reporting no
- * self-test error.
+ * Only categories flagged by the A0 summary are queried in detail. Throws
+ * ``std::runtime_error`` on transport failure or timeout. A failed query
+ * must not be reported as a device with no self-test error.
  */
 SelfTestErrorInfo BuildSelfTestErrorInfo(const ProductConfig& config,
                                         const SelfTestRegisterIO& io);

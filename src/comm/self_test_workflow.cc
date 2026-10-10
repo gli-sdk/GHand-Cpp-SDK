@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <thread>
+#include <stdexcept>
 
 #include "logging_macros.h"
 
@@ -17,34 +18,32 @@ constexpr int kPollTimeoutMs = 1000;
 
 uint8_t ParseState(const std::vector<uint8_t>& bytes) {
   if (bytes.size() < 2) {
-    return kSelfTestStateIdle;
+    throw std::runtime_error("Self-test state read failed");
   }
   return bytes[1];  // Low byte of 0x0038 (big-endian register)
 }
 
-bool PollUntilSettled(uint8_t command, const SelfTestRegisterIO& io,
-                      uint8_t* out_state) {
+void PollUntilSettled(uint8_t command, const SelfTestRegisterIO& io) {
   auto deadline = std::chrono::steady_clock::now() +
                   std::chrono::milliseconds(kPollTimeoutMs);
   while (true) {
     auto bytes = io.read_registers(kSelfTestCommandRegister, 1);
     uint8_t state = ParseState(bytes);
     if (state == kSelfTestStateSuccess || state == kSelfTestStateFailed) {
-      *out_state = state;
-      return true;
+      return;
     }
     if (std::chrono::steady_clock::now() >= deadline) {
       GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                      << " timed out (state=" << std::dec
                                      << static_cast<int>(state) << ")");
-      return false;
+      throw std::runtime_error("Self-test state poll timeout");
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(kPollIntervalMs));
   }
 }
 
-// Runs one A0~A8 transaction. Returns false on any transport/protocol error.
-bool ReadDiagnosticErrorCodes(uint8_t command, const SelfTestRegisterIO& io,
+// Runs one A0/A2/A6/A8 transaction. Throws on transport/protocol errors.
+void ReadDiagnosticErrorCodes(uint8_t command, const SelfTestRegisterIO& io,
                               std::array<uint8_t, 13>* out_codes) {
   out_codes->fill(0);
 
@@ -52,26 +51,22 @@ bool ReadDiagnosticErrorCodes(uint8_t command, const SelfTestRegisterIO& io,
   if (!io.write_register(kSelfTestCommandRegister, cmd_reg)) {
     GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                    << " write failed");
-    return false;
+    throw std::runtime_error("Self-test command write failed");
   }
 
-  uint8_t state = kSelfTestStateIdle;
-  if (!PollUntilSettled(command, io, &state)) {
-    return false;
-  }
+  PollUntilSettled(command, io);
 
   auto payload = io.read_registers(kSelfTestDataRegister,
                                    kSelfTestDataRegisterCount);
   if (static_cast<int>(payload.size()) < kSelfTestDataRegisterCount * 2) {
     GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                    << " data read failed");
-    return false;
+    throw std::runtime_error("Self-test data read failed");
   }
 
   for (int i = 0; i < 13; ++i) {
     (*out_codes)[i] = payload[i];
   }
-  return true;
 }
 
 JointId MotorIndexToJoint(const ProductConfig& config, uint8_t motor_index) {
@@ -107,53 +102,23 @@ SelfTestErrorInfo BuildSelfTestErrorInfo(const ProductConfig& config,
   SelfTestErrorInfo info;
 
   std::array<uint8_t, 13> codes{};
-  if (!ReadDiagnosticErrorCodes(0xA0, io, &codes)) {
-    return info;
-  }
+  ReadDiagnosticErrorCodes(0xA0, io, &codes);
   info.summary = codes[0];
   if (info.summary == 0) {
     return info;
   }
 
-  if (HasSelfTestError(info.summary, SelfTestError::Version)) {
-    if (ReadDiagnosticErrorCodes(0xA1, io, &codes)) {
-      info.version = codes[0];
-      GHAND_LOG_INFO("Self-test error: version mismatch (0x"
-                     << std::hex << static_cast<int>(info.version) << ")");
-    }
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::PositionSensorUnmapped)) {
-    GHAND_LOG_INFO("Self-test error: position sensor unmapped");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::PositionSensor)) {
-    if (ReadDiagnosticErrorCodes(0xA2, io, &codes)) {
-      info.position_sensor = CollectMotorErrors(config, codes);
-    }
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::TactileSensor)) {
-    if (ReadDiagnosticErrorCodes(0xA3, io, &codes)) {
-      info.tactile_sensor = CollectMotorErrors(config, codes);
-    }
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::TemperatureSensor)) {
-    if (ReadDiagnosticErrorCodes(0xA4, io, &codes)) {
-      info.temperature = codes[0];
-    }
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::Fan)) {
-    if (ReadDiagnosticErrorCodes(0xA5, io, &codes)) {
-      info.fan = codes[0];
-    }
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::Zeroing)) {
-    if (ReadDiagnosticErrorCodes(0xA6, io, &codes)) {
-      info.zeroing = CollectMotorErrors(config, codes);
-    }
-  }
   if (HasSelfTestError(info.summary, SelfTestError::Motor)) {
-    if (ReadDiagnosticErrorCodes(0xA8, io, &codes)) {
-      info.motor = CollectMotorErrors(config, codes);
-    }
+    ReadDiagnosticErrorCodes(0xA8, io, &codes);
+    info.motor = CollectMotorErrors(config, codes);
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::Sensor)) {
+    ReadDiagnosticErrorCodes(0xA2, io, &codes);
+    info.sensor = CollectMotorErrors(config, codes);
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::Joint)) {
+    ReadDiagnosticErrorCodes(0xA6, io, &codes);
+    info.joint = CollectMotorErrors(config, codes);
   }
   return info;
 }

@@ -25,6 +25,7 @@
 #include <memory>
 #include <sstream>
 #include <thread>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -1047,11 +1048,9 @@ constexpr uint8_t kSelfTestSubErrorCode = 0x03;
 constexpr uint8_t kSelfTestStateSuccess = 2;
 constexpr uint8_t kSelfTestStateFailed = 3;
 
-constexpr int kSelfTestPollAttempts = 100;
-
 }  // namespace
 
-bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
+void EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
                                             std::array<uint8_t, 13>* codes) {
   codes->fill(0);
 
@@ -1061,87 +1060,51 @@ bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
                EC_TIMEOUTRXM) <= 0) {
     GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                    << ": SDO write failed");
-    return false;
+    throw std::runtime_error("Self-test command SDO write failed");
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
 
   uint8_t state = 0xFF;
-  int attempts = kSelfTestPollAttempts;
-  while (attempts--) {
+  auto deadline = std::chrono::steady_clock::now() +
+                  std::chrono::milliseconds(1000);
+  while (true) {
     int state_size = sizeof(uint8_t);
     if (SDORead(1, kSelfTestIndex, kSelfTestSubState, &state_size, &state,
                 EC_TIMEOUTRXM) <= 0) {
       GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                      << ": state read failed");
-      return false;
+      throw std::runtime_error("Self-test state SDO read failed");
     }
     if (state == kSelfTestStateSuccess || state == kSelfTestStateFailed) {
       break;
     }
+    if (std::chrono::steady_clock::now() >= deadline) {
+      throw std::runtime_error("Self-test state poll timeout");
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
-  if (state != kSelfTestStateSuccess && state != kSelfTestStateFailed) {
-    GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
-                                   << ": state poll timeout (state="
-                                   << std::dec << static_cast<int>(state)
-                                   << ")");
-    return false;
-  }
-
   int codes_size = static_cast<int>(codes->size());
   if (SDORead(1, kSelfTestIndex, kSelfTestSubErrorCode, &codes_size,
               codes->data(), EC_TIMEOUTRXM) <= 0) {
     GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                    << ": error_code read failed");
-    return false;
+    throw std::runtime_error("Self-test error code SDO read failed");
   }
-  return true;
 }
 
 uint8_t EtherCATComm::GetSelfTestSummaryErrorCode() {
   std::array<uint8_t, 13> codes{};
-  if (!ReadDiagnosticErrorCodes(0xA0, &codes)) {
-    return 0;
-  }
+  ReadDiagnosticErrorCodes(0xA0, &codes);
   return codes[0];
 }
 
-uint8_t EtherCATComm::GetVersionCheckErrorCode() {
-  std::array<uint8_t, 13> codes{};
-  if (!ReadDiagnosticErrorCodes(0xA1, &codes)) {
-    return 0;
-  }
-  return codes[0];
-}
-
-std::array<uint8_t, 13> EtherCATComm::GetPositionSensorErrorCodes() {
+std::array<uint8_t, 13> EtherCATComm::GetSensorErrorCodes() {
   std::array<uint8_t, 13> codes{};
   ReadDiagnosticErrorCodes(0xA2, &codes);
   return codes;
 }
 
-std::array<uint8_t, 13> EtherCATComm::GetTactileSensorErrorCodes() {
-  std::array<uint8_t, 13> codes{};
-  ReadDiagnosticErrorCodes(0xA3, &codes);
-  return codes;
-}
-
-uint8_t EtherCATComm::GetTemperatureSensorErrorCode() {
-  std::array<uint8_t, 13> codes{};
-  if (!ReadDiagnosticErrorCodes(0xA4, &codes)) {
-    return 0;
-  }
-  return codes[0];
-}
-
-uint8_t EtherCATComm::GetFanErrorCode() {
-  std::array<uint8_t, 13> codes{};
-  if (!ReadDiagnosticErrorCodes(0xA5, &codes)) {
-    return 0;
-  }
-  return codes[0];
-}
-
-std::array<uint8_t, 13> EtherCATComm::GetZeroingErrorCodes() {
+std::array<uint8_t, 13> EtherCATComm::GetJointErrorCodes() {
   std::array<uint8_t, 13> codes{};
   ReadDiagnosticErrorCodes(0xA6, &codes);
   return codes;
@@ -1187,46 +1150,14 @@ SelfTestErrorInfo EtherCATComm::GetSelfTestErrorInfo() {
     return info;
   }
 
-  if (HasSelfTestError(info.summary, SelfTestError::Version)) {
-    info.version = GetVersionCheckErrorCode();
-    GHAND_LOG_INFO("Self-test error: version mismatch (0x" << std::hex
-                                                           << static_cast<int>(info.version)
-                                                           << ")");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::PositionSensorUnmapped)) {
-    GHAND_LOG_INFO("Self-test error: position sensor unmapped");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::PositionSensor)) {
-    info.position_sensor = CollectMotorErrors(GetPositionSensorErrorCodes());
-    GHAND_LOG_INFO("Self-test error: position sensor ("
-                   << info.position_sensor.size() << " motors)");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::TactileSensor)) {
-    info.tactile_sensor = CollectMotorErrors(GetTactileSensorErrorCodes());
-    GHAND_LOG_INFO("Self-test error: tactile sensor ("
-                   << info.tactile_sensor.size() << " motors)");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::TemperatureSensor)) {
-    info.temperature = GetTemperatureSensorErrorCode();
-    GHAND_LOG_INFO("Self-test error: temperature (0x" << std::hex
-                                                      << static_cast<int>(info.temperature)
-                                                      << ")");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::Fan)) {
-    info.fan = GetFanErrorCode();
-    GHAND_LOG_INFO("Self-test error: fan (0x" << std::hex
-                                              << static_cast<int>(info.fan)
-                                              << ")");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::Zeroing)) {
-    info.zeroing = CollectMotorErrors(GetZeroingErrorCodes());
-    GHAND_LOG_INFO("Self-test error: zeroing (" << info.zeroing.size()
-                                                << " motors)");
-  }
   if (HasSelfTestError(info.summary, SelfTestError::Motor)) {
     info.motor = CollectMotorErrors(GetMotorErrorCodes());
-    GHAND_LOG_INFO("Self-test error: motor check (" << info.motor.size()
-                                                    << " motors)");
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::Sensor)) {
+    info.sensor = CollectMotorErrors(GetSensorErrorCodes());
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::Joint)) {
+    info.joint = CollectMotorErrors(GetJointErrorCodes());
   }
   return info;
 }

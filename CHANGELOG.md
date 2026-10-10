@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING:** Aligned self-test diagnostics with the Python SDK: `SelfTestError` now contains `Motor` (0x01), `Sensor` (0x02), and `Joint` (0x04); `SelfTestErrorInfo` contains `motor`, `sensor`, and `joint` channel lists. Replaced the old category enums with `SensorError` and `JointError` bit masks.
+- EtherCAT, CANFD, and RS485 query only A8/A2/A6 categories selected by A0. Query failures and timeouts throw `std::runtime_error` instead of returning empty or partial diagnostics.
+
 ## [2.2.2] - 2026-09-02
 
 ### Added

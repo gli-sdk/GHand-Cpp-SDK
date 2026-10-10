@@ -669,7 +669,9 @@ bool RS485Comm::InitJoint() {
 }
 
 SelfTestErrorInfo RS485Comm::GetSelfTestErrorInfo() {
-  if (!IsConnected()) return SelfTestErrorInfo{};
+  if (!IsConnected()) {
+    throw std::runtime_error("Self-test query requires a connected device");
+  }
 
   SelfTestRegisterIO io;
   io.read_registers =

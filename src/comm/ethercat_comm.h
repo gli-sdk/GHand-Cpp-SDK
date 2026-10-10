@@ -165,16 +165,12 @@ class EtherCATComm : public IComm {
                                size_t* offset) const;
   void ParseAndNotify(const uint8_t* data, size_t size);
 
-  // Self-test error helpers (object dictionary 0x2008). A1~A8 are internal.
-  bool ReadDiagnosticErrorCodes(uint8_t command,
+  // Self-test error helpers (object dictionary 0x2008). A2/A6/A8 are internal.
+  void ReadDiagnosticErrorCodes(uint8_t command,
                                 std::array<uint8_t, 13>* codes);
   uint8_t GetSelfTestSummaryErrorCode();
-  uint8_t GetVersionCheckErrorCode();
-  std::array<uint8_t, 13> GetPositionSensorErrorCodes();
-  std::array<uint8_t, 13> GetTactileSensorErrorCodes();
-  uint8_t GetTemperatureSensorErrorCode();
-  uint8_t GetFanErrorCode();
-  std::array<uint8_t, 13> GetZeroingErrorCodes();
+  std::array<uint8_t, 13> GetSensorErrorCodes();
+  std::array<uint8_t, 13> GetJointErrorCodes();
   std::array<uint8_t, 13> GetMotorErrorCodes();
 
   JointId MotorIndexToJoint(uint8_t motor_index) const;

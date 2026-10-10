@@ -231,6 +231,20 @@ add_custom_command(TARGET ghand POST_BUILD
 # ========== Examples ==========
 add_subdirectory(examples)
 
+option(GHAND_BUILD_TESTS "Build SDK regression checks" OFF)
+if(GHAND_BUILD_TESTS)
+    enable_testing()
+    add_executable(self_test_workflow_test
+        tests/self_test_workflow_test.cc
+        src/comm/self_test_workflow.cc
+    )
+    target_include_directories(self_test_workflow_test PRIVATE
+        src/comm src/internal
+    )
+    target_link_libraries(self_test_workflow_test PRIVATE ghand)
+    add_test(NAME self_test_workflow COMMAND self_test_workflow_test)
+endif()
+
 # ========== Install rules ==========
 install(TARGETS ghand
     EXPORT GHandSDKTargets
