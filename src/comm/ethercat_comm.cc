@@ -184,8 +184,9 @@ std::map<std::string, std::string> EtherCATComm::SearchAdapters() {
   return adapter_names;
 }
 
-bool EtherCATComm::SetSlaveId(uint8_t slave_id) {
-  (void)slave_id;
+bool EtherCATComm::SetSlaveId(uint16_t slave_index, uint8_t new_slave_id) {
+  (void)slave_index;
+  (void)new_slave_id;
   GHAND_LOG_WARNING("SetSlaveId is not supported on EtherCAT");
   return false;
 }
@@ -194,7 +195,9 @@ void EtherCATComm::UpdateConfig(const ProductConfig& config) {
   config_ = config;
 }
 
-bool EtherCATComm::SetBaudrateConfig(uint8_t baudrate_gear) {
+bool EtherCATComm::SetBaudrateConfig(uint16_t slave_index,
+                                     uint8_t baudrate_gear) {
+  (void)slave_index;
   (void)baudrate_gear;
   GHAND_LOG_WARNING("SetBaudrateConfig is not supported on EtherCAT");
   return false;
@@ -223,7 +226,6 @@ Diagnostics EtherCATComm::GetDiagnostics() const {
 
 int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
                           uint8_t baudrate_gear) {
-  (void)slave_id;
   (void)baudrate_gear;
   GHAND_LOG_INFO("EtherCAT connecting to: " << device_name);
 
@@ -255,6 +257,16 @@ int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
     GHAND_LOG_ERROR("No devices found on adapter: " << device_name);
     device_lock_.Release();
     return -3;
+  }
+
+  rxpdo_buffers_.assign(static_cast<size_t>(soem_->ctx.slavecount) + 1,
+                        std::vector<uint8_t>(sizeof(rxpdo_buffer_), 0));
+  rxpdo_sizes_.assign(static_cast<size_t>(soem_->ctx.slavecount) + 1,
+                      rxpdo_size_);
+  for (int si = 1; si <= soem_->ctx.slavecount; ++si) {
+    if (rxpdo_size_ > 0) {
+      memcpy(rxpdo_buffers_[si].data(), rxpdo_buffer_, rxpdo_size_);
+    }
   }
 
   ec_groupt* group = &soem_->ctx.grouplist[0];
@@ -382,6 +394,7 @@ int EtherCATComm::SDOWrite(std::uint16_t slave, std::uint16_t index,
 
 int EtherCATComm::SendRxPDO(uint16 slave, uint16 pdo_index, uint32 data_size,
                             uint8* data) {
+  (void)pdo_index;
   if (!data || data_size <= 0 || slave <= 0 || slave > soem_->ctx.slavecount) {
     return -1;
   }
@@ -391,8 +404,19 @@ int EtherCATComm::SendRxPDO(uint16 slave, uint16 pdo_index, uint32 data_size,
     return -1;
   }
 
-  memcpy(rxpdo_buffer_, data, data_size);
-  rxpdo_size_ = data_size;
+  if (rxpdo_buffers_.size() <= slave) {
+    rxpdo_buffers_.resize(static_cast<size_t>(soem_->ctx.slavecount) + 1,
+                          std::vector<uint8_t>(sizeof(rxpdo_buffer_), 0));
+    rxpdo_sizes_.resize(static_cast<size_t>(soem_->ctx.slavecount) + 1, 0);
+  }
+
+  memcpy(rxpdo_buffers_[slave].data(), data, data_size);
+  rxpdo_sizes_[slave] = data_size;
+
+  if (slave == 1) {
+    memcpy(rxpdo_buffer_, data, data_size);
+    rxpdo_size_ = data_size;
+  }
 
   return 1;
 }
@@ -419,10 +443,18 @@ void EtherCATComm::Ecatthread() {
 
   {
     std::lock_guard<std::mutex> lock(rt_context_mutex_);
-    size_t copy_size =
-        (std::min)(rxpdo_size_,
-                   static_cast<size_t>(soem_->ctx.slavelist[1].Obytes));
-    memcpy(soem_->ctx.slavelist[1].outputs, rxpdo_buffer_, copy_size);
+    for (int si = 1; si <= soem_->ctx.slavecount; ++si) {
+      if (soem_->ctx.slavelist[si].outputs == nullptr) continue;
+      size_t size = si < static_cast<int>(rxpdo_sizes_.size())
+                        ? rxpdo_sizes_[si]
+                        : 0;
+      if (size == 0) continue;
+      size_t copy_size =
+          (std::min)(size,
+                     static_cast<size_t>(soem_->ctx.slavelist[si].Obytes));
+      memcpy(soem_->ctx.slavelist[si].outputs, rxpdo_buffers_[si].data(),
+             copy_size);
+    }
     ecx_send_processdata(&soem_->ctx);
   }
 
@@ -433,7 +465,7 @@ void EtherCATComm::Ecatthread() {
       cycle_++;
 
       // Receive process data
-      std::vector<uint8_t> pdo_copy;
+      std::vector<std::pair<uint16_t, std::vector<uint8_t>>> pdo_copies;
 
       {
         std::lock_guard<std::mutex> lock(rt_context_mutex_);
@@ -441,11 +473,19 @@ void EtherCATComm::Ecatthread() {
 
         if (wkc_ >= expectedWKC_ && inOP_) {
           rx_packets_++;
-          uint8_t* inputs = soem_->ctx.slavelist[1].inputs;
-          size_t pdo_size = soem_->ctx.slavelist[1].Ibytes;
-
-          if (pdo_size > 0) {
-            pdo_copy.assign(inputs, inputs + pdo_size);
+          // Every slave that produces a TxPDO carries its own feedback frame.
+          // With a junction/splitter the hands sit at slaves 2..N while slave
+          // 1 is the splitter itself, so collect one frame per slave instead
+          // of only reading slavelist[1].
+          for (int si = 1; si <= soem_->ctx.slavecount; ++si) {
+            uint8_t* inputs = soem_->ctx.slavelist[si].inputs;
+            size_t pdo_size = soem_->ctx.slavelist[si].Ibytes;
+            if (inputs == nullptr || pdo_size == 0) {
+              continue;
+            }
+            std::vector<uint8_t> copy(inputs, inputs + pdo_size);
+            pdo_copies.emplace_back(static_cast<uint16_t>(si),
+                                    std::move(copy));
           }
         } else {
           rx_errors_++;
@@ -453,9 +493,9 @@ void EtherCATComm::Ecatthread() {
       }
 
       // Call callbacks outside the lock
-      if (!pdo_copy.empty()) {
+      for (const auto& entry : pdo_copies) {
         received_frames_++;
-        ParseAndNotify(pdo_copy.data(), pdo_copy.size());
+        ParseAndNotify(entry.second.data(), entry.second.size(), entry.first);
       }
 
       if (wkc_ != expectedWKC_) {
@@ -466,9 +506,18 @@ void EtherCATComm::Ecatthread() {
 
       {
         std::lock_guard<std::mutex> lock(rt_context_mutex_);
-        size_t copy_size = (std::min)(
-            rxpdo_size_, static_cast<size_t>(soem_->ctx.slavelist[1].Obytes));
-        memcpy(soem_->ctx.slavelist[1].outputs, rxpdo_buffer_, copy_size);
+        for (int si = 1; si <= soem_->ctx.slavecount; ++si) {
+          if (soem_->ctx.slavelist[si].outputs == nullptr) continue;
+          size_t size = si < static_cast<int>(rxpdo_sizes_.size())
+                            ? rxpdo_sizes_[si]
+                            : 0;
+          if (size == 0) continue;
+          size_t copy_size =
+              (std::min)(size,
+                         static_cast<size_t>(soem_->ctx.slavelist[si].Obytes));
+          memcpy(soem_->ctx.slavelist[si].outputs, rxpdo_buffers_[si].data(),
+                 copy_size);
+        }
         if (ecx_send_processdata(&soem_->ctx) > 0) {
           tx_packets_++;
         } else {
@@ -779,13 +828,13 @@ void EtherCATComm::SetTactileDataCallback(TactileDataCallback cb) {
   tactile_callback_ = cb;
 }
 
-DeviceInfo EtherCATComm::GetDeviceInfo() {
+DeviceInfo EtherCATComm::ReadDeviceInfo(uint16_t slave) {
   DeviceInfo info;
   std::uint8_t value[255] = {0};
   int size = sizeof(value);
   int result = -1;
 
-  result = SDORead(1, 0x1008, 0x00, &size, &value, EC_TIMEOUTRXM);
+  result = SDORead(slave, 0x1008, 0x00, &size, &value, EC_TIMEOUTRXM);
   if (result == 1) {
     info.device_name = ByteArrayString(value, sizeof(value));
     if (info.device_name.empty()) {
@@ -795,7 +844,7 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
 
   size = sizeof(value);
   memset(value, 0, sizeof(value));
-  result = SDORead(1, 0x1009, 0x00, &size, &value, EC_TIMEOUTRXM);
+  result = SDORead(slave, 0x1009, 0x00, &size, &value, EC_TIMEOUTRXM);
   if (result == 1) {
     info.hardware_version = ByteArrayString(value, sizeof(value));
     if (info.hardware_version.empty()) {
@@ -805,14 +854,14 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
 
   size = sizeof(value);
   memset(value, 0, sizeof(value));
-  result = SDORead(1, 0x100A, 0x00, &size, &value, EC_TIMEOUTRXM);
+  result = SDORead(slave, 0x100A, 0x00, &size, &value, EC_TIMEOUTRXM);
   if (result == 1) {
     info.software_version = ByteArrayString(value, sizeof(value));
   }
 
   size = 19;
   memset(value, 0, sizeof(value));
-  result = SDORead(1, 0x200C, 0x01, &size, &value, EC_TIMEOUTRXM);
+  result = SDORead(slave, 0x200C, 0x01, &size, &value, EC_TIMEOUTRXM);
   if (result == 1) {
     std::string serial =
         ParseAsciiSerialNumber(value, static_cast<size_t>(size));
@@ -822,25 +871,32 @@ DeviceInfo EtherCATComm::GetDeviceInfo() {
   }
   
   if (info.software_version.empty()) {
-    info.software_version = ReadFirmwareVersion(0x01);
+    info.software_version = ReadFirmwareVersionFromSlave(slave, 0x01);
   }
   if (info.software_version.empty()) {
     info.software_version = "N/A";
   }
-  info.position_sensor_version = ReadFirmwareVersion(0x02);
-  info.tactile_sensor_version = ReadFirmwareVersion(0x03);
-  info.motor_driver_version = ReadFirmwareVersion(0x04);
-  info.firmware_package_version = ReadFirmwareVersion(0x05);
-  info.thumb_tactile_sensor_version = ReadFirmwareVersion(0x06);
-  info.finger_tactile_sensor_version = ReadFirmwareVersion(0x07);
+  info.position_sensor_version = ReadFirmwareVersionFromSlave(slave, 0x02);
+  info.tactile_sensor_version = ReadFirmwareVersionFromSlave(slave, 0x03);
+  info.motor_driver_version = ReadFirmwareVersionFromSlave(slave, 0x04);
+  info.firmware_package_version = ReadFirmwareVersionFromSlave(slave, 0x05);
+  info.thumb_tactile_sensor_version = ReadFirmwareVersionFromSlave(slave, 0x06);
+  info.finger_tactile_sensor_version = ReadFirmwareVersionFromSlave(slave, 0x07);
 
   return info;
 }
 
-HandType EtherCATComm::GetHandType() {
+DeviceInfo EtherCATComm::GetDeviceInfo(uint16_t slave_index) {
+  if (slave_index == 0 || slave_index > soem_->ctx.slavecount) {
+    return DeviceInfo{};
+  }
+  return ReadDeviceInfo(slave_index);
+}
+
+HandType EtherCATComm::GetHandTypeFromSlave(uint16_t slave) {
   std::uint8_t value = 0;
   int size = sizeof(value);
-  int result = SDORead(1, 0x2001, 0x00, &size, &value, EC_TIMEOUTRXM);
+  int result = SDORead(slave, 0x2001, 0x00, &size, &value, EC_TIMEOUTRXM);
 
   if (result == 1) {
     switch (value) {
@@ -855,10 +911,75 @@ HandType EtherCATComm::GetHandType() {
   return HandType::NONE;
 }
 
-bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
+HandType EtherCATComm::GetHandType(uint16_t slave_index) {
+  if (slave_index == 0 || slave_index > soem_->ctx.slavecount) {
+    return HandType::NONE;
+  }
+  return GetHandTypeFromSlave(slave_index);
+}
+
+std::vector<ConnectedHand> EtherCATComm::GetConnectedHands() {
+  std::vector<ConnectedHand> hands;
+  if (!IsConnected()) return hands;
+
+  for (int si = 1; si <= soem_->ctx.slavecount; ++si) {
+    ConnectedHand hand;
+    hand.slave_index = static_cast<uint16_t>(si);
+    hand.hand_type = GetHandTypeFromSlave(hand.slave_index);
+    if (hand.hand_type == HandType::NONE) continue;
+    hand.device_info = ReadDeviceInfo(hand.slave_index);
+    hands.push_back(hand);
+  }
+  return hands;
+}
+
+std::vector<uint16_t> EtherCATComm::TargetSlaves(uint16_t slave_index) {
+  std::vector<uint16_t> slaves;
+  if (!IsConnected()) return slaves;
+
+  if (slave_index == 0) {
+    for (const auto& hand : GetConnectedHands()) {
+      slaves.push_back(hand.slave_index);
+    }
+    return slaves;
+  }
+
+  if (slave_index > soem_->ctx.slavecount) {
+    GHAND_LOG_ERROR("Invalid EtherCAT slave index: " << slave_index);
+    return slaves;
+  }
+  if (GetHandTypeFromSlave(slave_index) == HandType::NONE) {
+    GHAND_LOG_ERROR("EtherCAT slave " << slave_index << " is not a hand");
+    return slaves;
+  }
+  slaves.push_back(slave_index);
+  return slaves;
+}
+
+bool EtherCATComm::MoveJoints(uint16_t slave_index,
+                              const std::vector<JointCommand>& joints,
                               ControlMode mode) {
+  std::vector<uint16_t> targets = TargetSlaves(slave_index);
+  if (targets.empty()) return false;
+
+  // Every slave's buffer is sent in the same process-data frame, so writing
+  // them one after another still reaches all hands simultaneously.
+  bool ok = true;
+  for (uint16_t slave : targets) {
+    ok = MoveJointsToSlave(slave, joints, mode) && ok;
+  }
+  return ok;
+}
+
+bool EtherCATComm::MoveJointsToSlave(uint16_t slave_index,
+                                     const std::vector<JointCommand>& joints,
+                                     ControlMode mode) {
   if (!IsConnected()) {
     GHAND_LOG_ERROR("Cannot move joints: device not connected");
+    return false;
+  }
+  if (slave_index == 0 || slave_index > soem_->ctx.slavecount) {
+    GHAND_LOG_ERROR("Invalid EtherCAT slave index: " << slave_index);
     return false;
   }
   if (joints.empty()) {
@@ -894,8 +1015,8 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
       buffer.push_back(static_cast<uint8_t>(torque));
     }
 
-    SendRxPDO(1, ECT_SDO_RXPDOASSIGN, static_cast<uint32_t>(buffer.size()),
-              buffer.data());
+    SendRxPDO(slave_index, ECT_SDO_RXPDOASSIGN,
+              static_cast<uint32_t>(buffer.size()), buffer.data());
     return true;
   }
 
@@ -931,13 +1052,24 @@ bool EtherCATComm::MoveJoints(const std::vector<JointCommand>& joints,
     buffer[offset++] = torque;
   }
 
-  SendRxPDO(1, ECT_SDO_RXPDOASSIGN, static_cast<uint32_t>(buffer.size()),
-            buffer.data());
+  SendRxPDO(slave_index, ECT_SDO_RXPDOASSIGN,
+            static_cast<uint32_t>(buffer.size()), buffer.data());
   return true;
 }
 
-void EtherCATComm::Stop() {
+void EtherCATComm::Stop(uint16_t slave_index) {
+  for (uint16_t slave : TargetSlaves(slave_index)) {
+    StopSlave(slave);
+  }
+}
+
+bool EtherCATComm::StopSlave(uint16_t slave_index) {
   GHAND_LOG_INFO("Sending stop command");
+  if (!IsConnected()) return false;
+  if (slave_index == 0 || slave_index > soem_->ctx.slavecount) {
+    GHAND_LOG_ERROR("Invalid EtherCAT slave index: " << slave_index);
+    return false;
+  }
   if (config_.product_type == ProductType::GHandLite1) {
     std::vector<JointId> controlled_joints = ControlledJoints(config_);
     std::vector<uint8_t> buffer;
@@ -950,9 +1082,8 @@ void EtherCATComm::Stop() {
       buffer.push_back(0);
       buffer.push_back(0);
     }
-    SendRxPDO(1, ECT_SDO_RXPDOASSIGN, static_cast<uint32_t>(buffer.size()),
-              buffer.data());
-    return;
+    return SendRxPDO(slave_index, ECT_SDO_RXPDOASSIGN,
+                     static_cast<uint32_t>(buffer.size()), buffer.data()) > 0;
   }
 
   std::vector<uint8_t> buffer(
@@ -960,12 +1091,23 @@ void EtherCATComm::Stop() {
   if (buffer.size() > 1) {
     buffer[1] = 1;
   }
-  SendRxPDO(1, ECT_SDO_RXPDOASSIGN, static_cast<uint32_t>(buffer.size()),
-            buffer.data());
+  return SendRxPDO(slave_index, ECT_SDO_RXPDOASSIGN,
+                   static_cast<uint32_t>(buffer.size()), buffer.data()) > 0;
 }
 
-bool EtherCATComm::ClearFault() {
+bool EtherCATComm::ClearFault(uint16_t slave_index) {
   GHAND_LOG_INFO("Clearing device fault");
+  std::vector<uint16_t> targets = TargetSlaves(slave_index);
+  if (targets.empty()) return false;
+
+  bool ok = true;
+  for (uint16_t target : targets) {
+    ok = ClearFaultOnSlave(target) && ok;
+  }
+  return ok;
+}
+
+bool EtherCATComm::ClearFaultOnSlave(uint16_t target_slave_index_) {
 
   std::uint8_t command = 0x01;
   std::uint8_t state = 0xFF;
@@ -973,13 +1115,16 @@ bool EtherCATComm::ClearFault() {
   std::uint8_t result = 0;
   int ret = -1;
   int times = 100;
-  ret = SDOWrite(1, 0x2002, 0x01, size, &command, EC_TIMEOUTRXM);
+  ret = SDOWrite(target_slave_index_, 0x2002, 0x01, size, &command,
+                 EC_TIMEOUTRXM);
   if (ret > 0) {
     std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
     while (times--) {
-      ret = SDORead(1, 0x2002, 0x02, &size, &state, EC_TIMEOUTRXM);
+      ret = SDORead(target_slave_index_, 0x2002, 0x02, &size, &state,
+                    EC_TIMEOUTRXM);
       if (ret > 0 && state == 0) {
-        ret = SDORead(1, 0x2002, 0x03, &size, &result, EC_TIMEOUTRXM);
+        ret = SDORead(target_slave_index_, 0x2002, 0x03, &size, &result,
+                      EC_TIMEOUTRXM);
         return result == 1;
       }
     }
@@ -988,51 +1133,64 @@ bool EtherCATComm::ClearFault() {
   return false;
 }
 
-bool EtherCATComm::InitJoint() {
-  GHAND_LOG_INFO("Initializing joint positions");
+bool EtherCATComm::OpenTactile(uint16_t slave_index) {
+  std::vector<uint16_t> targets = TargetSlaves(slave_index);
+  if (targets.empty()) return false;
 
-  std::uint8_t command = 0x01;
-  std::uint8_t state = 0xFF;
-  int size = sizeof(std::uint8_t);
-  std::uint8_t result = 0;
-  int ret = -1;
-  int times = 100;
-  ret = SDOWrite(1, 0x2003, 0x01, size, &command, EC_TIMEOUTRXM);
-  if (ret > 0) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
-    while (times--) {
-      ret = SDORead(1, 0x2003, 0x02, &size, &state, EC_TIMEOUTRXM);
-      if (ret > 0 && state == 0) {
-        ret = SDORead(1, 0x2003, 0x03, &size, &result, EC_TIMEOUTRXM);
-        return result == 1;
-      }
-    }
+  bool ok = true;
+  for (uint16_t target : targets) {
+    ok = OpenTactileOnSlave(target) && ok;
   }
-  GHAND_LOG_ERROR("Joint initialization timed out");
-  return false;
+  return ok;
 }
 
-bool EtherCATComm::OpenTactile() {
+bool EtherCATComm::OpenTactileOnSlave(uint16_t target_slave_index_) {
   std::uint8_t command = 0x01;
   int size = sizeof(std::uint8_t);
-  int result = SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
+  int result = SDOWrite(target_slave_index_, 0x2004, 0x01, size, &command,
+                        EC_TIMEOUTRXM);
   return result > 0;
 }
 
-bool EtherCATComm::CloseTactile() {
+bool EtherCATComm::CloseTactile(uint16_t slave_index) {
+  std::vector<uint16_t> targets = TargetSlaves(slave_index);
+  if (targets.empty()) return false;
+
+  bool ok = true;
+  for (uint16_t target : targets) {
+    ok = CloseTactileOnSlave(target) && ok;
+  }
+  return ok;
+}
+
+bool EtherCATComm::CloseTactileOnSlave(uint16_t target_slave_index_) {
   std::uint8_t command = 0x02;
   int size = sizeof(std::uint8_t);
-  int result = SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
+  int result = SDOWrite(target_slave_index_, 0x2004, 0x01, size, &command,
+                        EC_TIMEOUTRXM);
   return result > 0;
 }
 
-bool EtherCATComm::ZeroTactile() {
+bool EtherCATComm::ZeroTactile(uint16_t slave_index) {
+  std::vector<uint16_t> targets = TargetSlaves(slave_index);
+  if (targets.empty()) return false;
+
+  bool ok = true;
+  for (uint16_t target : targets) {
+    ok = ZeroTactileOnSlave(target) && ok;
+  }
+  return ok;
+}
+
+bool EtherCATComm::ZeroTactileOnSlave(uint16_t target_slave_index_) {
   std::uint8_t command = 0x04;
   std::uint8_t state = 0xFF;
   int size = sizeof(std::uint8_t);
-  int result = SDOWrite(1, 0x2004, 0x01, size, &command, EC_TIMEOUTRXM);
+  int result = SDOWrite(target_slave_index_, 0x2004, 0x01, size, &command,
+                        EC_TIMEOUTRXM);
   std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
-  result = SDORead(1, 0x2004, 0x03, &size, &state, EC_TIMEOUTRXM);
+  result = SDORead(target_slave_index_, 0x2004, 0x03, &size, &state,
+                   EC_TIMEOUTRXM);
   return result > 0;
 }
 
@@ -1050,13 +1208,13 @@ constexpr uint8_t kSelfTestStateFailed = 3;
 
 }  // namespace
 
-void EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
+void EtherCATComm::ReadDiagnosticErrorCodes(uint16_t slave, uint8_t command,
                                             std::array<uint8_t, 13>* codes) {
   codes->fill(0);
 
   int size = sizeof(uint8_t);
   uint8_t cmd = command;
-  if (SDOWrite(1, kSelfTestIndex, kSelfTestSubCommand, size, &cmd,
+  if (SDOWrite(slave, kSelfTestIndex, kSelfTestSubCommand, size, &cmd,
                EC_TIMEOUTRXM) <= 0) {
     GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                    << ": SDO write failed");
@@ -1069,7 +1227,7 @@ void EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
                   std::chrono::milliseconds(1000);
   while (true) {
     int state_size = sizeof(uint8_t);
-    if (SDORead(1, kSelfTestIndex, kSelfTestSubState, &state_size, &state,
+    if (SDORead(slave, kSelfTestIndex, kSelfTestSubState, &state_size, &state,
                 EC_TIMEOUTRXM) <= 0) {
       GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                      << ": state read failed");
@@ -1084,7 +1242,7 @@ void EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
   int codes_size = static_cast<int>(codes->size());
-  if (SDORead(1, kSelfTestIndex, kSelfTestSubErrorCode, &codes_size,
+  if (SDORead(slave, kSelfTestIndex, kSelfTestSubErrorCode, &codes_size,
               codes->data(), EC_TIMEOUTRXM) <= 0) {
     GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                    << ": error_code read failed");
@@ -1092,27 +1250,27 @@ void EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
   }
 }
 
-uint8_t EtherCATComm::GetSelfTestSummaryErrorCode() {
+uint8_t EtherCATComm::GetSelfTestSummaryErrorCode(uint16_t slave) {
   std::array<uint8_t, 13> codes{};
-  ReadDiagnosticErrorCodes(0xA0, &codes);
+  ReadDiagnosticErrorCodes(slave, 0xA0, &codes);
   return codes[0];
 }
 
-std::array<uint8_t, 13> EtherCATComm::GetSensorErrorCodes() {
+std::array<uint8_t, 13> EtherCATComm::GetSensorErrorCodes(uint16_t slave) {
   std::array<uint8_t, 13> codes{};
-  ReadDiagnosticErrorCodes(0xA2, &codes);
+  ReadDiagnosticErrorCodes(slave, 0xA2, &codes);
   return codes;
 }
 
-std::array<uint8_t, 13> EtherCATComm::GetJointErrorCodes() {
+std::array<uint8_t, 13> EtherCATComm::GetJointErrorCodes(uint16_t slave) {
   std::array<uint8_t, 13> codes{};
-  ReadDiagnosticErrorCodes(0xA6, &codes);
+  ReadDiagnosticErrorCodes(slave, 0xA6, &codes);
   return codes;
 }
 
-std::array<uint8_t, 13> EtherCATComm::GetMotorErrorCodes() {
+std::array<uint8_t, 13> EtherCATComm::GetMotorErrorCodes(uint16_t slave) {
   std::array<uint8_t, 13> codes{};
-  ReadDiagnosticErrorCodes(0xA8, &codes);
+  ReadDiagnosticErrorCodes(slave, 0xA8, &codes);
   return codes;
 }
 
@@ -1142,34 +1300,34 @@ std::vector<MotorDiagnosticError> EtherCATComm::CollectMotorErrors(
   return errors;
 }
 
-SelfTestErrorInfo EtherCATComm::GetSelfTestErrorInfo() {
+SelfTestErrorInfo EtherCATComm::GetSelfTestErrorInfo(uint16_t slave) {
   SelfTestErrorInfo info;
 
-  info.summary = GetSelfTestSummaryErrorCode();
+  info.summary = GetSelfTestSummaryErrorCode(slave);
   if (info.summary == 0) {
     return info;
   }
 
   if (HasSelfTestError(info.summary, SelfTestError::Motor)) {
-    info.motor = CollectMotorErrors(GetMotorErrorCodes());
+    info.motor = CollectMotorErrors(GetMotorErrorCodes(slave));
   }
   if (HasSelfTestError(info.summary, SelfTestError::Sensor)) {
-    info.sensor = CollectMotorErrors(GetSensorErrorCodes());
+    info.sensor = CollectMotorErrors(GetSensorErrorCodes(slave));
     GHAND_LOG_INFO("Self-test error: sensor (" << info.sensor.size()
                                               << " channels)");
   }
   if (HasSelfTestError(info.summary, SelfTestError::Joint)) {
-    info.joint = CollectMotorErrors(GetJointErrorCodes());
+    info.joint = CollectMotorErrors(GetJointErrorCodes(slave));
     GHAND_LOG_INFO("Self-test error: joint (" << info.joint.size()
                                              << " channels)");
   }
   return info;
 }
 
-uint8_t EtherCATComm::GetSelfTestStatus() {
+uint8_t EtherCATComm::GetSelfTestStatus(uint16_t slave) {
   uint8_t state = 0;
   int size = sizeof(uint8_t);
-  if (SDORead(1, kSelfTestIndex, kSelfTestSubState, &size, &state,
+  if (SDORead(slave, kSelfTestIndex, kSelfTestSubState, &size, &state,
               EC_TIMEOUTRXM) <= 0) {
     GHAND_LOG_ERROR("Self-test status read failed");
     return 0;
@@ -1333,7 +1491,8 @@ TactileData EtherCATComm::ParseTactileData(const uint8_t* data, size_t size,
   return tactile_data;
 }
 
-void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
+void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size,
+                                  uint16_t slave_index) {
   if (data == nullptr || size == 0) {
     GHAND_LOG_WARNING("Received invalid data: null or empty");
     return;
@@ -1358,7 +1517,7 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
   bool dispatched = false;
   try {
     if (joints_cb) {
-      joints_cb(parsed_joints);
+      joints_cb(slave_index, parsed_joints);
       dispatched = true;
     }
   } catch (const std::exception& e) {
@@ -1371,7 +1530,7 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
 
   try {
     if (hand_state_cb) {
-      hand_state_cb(parsed_temperature);
+      hand_state_cb(slave_index, parsed_temperature);
       dispatched = true;
     }
   } catch (const std::exception& e) {
@@ -1386,7 +1545,7 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
     TactileData tactile_data = ParseTactileData(data, size, &offset);
     try {
       if (tactile_cb) {
-        tactile_cb(tactile_data);
+        tactile_cb(slave_index, tactile_data);
         dispatched = true;
       }
     } catch (const std::exception& e) {
@@ -1403,23 +1562,30 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size) {
   }
 }
 
-std::string EtherCATComm::ReadFirmwareVersion(uint8_t mcu_id) {
+std::string EtherCATComm::ReadFirmwareVersion(uint16_t slave,
+                                              uint8_t mcu_id) {
+  if (slave == 0) return "N/A";
+  return ReadFirmwareVersionFromSlave(slave, mcu_id);
+}
+
+std::string EtherCATComm::ReadFirmwareVersionFromSlave(uint16_t slave,
+                                                       uint8_t mcu_id) {
   std::uint8_t cmd = mcu_id;
   int size = sizeof(std::uint8_t);
-  if (SDOWrite(1, 0x2007, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
+  if (SDOWrite(slave, 0x2007, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
     return "N/A";
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
 
   std::uint8_t version_high = 0;
   size = sizeof(std::uint8_t);
-  if (SDORead(1, 0x2007, 0x02, &size, &version_high, EC_TIMEOUTRXM) <= 0) {
+  if (SDORead(slave, 0x2007, 0x02, &size, &version_high, EC_TIMEOUTRXM) <= 0) {
     return "N/A";
   }
 
   std::uint8_t version_low = 0;
   size = sizeof(std::uint8_t);
-  if (SDORead(1, 0x2007, 0x03, &size, &version_low, EC_TIMEOUTRXM) <= 0) {
+  if (SDORead(slave, 0x2007, 0x03, &size, &version_low, EC_TIMEOUTRXM) <= 0) {
     return "N/A";
   }
 

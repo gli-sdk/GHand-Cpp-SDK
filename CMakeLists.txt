@@ -167,7 +167,7 @@ target_link_libraries(ghand PRIVATE
 set_target_properties(ghand PROPERTIES
     OUTPUT_NAME ghand
     VERSION ${PROJECT_VERSION}
-    SOVERSION 1
+    SOVERSION 2
 )
 
 if(MSVC)

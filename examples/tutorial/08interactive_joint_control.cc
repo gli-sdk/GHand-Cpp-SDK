@@ -159,33 +159,39 @@ bool IsValidJointId(int id) {
   return false;
 }
 
-std::unique_ptr<ghand::GHand> CreateConnectedHand() {
-  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+std::unique_ptr<ghand::Master> CreateConnectedMaster() {
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
-  if (!hand) {
+  if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return nullptr;
   }
 
   std::cout << "\nConnecting to dexterous hand..." << '\n';
-  if (!hand->AutoConnect()) {
-    std::cerr << "Error: Unable to connect to dexterous hand!" << '\n';
+  const auto connected = master->Connect("auto");
+  if (!connected) {
+    std::cerr << "Error: Unable to connect to dexterous hand: "
+              << connected.message << '\n';
     return nullptr;
   }
 
   std::cout << "OK Successfully connected to dexterous hand!" << '\n';
-  return hand;
+  return master;
 }
 
 void DisplayDeviceInfo(ghand::GHand& hand) {
-  ghand::DeviceInfo info = hand.GetDeviceInfo();
-  ghand::HandType hand_type = hand.GetHandType();
+  const auto info = hand.QueryDeviceInfo();
+  if (!info) {
+    std::cerr << "Failed to query device info: " << info.message << '\n';
+    return;
+  }
+  const ghand::DeviceInfo& device = info.value;
   std::cout << "\nDevice Information:" << '\n';
-  std::cout << "  Device Name: " << info.device_name << '\n';
-  std::cout << "  Hardware Version: " << info.hardware_version << '\n';
-  std::cout << "  Software Version: " << info.software_version << '\n';
-  std::cout << "  Serial Number: " << info.serial_number << '\n';
-  std::cout << "  Hand Type: " << ghand::ToString(hand_type) << '\n';
+  std::cout << "  Device Name: " << device.device_name << '\n';
+  std::cout << "  Hardware Version: " << device.hardware_version << '\n';
+  std::cout << "  Software Version: " << device.software_version << '\n';
+  std::cout << "  Serial Number: " << device.serial_number << '\n';
+  std::cout << "  Hand Type: " << ghand::ToString(hand.hand_type()) << '\n';
 }
 
 bool ReadJointIdInput(int* joint_id, bool* done) {
@@ -276,9 +282,9 @@ void SendAndDisplayFeedback(ghand::GHand& hand,
                             const std::vector<ghand::JointCommand>& joints,
                             bool joints_received,
                             const std::vector<ghand::Joint>& last_joints) {
-  bool move_success = hand.MoveJoints(joints);
-  if (!move_success) {
-    std::cerr << "ERROR Command send failed" << '\n';
+  const auto result = hand.MoveJoints(joints);
+  if (!result) {
+    std::cerr << "ERROR Command send failed: " << result.message << '\n';
     return;
   }
 
@@ -323,11 +329,11 @@ int main() {
             << '\n';
   std::cout << "========================================" << '\n';
 
-  auto hand = CreateConnectedHand();
-  if (!hand) return 1;
+  auto master = CreateConnectedMaster();
+  if (!master) return 1;
+  ghand::GHand* hand = master->hands().front();
 
   DisplayDeviceInfo(*hand);
-  hand->SetControlMode(ghand::ControlMode::POSITION);
 
   std::vector<ghand::Joint> last_joints;
   bool joints_received = false;
@@ -341,7 +347,7 @@ int main() {
   RunControlLoop(*hand, last_joints, joints_received);
 
   std::cout << "\nDisconnecting..." << '\n';
-  hand->Disconnect();
+  master->Disconnect();
   std::cout << "OK Disconnected" << '\n';
 
   std::cout << "\nProgram ended. Thank you for using!" << '\n';

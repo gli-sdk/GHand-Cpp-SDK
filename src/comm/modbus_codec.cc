@@ -229,5 +229,74 @@ std::pair<uint16_t, uint16_t> EncodeJointCommand(const JointCommand& joint) {
   return {reg0, reg1};
 }
 
+bool BuildJointControlBlock(const ProductConfig& config,
+                            const std::vector<JointCommand>& joints,
+                            ControlMode mode, uint16_t* start_addr,
+                            std::vector<uint16_t>* registers) {
+  if (start_addr == nullptr || registers == nullptr) return false;
+
+  const std::map<JointId, uint16_t>& control_map =
+      config.joint_control_registers.empty() ? kHoldingRegMap
+                                             : config.joint_control_registers;
+  if (control_map.empty()) return false;
+
+  // GHandLite1 embeds the control mode in each joint's register triplet and has
+  // no mode register of its own.
+  const bool embedded_mode = config.mode_register < 0;
+  const uint16_t regs_per_joint = embedded_mode ? 3 : 2;
+
+  uint16_t first = 0xFFFF;
+  uint16_t end = 0;
+  for (const auto& entry : control_map) {
+    if (entry.second < first) first = entry.second;
+    if (static_cast<uint16_t>(entry.second + regs_per_joint) > end) {
+      end = static_cast<uint16_t>(entry.second + regs_per_joint);
+    }
+  }
+
+  const uint16_t start = config.mode_register >= 0
+                             ? static_cast<uint16_t>(config.mode_register)
+                             : first;
+  if (start > first || end <= start) return false;
+
+  // The block must be dense: a joint immediately follows the previous one,
+  // otherwise one write would spill into unrelated registers.
+  for (const auto& entry : control_map) {
+    const uint16_t offset = static_cast<uint16_t>(entry.second - start);
+    if (offset + regs_per_joint > end - start) return false;
+  }
+  const size_t count = static_cast<size_t>(end - start);
+  if (control_map.size() * regs_per_joint +
+          (config.mode_register >= 0 ? 1 : 0) !=
+      count) {
+    return false;
+  }
+
+  registers->assign(count, 0);
+  if (config.mode_register >= 0) {
+    (*registers)[0] = (static_cast<uint16_t>(mode) << 8) & 0xFF00;
+  }
+
+  uint16_t mode_value = (static_cast<uint16_t>(mode) << 8) & 0xFF00;
+  for (const auto& joint : joints) {
+    const auto it = control_map.find(joint.id);
+    if (it == control_map.end()) continue;
+
+    const auto regs = EncodeJointCommand(joint);
+    const size_t offset = static_cast<size_t>(it->second - start);
+    if (embedded_mode) {
+      (*registers)[offset] = mode_value;
+      (*registers)[offset + 1] = regs.first;
+      (*registers)[offset + 2] = regs.second;
+    } else {
+      (*registers)[offset] = regs.first;
+      (*registers)[offset + 1] = regs.second;
+    }
+  }
+
+  *start_addr = start;
+  return true;
+}
+
 }  // namespace internal
 }  // namespace ghand

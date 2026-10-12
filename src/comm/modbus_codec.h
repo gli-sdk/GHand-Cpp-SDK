@@ -83,6 +83,15 @@ std::vector<Force> ParseTactileDistributed(const uint8_t* data_bytes,
 // Returns (reg0, reg1).
 std::pair<uint16_t, uint16_t> EncodeJointCommand(const JointCommand& joint);
 
+// Build the contiguous control block that covers every controllable joint,
+// so one multi-register write reaches the whole hand. Joints that are not in
+// the command are filled with zeros. start_addr receives the block's base
+// register address. Returns false when the register map is not a dense block.
+bool BuildJointControlBlock(const ProductConfig& config,
+                            const std::vector<JointCommand>& joints,
+                            ControlMode mode, uint16_t* start_addr,
+                            std::vector<uint16_t>* registers);
+
 }  // namespace internal
 }  // namespace ghand
 

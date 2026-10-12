@@ -56,6 +56,9 @@ inline int modbus_write_register(modbus_t*, int, uint16_t) { return -1; }
 inline int modbus_write_registers(modbus_t*, int, int, const uint16_t*) {
   return -1;
 }
+inline int modbus_send_raw_request(modbus_t*, const uint8_t*, int) {
+  return -1;
+}
 #else
 #include <modbus/modbus.h>
 #endif
@@ -68,6 +71,12 @@ inline int modbus_write_registers(modbus_t*, int, int, const uint16_t*) {
 
 namespace ghand {
 namespace internal {
+
+static const int kTactilePollIntervalMs = 100;
+// A hand that fails this many consecutive polls is skipped for a while so the
+// other hand on the bus keeps its polling rate.
+static const int kOfflineFailThreshold = 3;
+static const int kOfflineBackoffMs = 2000;
 
 #ifdef _WIN32
 namespace {
@@ -124,6 +133,13 @@ namespace {
 
 const int kBaudrateConfigRegister = 0x002C;
 const uint8_t kDefaultBaudrateGear = 0x05;
+
+// Modbus function 0x10 accepts at most 123 registers in one frame.
+const int kMaxBroadcastRegisters = 123;
+// A broadcast write is never acknowledged, so the master must leave the slaves
+// time to apply it before the next request (feedback polling) hits the bus.
+// Tune on hardware if a hand drops frames right after a broadcast.
+const int kBroadcastTurnaroundMs = 3;
 
 bool ResolveRS485Baudrate(uint8_t baudrate_gear, int* baudrate) {
   if (baudrate == nullptr) return false;
@@ -285,15 +301,121 @@ int RS485Comm::WriteRegistersCounted(int addr, int count,
   return rc;
 }
 
-bool RS485Comm::SetSlaveId(uint8_t slave_id) {
+int RS485Comm::SendBroadcastRegisters(int addr, int count,
+                                      const uint16_t* data) {
+  if (ctx_ == nullptr || data == nullptr || count <= 0 ||
+      count > kMaxBroadcastRegisters) {
+    return -1;
+  }
+
+  // Modbus write-multiple-registers PDU with the broadcast address. libmodbus
+  // sends the frame and does not wait for a response, which is exactly the
+  // broadcast contract.
+  std::vector<uint8_t> request;
+  request.reserve(static_cast<size_t>(count) * 2 + 7);
+  request.push_back(0x00);
+  request.push_back(0x10);
+  request.push_back(static_cast<uint8_t>((addr >> 8) & 0xFF));
+  request.push_back(static_cast<uint8_t>(addr & 0xFF));
+  request.push_back(static_cast<uint8_t>((count >> 8) & 0xFF));
+  request.push_back(static_cast<uint8_t>(count & 0xFF));
+  request.push_back(static_cast<uint8_t>(count * 2));
+  for (int i = 0; i < count; ++i) {
+    request.push_back(static_cast<uint8_t>((data[i] >> 8) & 0xFF));
+    request.push_back(static_cast<uint8_t>(data[i] & 0xFF));
+  }
+
+  int rc = modbus_send_raw_request(ctx_, request.data(),
+                                   static_cast<int>(request.size()));
+  if (rc > 0) {
+    tx_packets_++;
+  } else {
+    tx_errors_++;
+  }
+  return rc;
+}
+
+bool RS485Comm::SetSlaveId(uint16_t slave_index, uint8_t new_slave_id) {
   if (!IsConnected()) return false;
-  std::lock_guard<std::mutex> io_lock(io_mutex_);
-  modbus_set_slave(ctx_, slave_id_);
-  if (WriteRegisterCounted(0x0000, slave_id) != 1) return false;
-  slave_id_ = slave_id;
+  // A rename always targets exactly one hand: address 0 is the Modbus broadcast
+  // address and the Connect() scan sentinel, and renaming every hand at once
+  // would collide on the new ID.
+  if (slave_index == 0 || slave_index > 0xFF) return false;
+  if (new_slave_id == 0) {
+    GHAND_LOG_ERROR("Invalid RS485 slave ID: 0x0");
+    return false;
+  }
+
+  const uint8_t old_id = static_cast<uint8_t>(slave_index);
+  {
+    std::lock_guard<std::mutex> lock(hands_mutex_);
+    bool known = false;
+    for (const auto& hand : hands_) {
+      if (hand.slave_index == old_id) {
+        known = true;
+        break;
+      }
+    }
+    if (!known) {
+      GHAND_LOG_ERROR("RS485 slave 0x" << std::hex
+                                       << static_cast<int>(old_id) << std::dec
+                                       << " is not on the bus");
+      return false;
+    }
+    if (new_slave_id != old_id) {
+      for (const auto& hand : hands_) {
+        if (hand.slave_index == new_slave_id) {
+          GHAND_LOG_ERROR("RS485 slave ID 0x"
+                          << std::hex << static_cast<int>(new_slave_id) << std::dec
+                          << " is already used by another hand");
+          return false;
+        }
+      }
+    }
+  }
+
+  {
+    std::lock_guard<std::mutex> io_lock(io_mutex_);
+    modbus_set_slave(ctx_, old_id);
+    if (WriteRegisterCounted(0x0000, new_slave_id) != 1) return false;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(hands_mutex_);
+    for (auto& hand : hands_) {
+      if (hand.slave_index == old_id) hand.slave_index = new_slave_id;
+    }
+    health_.erase(old_id);
+  }
   GHAND_LOG_INFO("RS485 slave ID set to 0x"
-                 << std::hex << static_cast<int>(slave_id) << std::dec);
+                 << std::hex << static_cast<int>(new_slave_id) << std::dec);
   return true;
+}
+
+bool RS485Comm::TargetSlaves(uint16_t slave_index,
+                             std::vector<uint8_t>* slaves) {
+  if (slaves == nullptr) return false;
+  slaves->clear();
+
+  std::lock_guard<std::mutex> lock(hands_mutex_);
+  if (slave_index == 0) {
+    for (const auto& hand : hands_) {
+      slaves->push_back(static_cast<uint8_t>(hand.slave_index));
+    }
+    return !slaves->empty();
+  }
+
+  if (slave_index > 0xFF) return false;
+  const uint8_t target = static_cast<uint8_t>(slave_index);
+  for (const auto& hand : hands_) {
+    if (hand.slave_index == target) {
+      slaves->push_back(target);
+      return true;
+    }
+  }
+  GHAND_LOG_ERROR("RS485 slave 0x" << std::hex << static_cast<int>(target)
+                                   << std::dec << " is not on the bus");
+  return false;
 }
 
 bool RS485Comm::ProbeSlave(int sid, int attempt,
@@ -320,14 +442,8 @@ bool RS485Comm::ProbeSlave(int sid, int attempt,
   }
 
   if (rc == 1) {
-    slave_id_ = static_cast<uint8_t>(sid);
-    connected_.store(true);
-    if (HasCallbacks()) {
-      EnsurePollStarted();
-    }
-
     GHAND_LOG_INFO(
-        "RS485 device connected ("
+        "RS485 device found ("
         << device_name
         << ", probe slave=0x"
         << std::hex << sid
@@ -415,30 +531,52 @@ int RS485Comm::Connect(const std::string& device_name, uint8_t slave_id,
                  << device_name << " at " << baud_rate << " baud");
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-  for (int attempt = 0; attempt < 1; ++attempt) {
-    int tried_ids[2] = {0, 0};
-    int tried_count = 0;
-    for (int i = 0; i < slave_id_count; ++i) {
-      int sid = slave_ids[i];
-      bool already_tried = false;
-      for (int i = 0; i < tried_count; ++i) {
-        if (tried_ids[i] == sid) {
-          already_tried = true;
-          break;
-        }
+  std::vector<uint8_t> found;
+  int tried_ids[2] = {0, 0};
+  int tried_count = 0;
+  for (int i = 0; i < slave_id_count; ++i) {
+    int sid = slave_ids[i];
+    bool already_tried = false;
+    for (int j = 0; j < tried_count; ++j) {
+      if (tried_ids[j] == sid) {
+        already_tried = true;
+        break;
       }
-      if (already_tried) continue;
-      tried_ids[tried_count++] = sid;
-      if (ProbeSlave(sid, attempt, device_name)) {
-        return 0;
-      }
+    }
+    if (already_tried) continue;
+    tried_ids[tried_count++] = sid;
+    if (ProbeSlave(sid, 0, device_name)) {
+      found.push_back(static_cast<uint8_t>(sid));
     }
   }
 
-  CloseContext();
+  if (found.empty()) {
+    CloseContext();
+    GHAND_LOG_ERROR("Failed to connect to RS485 device: " << device_name);
+    return -2;
+  }
 
-  GHAND_LOG_ERROR("Failed to connect to RS485 device: " << device_name);
-  return -2;
+  // Enumerate the hands before publishing the connection so the polling
+  // thread never observes an empty hand list.
+  std::vector<ConnectedHand> hands;
+  for (uint8_t target : found) {
+    ConnectedHand hand;
+    hand.slave_index = target;
+    hand.hand_type = GetHandTypeForSlave(target);
+    hand.device_info = GetDeviceInfoForSlave(target);
+    hands.push_back(std::move(hand));
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(hands_mutex_);
+    hands_ = std::move(hands);
+    health_.clear();
+  }
+  connected_.store(true);
+  if (HasCallbacks()) {
+    EnsurePollStarted();
+  }
+  return 0;
 }
 
 int RS485Comm::Disconnect() {
@@ -453,66 +591,81 @@ int RS485Comm::Disconnect() {
   CloseContext();
 
   connected_.store(false);
-  slave_id_ = 0x31;
+  {
+    std::lock_guard<std::mutex> lock(hands_mutex_);
+    hands_.clear();
+    health_.clear();
+  }
   return 0;
+}
+
+std::vector<ConnectedHand> RS485Comm::GetConnectedHands() {
+  std::lock_guard<std::mutex> lock(hands_mutex_);
+  return hands_;
 }
 
 // Device info
 
-DeviceInfo RS485Comm::GetDeviceInfo() {
+DeviceInfo RS485Comm::GetDeviceInfo(uint16_t slave_index) {
+  if (!IsConnected() || slave_index == 0 || slave_index > 0xFF) {
+    return DeviceInfo{};
+  }
+  return GetDeviceInfoForSlave(static_cast<uint8_t>(slave_index));
+}
+
+DeviceInfo RS485Comm::GetDeviceInfoForSlave(uint8_t slave) {
   DeviceInfo info;
-  if (!IsConnected()) return info;
 
   std::vector<uint8_t> bytes;
-  if (ReadInputRegistersBytes(0x1000, 8, &bytes)) {
+  if (ReadInputRegistersBytes(slave, 0x1000, 8, &bytes)) {
     info.device_name = ParseDeviceName(bytes.data(), bytes.size());
     if (info.device_name.empty()) {
       info.device_name = "N/A";
     }
   }
 
-  if (ReadInputRegistersBytes(0x1008, 8, &bytes)) {
+  if (ReadInputRegistersBytes(slave, 0x1008, 8, &bytes)) {
     info.hardware_version = ParseHardwareVersion(bytes.data(), bytes.size());
     if (info.hardware_version.empty()) {
       info.hardware_version = "N/A";
     }
   }
 
-  if (ReadInputRegistersBytes(0x1010, 8, &bytes)) {
+  if (ReadInputRegistersBytes(slave, 0x1010, 8, &bytes)) {
     info.software_version = ParseFirmwareVersion(bytes.data(), bytes.size());
     if (info.software_version.empty()) {
       info.software_version = "N/A";
     }
   }
 
-  if (ReadInputRegistersBytes(0x119A, 10, &bytes)) {
+  if (ReadInputRegistersBytes(slave, 0x119A, 10, &bytes)) {
     std::string serial = ParseAsciiSerialNumber(bytes.data(), bytes.size());
     if (!serial.empty()) {
       info.serial_number = serial;
     }
   }
 
-  if (ReadInputRegistersBytes(0x1185, 1, &bytes) && bytes.size() >= 2) {
+  if (ReadInputRegistersBytes(slave, 0x1185, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
     if (raw != 0) info.firmware_package_version = ParsePackedFirmwareVersion(raw);
   }
-  if (ReadInputRegistersBytes(0x1186, 1, &bytes) && bytes.size() >= 2) {
+  if (ReadInputRegistersBytes(slave, 0x1186, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
     if (raw != 0) info.position_sensor_version = ParsePackedFirmwareVersion(raw);
   }
-  if (ReadInputRegistersBytes(0x1187, 1, &bytes) && bytes.size() >= 2) {
+  if (ReadInputRegistersBytes(slave, 0x1187, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
     if (raw != 0) info.tactile_sensor_version = ParsePackedFirmwareVersion(raw);
   }
-  if (ReadInputRegistersBytes(0x1188, 1, &bytes) && bytes.size() >= 2) {
+  if (ReadInputRegistersBytes(slave, 0x1188, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
     if (raw != 0) info.motor_driver_version = ParsePackedFirmwareVersion(raw);
   }
-  if (ReadInputRegistersBytes(0x1189, 1, &bytes) && bytes.size() >= 2) {
+  if (ReadInputRegistersBytes(slave, 0x1189, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
     if (raw != 0) info.thumb_tactile_sensor_version = ParsePackedFirmwareVersion(raw);
   }
-  if (ReadInputRegistersBytes(0x118A, 1, &bytes) && bytes.size() >= 2) {
+  if (ReadInputRegistersBytes(slave, 0x118A, 1, &bytes) && bytes.size() >= 2) {
     uint16_t raw = (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
     if (raw != 0) info.finger_tactile_sensor_version = ParsePackedFirmwareVersion(raw);
   }
@@ -520,11 +673,16 @@ DeviceInfo RS485Comm::GetDeviceInfo() {
   return info;
 }
 
-HandType RS485Comm::GetHandType() {
-  if (!IsConnected()) return HandType::NONE;
+HandType RS485Comm::GetHandType(uint16_t slave_index) {
+  if (!IsConnected() || slave_index == 0 || slave_index > 0xFF) {
+    return HandType::NONE;
+  }
+  return GetHandTypeForSlave(static_cast<uint8_t>(slave_index));
+}
 
+HandType RS485Comm::GetHandTypeForSlave(uint8_t slave) {
   std::vector<uint8_t> bytes;
-  if (!ReadInputRegistersBytes(0x1020, 1, &bytes)) {
+  if (!ReadInputRegistersBytes(slave, 0x1020, 1, &bytes)) {
     GHAND_LOG_ERROR("Failed to read hand type");
     return HandType::NONE;
   }
@@ -536,51 +694,49 @@ HandType RS485Comm::GetHandType() {
 
 // Motion control
 
-bool RS485Comm::MoveJoints(const std::vector<JointCommand>& joints,
+bool RS485Comm::MoveJoints(uint16_t slave_index,
+                           const std::vector<JointCommand>& joints,
                            ControlMode mode) {
   if (!IsConnected() || joints.empty()) {
     GHAND_LOG_WARNING("MoveJoints called with empty list or not connected");
     return false;
   }
 
+  std::vector<uint8_t> targets;
+  if (!TargetSlaves(slave_index, &targets)) return false;
+
+  uint16_t start_addr = 0;
+  std::vector<uint16_t> block;
+  if (!BuildJointControlBlock(config_, joints, mode, &start_addr, &block)) {
+    GHAND_LOG_ERROR("Failed to encode the joint control block");
+    return false;
+  }
+
+  const int reg_count = static_cast<int>(block.size());
   std::lock_guard<std::mutex> io_lock(io_mutex_);
-  modbus_set_slave(ctx_, slave_id_);
 
-  if (config_.mode_register >= 0) {
-    uint16_t mode_value = (static_cast<uint16_t>(mode) << 8) & 0xFF00;
-    if (WriteRegisterCounted(config_.mode_register, mode_value) != 1) {
-      GHAND_LOG_ERROR("Failed to write mode register");
+  if (targets.size() > 1) {
+    // One frame for the whole bus: Modbus broadcast is never acknowledged, so
+    // the feedback polling is what confirms the hands actually moved.
+    if (SendBroadcastRegisters(start_addr, reg_count, block.data()) <= 0) {
+      GHAND_LOG_ERROR("Failed to broadcast the joint control block");
       return false;
     }
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(kBroadcastTurnaroundMs));
+    return true;
   }
 
-  const auto& control_map = config_.joint_control_registers.empty()
-                                ? kHoldingRegMap
-                                : config_.joint_control_registers;
-  for (const auto& joint : joints) {
-    auto it = control_map.find(joint.id);
-    if (it == control_map.end()) continue;
-
-    auto regs = EncodeJointCommand(joint);
-    std::vector<uint16_t> data;
-    if (config_.product_type == ProductType::GHandLite1) {
-      data.push_back((static_cast<uint16_t>(mode) << 8) & 0xFF00);
-    }
-    data.push_back(regs.first);
-    data.push_back(regs.second);
-    int reg_count = static_cast<int>(data.size());
-    if (WriteRegistersCounted(it->second, reg_count, data.data()) !=
-        reg_count) {
-      GHAND_LOG_ERROR("Failed to write joint register: "
-                      << ToString(joint.id));
-      return false;
-    }
+  modbus_set_slave(ctx_, targets.front());
+  if (WriteRegistersCounted(start_addr, reg_count, block.data()) != reg_count) {
+    GHAND_LOG_ERROR("Failed to write the joint control block");
+    return false;
   }
-
   return true;
 }
 
-bool RS485Comm::SetBaudrateConfig(uint8_t baudrate_gear) {
+bool RS485Comm::SetBaudrateConfig(uint16_t slave_index,
+                                  uint8_t baudrate_gear) {
   if (!IsConnected()) return false;
 
   int baudrate = 0;
@@ -591,13 +747,18 @@ bool RS485Comm::SetBaudrateConfig(uint8_t baudrate_gear) {
     return false;
   }
 
-  std::lock_guard<std::mutex> io_lock(io_mutex_);
-  modbus_set_slave(ctx_, slave_id_);
-  if (WriteRegisterCounted(kBaudrateConfigRegister, baudrate_gear) != 1) {
-    return false;
+  std::vector<uint8_t> targets;
+  if (!TargetSlaves(slave_index, &targets)) return false;
+
+  for (uint8_t slave : targets) {
+    std::lock_guard<std::mutex> io_lock(io_mutex_);
+    modbus_set_slave(ctx_, slave);
+    if (WriteRegisterCounted(kBaudrateConfigRegister, baudrate_gear) != 1) {
+      return false;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
   GHAND_LOG_INFO("RS485 baudrate config set to gear 0x"
                  << std::hex << static_cast<int>(baudrate_gear) << std::dec
                  << " (" << baudrate
@@ -624,61 +785,68 @@ Diagnostics RS485Comm::GetDiagnostics() const {
   return diagnostics;
 }
 
-void RS485Comm::Stop() {
+void RS485Comm::Stop(uint16_t slave_index) {
   if (!IsConnected()) return;
-  std::lock_guard<std::mutex> io_lock(io_mutex_);
-  modbus_set_slave(ctx_, slave_id_);
-  if (config_.stop_register >= 0) {
-    WriteRegisterCounted(config_.stop_register, 0x0001);
-    return;
-  }
+  std::vector<uint8_t> targets;
+  if (!TargetSlaves(slave_index, &targets)) return;
 
-  const auto& control_map = config_.joint_control_registers.empty()
-                                ? kHoldingRegMap
-                                : config_.joint_control_registers;
-  for (JointId joint_id : config_.valid_joints) {
-    auto it = control_map.find(joint_id);
-    if (it != control_map.end()) {
-      WriteRegisterCounted(it->second, 0x0001);
+  for (uint8_t slave : targets) {
+    std::lock_guard<std::mutex> io_lock(io_mutex_);
+    modbus_set_slave(ctx_, slave);
+    if (config_.stop_register >= 0) {
+      WriteRegisterCounted(config_.stop_register, 0x0001);
+      continue;
+    }
+
+    const auto& control_map = config_.joint_control_registers.empty()
+                                  ? kHoldingRegMap
+                                  : config_.joint_control_registers;
+    for (JointId joint_id : config_.valid_joints) {
+      auto it = control_map.find(joint_id);
+      if (it != control_map.end()) {
+        WriteRegisterCounted(it->second, 0x0001);
+      }
     }
   }
 }
 
 // System operations
 
-bool RS485Comm::ClearFault() {
+bool RS485Comm::ClearFault(uint16_t slave_index) {
   if (!IsConnected()) return false;
-  std::lock_guard<std::mutex> io_lock(io_mutex_);
-  modbus_set_slave(ctx_, slave_id_);
-  if (WriteRegisterCounted(0x0001, 0x0100) != 1) return false;
-  if (!WaitHoldingResult(0x0001)) {
-    GHAND_LOG_ERROR("Fault clearance failed or timed out over RS485");
-    return false;
+  std::vector<uint8_t> targets;
+  if (!TargetSlaves(slave_index, &targets)) return false;
+
+  bool ok = true;
+  for (uint8_t slave : targets) {
+    std::lock_guard<std::mutex> io_lock(io_mutex_);
+    modbus_set_slave(ctx_, slave);
+    if (WriteRegisterCounted(0x0001, 0x0100) != 1) {
+      ok = false;
+      continue;
+    }
+    if (!WaitHoldingResult(slave, 0x0001)) {
+      GHAND_LOG_ERROR("Fault clearance failed or timed out on RS485 slave 0x"
+                      << std::hex << static_cast<int>(slave) << std::dec);
+      ok = false;
+    }
   }
-  GHAND_LOG_INFO("Fault cleared");
-  return true;
+  if (ok) GHAND_LOG_INFO("Fault cleared");
+  return ok;
 }
 
-bool RS485Comm::InitJoint() {
-  if (!IsConnected()) return false;
-  std::lock_guard<std::mutex> io_lock(io_mutex_);
-  modbus_set_slave(ctx_, slave_id_);
-  if (WriteRegisterCounted(0x0002, 0x0001) != 1) return false;
-  GHAND_LOG_INFO("Joint initialization completed");
-  return true;
-}
-
-SelfTestErrorInfo RS485Comm::GetSelfTestErrorInfo() {
-  if (!IsConnected()) {
-    throw std::runtime_error("Self-test query requires a connected device");
+SelfTestErrorInfo RS485Comm::GetSelfTestErrorInfo(uint16_t slave_index) {
+  if (!IsConnected() || slave_index == 0 || slave_index > 0xFF) {
+    throw std::runtime_error("Self-test query requires a connected hand");
   }
+  const uint8_t slave = static_cast<uint8_t>(slave_index);
 
   SelfTestRegisterIO io;
   io.read_registers =
-      [this](uint16_t address, int count) -> std::vector<uint8_t> {
+      [this, slave](uint16_t address, int count) -> std::vector<uint8_t> {
     std::lock_guard<std::mutex> lock(io_mutex_);
     if (ctx_ == nullptr) return {};
-    modbus_set_slave(ctx_, slave_id_);
+    modbus_set_slave(ctx_, slave);
     std::vector<uint16_t> regs(count);
     if (modbus_read_registers(ctx_, address, count, regs.data()) != count) {
       return {};
@@ -691,20 +859,20 @@ SelfTestErrorInfo RS485Comm::GetSelfTestErrorInfo() {
     }
     return bytes;
   };
-  io.write_register = [this](uint16_t address, uint16_t value) -> bool {
+  io.write_register = [this, slave](uint16_t address, uint16_t value) -> bool {
     std::lock_guard<std::mutex> lock(io_mutex_);
     if (ctx_ == nullptr) return false;
-    modbus_set_slave(ctx_, slave_id_);
+    modbus_set_slave(ctx_, slave);
     return modbus_write_register(ctx_, address, value) == 1;
   };
   return BuildSelfTestErrorInfo(config_, io);
 }
 
-uint8_t RS485Comm::GetSelfTestStatus() {
-  if (!IsConnected()) return 0;
+uint8_t RS485Comm::GetSelfTestStatus(uint16_t slave_index) {
+  if (!IsConnected() || slave_index == 0 || slave_index > 0xFF) return 0;
   std::lock_guard<std::mutex> lock(io_mutex_);
   if (ctx_ == nullptr) return 0;
-  modbus_set_slave(ctx_, slave_id_);
+  modbus_set_slave(ctx_, static_cast<uint8_t>(slave_index));
   uint16_t reg = 0;
   if (modbus_read_registers(ctx_, 0x0038, 1, &reg) != 1) {
     return 0;
@@ -714,8 +882,13 @@ uint8_t RS485Comm::GetSelfTestStatus() {
 
 // Tactile sensor
 
-bool RS485Comm::OpenTactile() {
-  if (!WriteTactileControl(0x0100)) return false;
+bool RS485Comm::OpenTactile(uint16_t slave_index) {
+  std::vector<uint8_t> targets;
+  if (!TargetSlaves(slave_index, &targets)) return false;
+
+  for (uint8_t slave : targets) {
+    if (!WriteTactileControl(slave, 0x0100)) return false;
+  }
 
   bool should_start = false;
   {
@@ -730,8 +903,15 @@ bool RS485Comm::OpenTactile() {
   return true;
 }
 
-bool RS485Comm::CloseTactile() {
-  bool ok = WriteTactileControl(0x0200);
+bool RS485Comm::CloseTactile(uint16_t slave_index) {
+  std::vector<uint8_t> targets;
+  if (!TargetSlaves(slave_index, &targets)) return false;
+
+  bool ok = true;
+  for (uint8_t slave : targets) {
+    ok = WriteTactileControl(slave, 0x0200) && ok;
+  }
+
   bool should_stop = false;
   {
     std::lock_guard<std::mutex> lock(cb_mutex_);
@@ -745,21 +925,31 @@ bool RS485Comm::CloseTactile() {
   return ok;
 }
 
-bool RS485Comm::ZeroTactile() { return WriteTactileControl(0x0400); }
+bool RS485Comm::ZeroTactile(uint16_t slave_index) {
+  std::vector<uint8_t> targets;
+  if (!TargetSlaves(slave_index, &targets)) return false;
 
-bool RS485Comm::WriteTactileControl(uint16_t command) {
+  bool ok = true;
+  for (uint8_t slave : targets) {
+    ok = WriteTactileControl(slave, 0x0400) && ok;
+  }
+  return ok;
+}
+
+bool RS485Comm::WriteTactileControl(uint8_t slave, uint16_t command) {
   if (!IsConnected()) return false;
   std::lock_guard<std::mutex> io_lock(io_mutex_);
-  modbus_set_slave(ctx_, slave_id_);
+  modbus_set_slave(ctx_, slave);
   return WriteRegisterCounted(config_.tactile_control_register, command) == 1;
 }
 
-bool RS485Comm::WaitHoldingResult(int addr, int timeout_ms, int interval_ms) {
+bool RS485Comm::WaitHoldingResult(uint8_t slave, int addr, int timeout_ms,
+                                  int interval_ms) {
   auto deadline =
       std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
   while (std::chrono::steady_clock::now() < deadline) {
     uint16_t reg = 0;
-    modbus_set_slave(ctx_, slave_id_);
+    modbus_set_slave(ctx_, slave);
     if (ReadHoldingRegistersCounted(addr, 1, &reg) == 1) {
       uint8_t status = static_cast<uint8_t>(reg & 0x00FF);
       if (status == 1) return true;
@@ -773,12 +963,12 @@ bool RS485Comm::WaitHoldingResult(int addr, int timeout_ms, int interval_ms) {
 
 // Data retrieval
 
-bool RS485Comm::ReadInputRegistersBytes(int addr, int count,
+bool RS485Comm::ReadInputRegistersBytes(uint8_t slave, int addr, int count,
                                         std::vector<uint8_t>* bytes) {
   if (!ctx_ || bytes == nullptr) return false;
 
   std::lock_guard<std::mutex> io_lock(io_mutex_);
-  modbus_set_slave(ctx_, slave_id_);
+  modbus_set_slave(ctx_, slave);
   std::vector<uint16_t> regs(count);
   int rc = ReadInputRegistersCounted(addr, count, regs.data());
   if (rc != count) {
@@ -788,7 +978,8 @@ bool RS485Comm::ReadInputRegistersBytes(int addr, int count,
   return true;
 }
 
-std::vector<Joint> RS485Comm::GetJoints() {
+std::vector<Joint> RS485Comm::GetJoints(uint8_t slave, bool* ok) {
+  if (ok != nullptr) *ok = false;
   if (!IsConnected() || config_.valid_joints.empty()) return {};
 
   uint16_t start_addr = 0;
@@ -796,7 +987,7 @@ std::vector<Joint> RS485Comm::GetJoints() {
   if (!GetJointInputSpan(config_, &start_addr, &count)) return {};
 
   std::lock_guard<std::mutex> io_lock(io_mutex_);
-  modbus_set_slave(ctx_, slave_id_);
+  modbus_set_slave(ctx_, slave);
   std::vector<uint16_t> regs(count);
   if (ReadInputRegistersCounted(start_addr, count, regs.data()) !=
       count) {
@@ -804,28 +995,32 @@ std::vector<Joint> RS485Comm::GetJoints() {
     return {};
   }
 
+  if (ok != nullptr) *ok = true;
   return ParseJoints(regs.data(), regs.size(), config_, start_addr);
 }
 
-HandState RS485Comm::GetHandInfo() {
+HandState RS485Comm::GetHandInfo(uint8_t slave, bool* ok) {
+  if (ok != nullptr) *ok = false;
   if (!IsConnected()) return HandState{};
 
   std::lock_guard<std::mutex> io_lock(io_mutex_);
-  modbus_set_slave(ctx_, slave_id_);
+  modbus_set_slave(ctx_, slave);
   uint16_t regs[2] = {0};
   if (ReadInputRegistersCounted(0x1021, 2, regs) != 2) {
     GHAND_LOG_ERROR("Failed to read hand info registers");
     return HandState{};
   }
+  if (ok != nullptr) *ok = true;
   return ParseHandInfo(regs, 2);
 }
 
-TactileData RS485Comm::GetTactileData() {
+TactileData RS485Comm::GetTactileData(uint8_t slave, bool* ok) {
+  if (ok != nullptr) *ok = false;
   TactileData data;
   if (!IsConnected() || !config_.has_tactile) return data;
 
   std::lock_guard<std::mutex> io_lock(io_mutex_);
-  modbus_set_slave(ctx_, slave_id_);
+  modbus_set_slave(ctx_, slave);
   uint16_t regs[16] = {0};
   if (ReadInputRegistersCounted(0x1080, 16, regs) != 16) {
     GHAND_LOG_ERROR("Failed to read tactile registers");
@@ -859,6 +1054,7 @@ TactileData RS485Comm::GetTactileData() {
     data.regions.push_back(std::move(rt));
   }
 
+  if (ok != nullptr) *ok = true;
   return data;
 }
 
@@ -944,8 +1140,6 @@ void RS485Comm::StopPoll() {
 }
 
 void RS485Comm::PollLoop() {
-  auto last_tactile_time = std::chrono::steady_clock::time_point{};
-
   while (!poll_stop_.load()) {
     if (!connected_.load() || !ctx_) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -970,57 +1164,110 @@ void RS485Comm::PollLoop() {
       continue;
     }
 
-    std::vector<Joint> joints;
-    HandState hand_state;
-    TactileData tactile_data;
-    bool has_tactile_data = false;
-
-    if (joints_cb && !config_.valid_joints.empty()) {
-      joints = GetJoints();
+    std::vector<ConnectedHand> hands;
+    {
+      std::lock_guard<std::mutex> lock(hands_mutex_);
+      hands = hands_;
     }
-    if (hand_state_cb) {
-      hand_state = GetHandInfo();
-    }
-    auto now = std::chrono::steady_clock::now();
-    if (tactile_poll_enabled && tactile_cb &&
-        (last_tactile_time.time_since_epoch().count() == 0 ||
-         now - last_tactile_time >= std::chrono::milliseconds(100))) {
-      tactile_data = GetTactileData();
-      has_tactile_data = true;
-      last_tactile_time = now;
+    if (hands.empty()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      continue;
     }
 
-    try {
-      if (joints_cb) joints_cb(joints);
-    } catch (const std::exception& e) {
-      callback_errors_++;
-      GHAND_LOG_ERROR("RS485 joints callback failed: " << e.what());
-    } catch (...) {
-      callback_errors_++;
-      GHAND_LOG_ERROR("RS485 joints callback failed with unknown exception");
-    }
+    const bool wants_joints = joints_cb && !config_.valid_joints.empty();
+    const bool wants_state = static_cast<bool>(hand_state_cb);
+    const bool wants_tactile = tactile_poll_enabled && tactile_cb;
 
-    try {
-      if (hand_state_cb) hand_state_cb(hand_state);
-    } catch (const std::exception& e) {
-      callback_errors_++;
-      GHAND_LOG_ERROR("RS485 hand-state callback failed: " << e.what());
-    } catch (...) {
-      callback_errors_++;
-      GHAND_LOG_ERROR(
-          "RS485 hand-state callback failed with unknown exception");
-    }
+    for (const auto& hand : hands) {
+      const uint8_t slave = static_cast<uint8_t>(hand.slave_index);
+      const auto now = std::chrono::steady_clock::now();
 
-    try {
-      if (tactile_poll_enabled && tactile_cb && has_tactile_data) {
-        tactile_cb(tactile_data);
+      bool backing_off = false;
+      bool tactile_due = false;
+      {
+        std::lock_guard<std::mutex> lock(hands_mutex_);
+        HandHealth& health = health_[slave];
+        backing_off = now < health.skip_until;
+        if (!backing_off && wants_tactile) {
+          tactile_due =
+              health.last_tactile_time.time_since_epoch().count() == 0 ||
+              now - health.last_tactile_time >=
+                  std::chrono::milliseconds(kTactilePollIntervalMs);
+          if (tactile_due) health.last_tactile_time = now;
+        }
       }
-    } catch (const std::exception& e) {
-      callback_errors_++;
-      GHAND_LOG_ERROR("RS485 tactile callback failed: " << e.what());
-    } catch (...) {
-      callback_errors_++;
-      GHAND_LOG_ERROR("RS485 tactile callback failed with unknown exception");
+      if (backing_off) continue;
+
+      bool read_ok = true;
+      bool ok = true;
+
+      std::vector<Joint> joints;
+      if (wants_joints) {
+        joints = GetJoints(slave, &ok);
+        read_ok = read_ok && ok;
+      }
+
+      HandState hand_state;
+      if (wants_state) {
+        hand_state = GetHandInfo(slave, &ok);
+        read_ok = read_ok && ok;
+      }
+
+      TactileData tactile_data;
+      if (tactile_due) {
+        tactile_data = GetTactileData(slave, &ok);
+        read_ok = read_ok && ok;
+      }
+
+      {
+        std::lock_guard<std::mutex> lock(hands_mutex_);
+        HandHealth& health = health_[slave];
+        if (!read_ok) {
+          if (++health.fail_count >= kOfflineFailThreshold) {
+            health.skip_until =
+                std::chrono::steady_clock::now() +
+                std::chrono::milliseconds(kOfflineBackoffMs);
+            GHAND_LOG_WARNING("RS485 hand 0x"
+                              << std::hex << static_cast<int>(slave)
+                              << std::dec << " not responding; backing off "
+                              << kOfflineBackoffMs << "ms");
+          }
+        } else {
+          health.fail_count = 0;
+          health.skip_until = std::chrono::steady_clock::time_point{};
+        }
+      }
+
+      try {
+        if (wants_joints) joints_cb(slave, joints);
+      } catch (const std::exception& e) {
+        callback_errors_++;
+        GHAND_LOG_ERROR("RS485 joints callback failed: " << e.what());
+      } catch (...) {
+        callback_errors_++;
+        GHAND_LOG_ERROR("RS485 joints callback failed with unknown exception");
+      }
+
+      try {
+        if (wants_state) hand_state_cb(slave, hand_state);
+      } catch (const std::exception& e) {
+        callback_errors_++;
+        GHAND_LOG_ERROR("RS485 hand-state callback failed: " << e.what());
+      } catch (...) {
+        callback_errors_++;
+        GHAND_LOG_ERROR(
+            "RS485 hand-state callback failed with unknown exception");
+      }
+
+      try {
+        if (tactile_due) tactile_cb(slave, tactile_data);
+      } catch (const std::exception& e) {
+        callback_errors_++;
+        GHAND_LOG_ERROR("RS485 tactile callback failed: " << e.what());
+      } catch (...) {
+        callback_errors_++;
+        GHAND_LOG_ERROR("RS485 tactile callback failed with unknown exception");
+      }
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));

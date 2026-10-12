@@ -120,38 +120,38 @@ std::vector<ghand::JointCommand> MakeOpenHand() {
   };
 }
 
-bool Press(ghand::GHand& hand) {
+bool Press(ghand::Master& master) {
   const std::vector<std::vector<ghand::JointCommand>> poses = {
       MakeThumbPress(), MakeIndexPress(), MakeMiddlePress(), MakeRingPress(),
       MakeLittlePress()};
   for (const auto& pose : poses) {
-    if (!hand.MoveJoints(pose)) return false;
+    if (!master.MoveJoints(pose)) return false;
     std::this_thread::sleep_for(std::chrono::seconds(2));
   }
   return true;
 }
 
-bool HandZero(ghand::GHand& hand) {
+bool HandZero(ghand::Master& master) {
   auto joints = MakeOpenHand();
-  return hand.MoveJoints(joints);
+  return master.MoveJoints(joints);
 }
 
-std::unique_ptr<ghand::GHand> CreateConnectedHand() {
-  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+std::unique_ptr<ghand::Master> CreateConnectedHand() {
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
-  if (!hand) {
+  if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return nullptr;
   }
-  if (!hand->Connect("auto")) {
+  if (!master->Connect("auto")) {
     std::cout << "\n[Scan complete] Failed to connect to dexterous hand."
               << '\n';
     return nullptr;
   }
-  return hand;
+  return master;
 }
 
-void RunPressDemo(ghand::GHand& hand) {
+void RunPressDemo(ghand::Master& master) {
   int gesture_cycle = 0;
   const int max_cycles = 0;
 
@@ -162,13 +162,13 @@ void RunPressDemo(ghand::GHand& hand) {
     std::cout << "\n--- Round " << gesture_cycle << " demo started ---"
               << '\n';
 
-    if (!Press(hand)) {
+    if (!Press(master)) {
       std::cout << "Round " << gesture_cycle
                 << " press action execution failed" << '\n';
       break;
     }
 
-    if (!HandZero(hand)) {
+    if (!HandZero(master)) {
       std::cout << "Round " << gesture_cycle
                 << " reset action execution failed" << '\n';
       break;
@@ -186,12 +186,12 @@ void RunPressDemo(ghand::GHand& hand) {
 
 int main() {
   std::cout << "***** GHand SDK - Press Demo *****\n" << '\n';
-  auto hand = CreateConnectedHand();
-  if (!hand) return 1;
+  auto master = CreateConnectedHand();
+  if (!master) return 1;
 
   std::cout << "\n--- Device ready, starting press demo ---\n" << '\n';
-  RunPressDemo(*hand);
-  hand->Disconnect();
+  RunPressDemo(*master);
+  master->Disconnect();
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   std::cout << "\n--- Demo finished, disconnecting ---" << '\n';
   return 0;

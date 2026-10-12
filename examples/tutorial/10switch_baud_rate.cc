@@ -1,8 +1,7 @@
+#include <chrono>
 #include <iostream>
-#include <memory>
 #include <string>
 #include <thread>
-#include <chrono>
 
 #include "ghand/ghand.h"
 
@@ -29,54 +28,46 @@ std::string CanfdTimingName(ghand::CANFDBitTiming timing) {
   return "UNKNOWN";
 }
 
-void PrintLastError(const ghand::GHand& hand) {
-  const auto result = hand.GetLastResult();
-  std::cerr << "Last error: " << static_cast<int>(result.code) << " "
-            << result.message << '\n';
-}
+}  // namespace
 
-bool RunCanfdExample() {
+int main() {
   const auto current_timing = ghand::CANFDBitTiming::TIMING_1M_5M;
   const auto target_timing = ghand::CANFDBitTiming::TIMING_1M_4M;
 
-  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                   ghand::CommType::CANFD);
-  if (!hand) {
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                      ghand::CommType::CANFD);
+  if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
-    return false;
+    return 1;
   }
 
   std::cout << "Connecting with current CANFD timing "
             << CanfdTimingName(current_timing) << "..." << '\n';
-  if (!hand->Connect(kDeviceName, kSlaveId, current_timing)) {
-    std::cerr << "Connection failed" << '\n';
-    PrintLastError(*hand);
-    return false;
+  const auto connected = master->Connect(kDeviceName, kSlaveId, current_timing);
+  if (!connected) {
+    std::cerr << "Connection failed: " << connected.message << '\n';
+    return 1;
   }
+  ghand::GHand* hand = connected.value.front();
 
   std::cout << "Writing new CANFD timing " << CanfdTimingName(target_timing)
             << "..." << '\n';
-  if (!hand->SetBaudrateConfig(target_timing)) {
-    std::cerr << "Failed to write baud-rate configuration" << '\n';
-    PrintLastError(*hand);
-    hand->Disconnect();
-    return false;
+  const auto write_result = hand->SetBaudrateConfig(target_timing);
+  if (!write_result) {
+    std::cerr << "Failed to write baud-rate configuration: "
+              << write_result.message << '\n';
+    master->Disconnect();
+    return 1;
   }
 
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  hand->Disconnect();
+  master->Disconnect();
 
   std::cout << "Baud-rate configuration written successfully." << '\n';
   std::cout << "Power-cycle the device, then reconnect with:" << '\n';
-  std::cout << "  hand->Connect(\"" << kDeviceName << "\", 0x" << std::hex
+  std::cout << "  master->Connect(\"" << kDeviceName << "\", 0x" << std::hex
             << static_cast<int>(kSlaveId) << std::dec << ", "
             << "ghand::CANFDBitTiming::" << CanfdTimingName(target_timing)
             << ")" << '\n';
-  return true;
-}
-
-}  // namespace
-
-int main() {
-  return RunCanfdExample() ? 0 : 1;
+  return 0;
 }

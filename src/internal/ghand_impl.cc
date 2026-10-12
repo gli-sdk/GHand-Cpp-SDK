@@ -30,9 +30,6 @@
 
 namespace {
 
-const uint8_t kDefaultSlaveId = 0;
-const uint8_t kDefaultBaudrateGear = 0x05;
-
 bool IsVersionNewer(const std::string& old_ver, const std::string& new_ver) {
   auto parse = [](const std::string& ver) {
     std::vector<int> parts;
@@ -87,11 +84,9 @@ namespace ghand {
 namespace internal {
 
 GHandImpl::GHandImpl(ProductType product_type, CommType comm_type)
-    : control_mode_(ControlMode::POSITION),
-      comm_type_(comm_type),
+    : comm_type_(comm_type),
       product_type_(product_type),
-      device_name_(""),
-      last_result_(SdkError::OK, "", comm_type) {
+      device_name_("") {
   if (product_type == ProductType::AUTO) {
     config_ = ProductConfig();
   } else {
@@ -99,7 +94,6 @@ GHandImpl::GHandImpl(ProductType product_type, CommType comm_type)
     if (config_.name.empty()) {
       GHAND_LOG_ERROR("Failed to load product config for product type: "
                 << ToString(product_type));
-      SetLastResult(SdkError::CONFIG_ERROR, "failed to load product config");
       return;
     }
   }
@@ -116,7 +110,6 @@ GHandImpl::GHandImpl(ProductType product_type, CommType comm_type)
       break;
     default:
       GHAND_LOG_WARNING("Unsupported communication type");
-      SetLastResult(SdkError::NOT_SUPPORTED, "unsupported communication type");
       break;
   }
   callback_manager_ =
@@ -128,16 +121,6 @@ GHandImpl::GHandImpl(ProductType product_type, CommType comm_type)
 
 GHandImpl::~GHandImpl() = default;
 
-void GHandImpl::SetLastResult(SdkError code, const std::string& message) {
-  std::lock_guard<std::mutex> lock(last_result_mutex_);
-  last_result_ = OperationResult(code, message, comm_type_);
-}
-
-OperationResult GHandImpl::GetLastResult() const {
-  std::lock_guard<std::mutex> lock(last_result_mutex_);
-  return last_result_;
-}
-
 Diagnostics GHandImpl::GetDiagnostics() const {
   Diagnostics diagnostics = comm_->GetDiagnostics();
   diagnostics.connection.connected = IsConnected();
@@ -145,55 +128,52 @@ Diagnostics GHandImpl::GetDiagnostics() const {
   diagnostics.connection.device = device_name_;
   diagnostics.identity.product = product_type_;
 
-  OperationResult last = GetLastResult();
-  diagnostics.error.last_sdk_error = last.code;
-  diagnostics.error.last_error_message = last.message;
   return diagnostics;
 }
 
 void GHandImpl::SetupCallbacks() {
-  comm_->SetJointsCallback([this](const std::vector<Joint>& joints) {
-    callback_manager_->UpdateJoints(joints);
+  comm_->SetJointsCallback([this](uint16_t slave,
+                                  const std::vector<Joint>& joints) {
+    callback_manager_->UpdateJoints(slave, joints);
   });
-  comm_->SetHandStateCallback([this](const HandState& state) {
-    callback_manager_->UpdateTemperature(state);
+  comm_->SetHandStateCallback([this](uint16_t slave, const HandState& state) {
+    callback_manager_->UpdateTemperature(slave, state);
   });
-  comm_->SetTactileDataCallback([this](const TactileData& data) {
-    callback_manager_->UpdateTactileData(data);
+  comm_->SetTactileDataCallback([this](uint16_t slave,
+                                       const TactileData& data) {
+    callback_manager_->UpdateTactileData(slave, data);
   });
 }
 
-bool GHandImpl::ConnectToDevice(const std::string& device_name,
-                              uint8_t slave_id,
-                              uint8_t baudrate_gear) {
+ResultOf<std::vector<ConnectedHand>> GHandImpl::ConnectToDevice(
+    const std::string& device_name, uint8_t slave_id, uint8_t baudrate_gear) {
   device_info_ = DeviceInfo();
-  GHAND_LOG_INFO("op=connect comm=" << ToString(comm_type_)
-                                    << " device=" << device_name
-                                    << " slave_id=0x" << std::hex
-                                    << static_cast<int>(slave_id)
-                                    << " baudrate_gear=0x"
-                                    << static_cast<int>(baudrate_gear)
-                                    << std::dec);
   int result = comm_->Connect(device_name, slave_id, baudrate_gear);
   if (result == 0) {
     device_name_ = device_name;
-    SetLastResult(SdkError::OK, "");
-    GHAND_LOG_INFO("op=connect comm=" << ToString(comm_type_)
+    GHAND_LOG_INFO("comm=" << ToString(comm_type_)
                                       << " result=ok device="
                                       << device_name);
 
-    // Post-connection verification / auto-detection
-    device_info_ = comm_->GetDeviceInfo();
+    const std::vector<ConnectedHand> hands = comm_->GetConnectedHands();
+    if (hands.empty()) {
+      comm_->Disconnect();
+      return {SdkError::DEVICE_REJECTED,
+              "no controllable hand found on the bus"};
+    }
+
+    // Post-connection verification / auto-detection. The first hand on the
+    // bus identifies the product.
+    device_info_ = comm_->GetDeviceInfo(hands.front().slave_index);
     std::string dev_name = device_info_.device_name;
     if (!dev_name.empty()) {
       if (product_type_ == ProductType::AUTO) {
         config_ = FindConfigByName(dev_name);
         if (config_.name.empty()) {
           GHAND_LOG_ERROR("Auto-detection failed for device: " << dev_name);
-          SetLastResult(SdkError::CONFIG_ERROR,
-                        "auto-detection failed for device: " + dev_name);
           comm_->Disconnect();
-          return false;
+          return {SdkError::CONFIG_ERROR,
+                  "auto-detection failed for device: " + dev_name};
         }
         comm_->UpdateConfig(config_);
         SetupCallbacks();
@@ -218,46 +198,39 @@ bool GHandImpl::ConnectToDevice(const std::string& device_name,
           GHAND_LOG_ERROR("Device name mismatch: device reports \""
                       << dev_name << "\", config expects \"" << config_.name
                       << "\"");
-          SetLastResult(SdkError::PRODUCT_MISMATCH,
-                        "device name mismatch: " + dev_name);
           comm_->Disconnect();
-          return false;
+          return {SdkError::PRODUCT_MISMATCH,
+                  "device name mismatch: " + dev_name};
         }
       }
     }
     GHAND_LOG_INFO("op=connect comm=" << ToString(comm_type_)
                                       << " result=ok device_name="
                                       << device_name_);
-    return true;
+    return hands;
   }
-  SetLastResult(SdkError::TRANSPORT_ERROR,
-                "connect failed with transport result " +
-                    std::to_string(result));
   GHAND_LOG_ERROR("op=connect comm=" << ToString(comm_type_)
                                      << " result=transport_error code="
                                      << result);
-  return false;
+  return {SdkError::TRANSPORT_ERROR,
+          "connect failed with transport result " + std::to_string(result)};
 }
 
-bool GHandImpl::AutoConnect() {
-  return AutoConnect(kDefaultSlaveId, kDefaultBaudrateGear);
-}
-
-bool GHandImpl::AutoConnect(uint8_t slave_id, uint8_t baudrate_gear) {
+ResultOf<std::vector<ConnectedHand>> GHandImpl::AutoConnect(
+    uint8_t slave_id, uint8_t baudrate_gear) {
   device_info_ = DeviceInfo();
-  OperationResult mismatch_result;
+  ResultOf<std::vector<ConnectedHand>> mismatch_result;
   DeviceInfo mismatch_info;
   std::string mismatch_device;
   std::map<std::string, std::string> adapter_names = SearchAdapters();
   if (adapter_names.empty()) {
-    SetLastResult(SdkError::NOT_CONNECTED, "no communication adapters found");
-    return false;
+    return {SdkError::NOT_CONNECTED, "no communication adapters found"};
   }
+  ResultOf<std::vector<ConnectedHand>> result{
+      SdkError::TRANSPORT_ERROR, "no adapter carries a controllable hand"};
   for (const auto& adapter_pair : adapter_names) {
-    if (ConnectToDevice(adapter_pair.first, slave_id, baudrate_gear)) {
-      return true;
-    }
-    OperationResult result = GetLastResult();
+    result = ConnectToDevice(adapter_pair.first, slave_id, baudrate_gear);
+    if (result) return result;
     if (result.code == SdkError::PRODUCT_MISMATCH &&
         mismatch_result.code != SdkError::PRODUCT_MISMATCH) {
       mismatch_result = result;
@@ -268,50 +241,47 @@ bool GHandImpl::AutoConnect(uint8_t slave_id, uint8_t baudrate_gear) {
   if (mismatch_result.code == SdkError::PRODUCT_MISMATCH) {
     device_info_ = mismatch_info;
     device_name_ = mismatch_device;
-    SetLastResult(mismatch_result.code, mismatch_result.message);
+    return mismatch_result;
   }
-  return false;
+  return result;
 }
 
-bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
-                      uint8_t baudrate_gear) {
+ResultOf<std::vector<ConnectedHand>> GHandImpl::Connect(
+    const std::string& device_name, uint8_t slave_id, uint8_t baudrate_gear) {
   if (device_name == "auto") {
     return AutoConnect(slave_id, baudrate_gear);
   }
   return ConnectToDevice(device_name, slave_id, baudrate_gear);
 }
 
-bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
-                        RS485BaudRate baud_rate) {
+ResultOf<std::vector<ConnectedHand>> GHandImpl::Connect(
+    const std::string& device_name, uint8_t slave_id, RS485BaudRate baud_rate) {
   if (comm_type_ != CommType::RS485) {
     device_info_ = DeviceInfo();
     GHAND_LOG_ERROR("RS485BaudRate requires RS485 communication");
-    SetLastResult(SdkError::INVALID_ARGUMENT,
-                  "RS485BaudRate requires RS485 communication");
-    return false;
+    return {SdkError::INVALID_ARGUMENT,
+            "RS485BaudRate requires RS485 communication"};
   }
   return Connect(device_name, slave_id, static_cast<uint8_t>(baud_rate));
 }
 
-bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
-                        CANFDBitTiming timing) {
+ResultOf<std::vector<ConnectedHand>> GHandImpl::Connect(
+    const std::string& device_name, uint8_t slave_id, CANFDBitTiming timing) {
   if (comm_type_ != CommType::CANFD) {
     device_info_ = DeviceInfo();
     GHAND_LOG_ERROR("CANFDBitTiming requires CANFD communication");
-    SetLastResult(SdkError::INVALID_ARGUMENT,
-                  "CANFDBitTiming requires CANFD communication");
-    return false;
+    return {SdkError::INVALID_ARGUMENT,
+            "CANFDBitTiming requires CANFD communication"};
   }
   return Connect(device_name, slave_id, static_cast<uint8_t>(timing));
 }
 
-bool GHandImpl::PrepareCANFDBaudrateListener(const std::string& device_name,
+Result GHandImpl::PrepareCANFDBaudrateListener(const std::string& device_name,
                                              CANFDBitTiming timing) {
   if (comm_type_ != CommType::CANFD) {
     GHAND_LOG_ERROR("PrepareCANFDBaudrateListener is only supported for CANFD");
-    SetLastResult(SdkError::NOT_SUPPORTED,
-                  "PrepareCANFDBaudrateListener is only supported for CANFD");
-    return false;
+    return {SdkError::NOT_SUPPORTED,
+            "PrepareCANFDBaudrateListener is only supported for CANFD"};
   }
 
   const uint8_t baudrate_gear = static_cast<uint8_t>(timing);
@@ -337,83 +307,78 @@ bool GHandImpl::PrepareCANFDBaudrateListener(const std::string& device_name,
   }
 
   if (!prepared) {
-    SetLastResult(SdkError::TRANSPORT_ERROR,
+    return {SdkError::TRANSPORT_ERROR,
                   device_name == "auto"
                       ? "failed to prepare CANFD listener"
-                      : "failed to prepare CANFD listener " + device_name);
-    return false;
+                      : "failed to prepare CANFD listener " + device_name};
   }
-  SetLastResult(SdkError::OK, "");
-  return true;
+  return {};
 }
 
-bool GHandImpl::Disconnect() {
+Result GHandImpl::Disconnect() {
   GHAND_LOG_INFO("op=disconnect comm=" << ToString(comm_type_));
 
-  Stop();
+  Stop(0);
   int result = comm_->Disconnect();
 
   if (result == 0) {
-    SetLastResult(SdkError::OK, "");
     GHAND_LOG_INFO("op=disconnect comm=" << ToString(comm_type_)
                                          << " result=ok");
-  } else {
-    SetLastResult(SdkError::TRANSPORT_ERROR, "disconnect failed");
-    GHAND_LOG_ERROR("op=disconnect comm=" << ToString(comm_type_)
-                                          << " result=transport_error");
+    return {};
   }
-
-  return (result == 0);
+  GHAND_LOG_ERROR("op=disconnect comm=" << ToString(comm_type_)
+                                        << " result=transport_error");
+  return {SdkError::TRANSPORT_ERROR, "disconnect failed"};
 }
 
 bool GHandImpl::IsConnected() const { return comm_->IsConnected(); }
 
-bool GHandImpl::SetSlaveId(uint8_t slave_id) {
+Result GHandImpl::SetSlaveId(uint16_t slave_index, uint8_t new_slave_id) {
   if (!IsConnected()) {
     GHAND_LOG_ERROR("Cannot set slave ID: device not connected");
-    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
-    return false;
+    return {SdkError::NOT_CONNECTED, "device is not connected"};
   }
-  bool result = comm_->SetSlaveId(slave_id);
-  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
-                result ? "" : "device rejected slave ID change");
-  return result;
+  if (!comm_->SetSlaveId(slave_index, new_slave_id)) {
+    return {SdkError::DEVICE_REJECTED, "device rejected slave ID change"};
+  }
+  return {};
 }
 
-bool GHandImpl::SetBaudrateConfig(RS485BaudRate baud_rate) {
+Result GHandImpl::SetBaudrateConfig(uint16_t slave_index,
+                                    RS485BaudRate baud_rate) {
   if (comm_type_ != CommType::RS485) {
     GHAND_LOG_ERROR("RS485BaudRate requires RS485 communication");
-    SetLastResult(SdkError::INVALID_ARGUMENT,
-                  "RS485BaudRate requires RS485 communication");
-    return false;
+    return {SdkError::INVALID_ARGUMENT,
+            "RS485BaudRate requires RS485 communication"};
   }
   if (!IsConnected()) {
     GHAND_LOG_ERROR("Cannot set baudrate config: device not connected");
-    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
-    return false;
+    return {SdkError::NOT_CONNECTED, "device is not connected"};
   }
-  bool result = comm_->SetBaudrateConfig(static_cast<uint8_t>(baud_rate));
-  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
-                result ? "" : "device rejected baudrate configuration");
-  return result;
+  if (!comm_->SetBaudrateConfig(slave_index,
+                                static_cast<uint8_t>(baud_rate))) {
+    return {SdkError::DEVICE_REJECTED,
+            "device rejected baudrate configuration"};
+  }
+  return {};
 }
 
-bool GHandImpl::SetBaudrateConfig(CANFDBitTiming timing) {
+Result GHandImpl::SetBaudrateConfig(uint16_t slave_index,
+                                    CANFDBitTiming timing) {
   if (comm_type_ != CommType::CANFD) {
     GHAND_LOG_ERROR("CANFDBitTiming requires CANFD communication");
-    SetLastResult(SdkError::INVALID_ARGUMENT,
-                  "CANFDBitTiming requires CANFD communication");
-    return false;
+    return {SdkError::INVALID_ARGUMENT,
+            "CANFDBitTiming requires CANFD communication"};
   }
   if (!IsConnected()) {
     GHAND_LOG_ERROR("Cannot set baudrate config: device not connected");
-    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
-    return false;
+    return {SdkError::NOT_CONNECTED, "device is not connected"};
   }
-  bool result = comm_->SetBaudrateConfig(static_cast<uint8_t>(timing));
-  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
-                result ? "" : "device rejected baudrate configuration");
-  return result;
+  if (!comm_->SetBaudrateConfig(slave_index, static_cast<uint8_t>(timing))) {
+    return {SdkError::DEVICE_REJECTED,
+            "device rejected baudrate configuration"};
+  }
+  return {};
 }
 
 std::map<std::string, std::string> GHandImpl::SearchAdapters() const {
@@ -424,27 +389,35 @@ std::map<std::string, std::string> GHandImpl::SearchAdapters() const {
   return adapters;
 }
 
-HandType GHandImpl::GetHandType() const { return comm_->GetHandType(); }
-
-DeviceInfo GHandImpl::GetDeviceInfo() const {
-  return IsConnected() ? comm_->GetDeviceInfo() : device_info_;
+ResultOf<HandType> GHandImpl::GetHandType(uint16_t slave_index) const {
+  if (slave_index == 0) {
+    return {SdkError::INVALID_ARGUMENT,
+            "a read names exactly one hand: slave_index 0 is invalid"};
+  }
+  return ResultOf<HandType>(comm_->GetHandType(slave_index));
 }
 
-void GHandImpl::SetControlMode(ControlMode mode) { control_mode_ = mode; }
+ResultOf<DeviceInfo> GHandImpl::GetDeviceInfo(uint16_t slave_index) const {
+  if (slave_index == 0) {
+    return {SdkError::INVALID_ARGUMENT,
+            "a read names exactly one hand: slave_index 0 is invalid"};
+  }
+  return ResultOf<DeviceInfo>(comm_->GetDeviceInfo(slave_index));
+}
 
-bool GHandImpl::MoveJoints(const std::vector<JointCommand>& joints) {
+Result GHandImpl::MoveJoints(uint16_t slave_index,
+                             const std::vector<JointCommand>& joints,
+                             ControlMode mode) {
   // Check device connection status
   if (!IsConnected()) {
     GHAND_LOG_ERROR("Cannot move joints: device not connected");
-    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
-    return false;
+    return {SdkError::NOT_CONNECTED, "device is not connected"};
   }
 
   // Check if command is empty
   if (joints.empty()) {
     GHAND_LOG_WARNING("MoveJoints called with empty joint list");
-    SetLastResult(SdkError::INVALID_ARGUMENT, "joint command list is empty");
-    return false;
+    return {SdkError::INVALID_ARGUMENT, "joint command list is empty"};
   }
 
   GHAND_LOG_DEBUG("Moving " << joints.size() << " joints");
@@ -460,8 +433,8 @@ bool GHandImpl::MoveJoints(const std::vector<JointCommand>& joints) {
       if (joint.id == joint_id) {
         JointCommand limited = joint;
         ClampJointAngle(limited);
-        ClampJointVelocity(limited);
-        ClampJointTorque(limited);
+        ClampJointVelocity(limited, mode);
+        ClampJointTorque(limited, mode);
         ordered_joints.push_back(limited);
         break;
       }
@@ -469,105 +442,121 @@ bool GHandImpl::MoveJoints(const std::vector<JointCommand>& joints) {
   }
 
   if (ordered_joints.empty()) {
-    SetLastResult(SdkError::INVALID_ARGUMENT,
-                  "joint command list contains no controllable joints");
-    return false;
+    return {SdkError::INVALID_ARGUMENT,
+            "joint command list contains no controllable joints"};
   }
 
-  bool result = comm_->MoveJoints(ordered_joints, control_mode_);
-  SetLastResult(result ? SdkError::OK : SdkError::TRANSPORT_ERROR,
-                result ? "" : "move joints command failed");
-  return result;
+  if (!comm_->MoveJoints(slave_index, ordered_joints, mode)) {
+    return {SdkError::TRANSPORT_ERROR, "move joints command failed"};
+  }
+  return {};
 }
 
-void GHandImpl::Stop() {
+Result GHandImpl::Stop(uint16_t slave_index) {
   GHAND_LOG_INFO("op=stop comm=" << ToString(comm_type_));
-  comm_->Stop();
+  comm_->Stop(slave_index);
+  return {};
 }
 
-bool GHandImpl::ClearFault() {
+Result GHandImpl::ClearFault(uint16_t slave_index) {
   GHAND_LOG_INFO("op=clear_fault comm=" << ToString(comm_type_));
-  bool result = comm_->ClearFault();
-  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
-                result ? "" : "clear fault failed");
+  bool result = comm_->ClearFault(slave_index);
   GHAND_LOG_INFO("op=clear_fault comm=" << ToString(comm_type_)
                                         << " result="
                                         << (result ? "ok" : "failed"));
-  return result;
+  if (!result) return {SdkError::DEVICE_REJECTED, "clear fault failed"};
+  return {};
 }
 
-bool GHandImpl::InitJoint() {
-  GHAND_LOG_INFO("op=init_joint comm=" << ToString(comm_type_));
-  bool result = comm_->InitJoint();
-  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
-                result ? "" : "joint initialization failed");
-  GHAND_LOG_INFO("op=init_joint comm=" << ToString(comm_type_)
-                                       << " result="
-                                       << (result ? "ok" : "failed"));
-  return result;
+Result GHandImpl::OpenTactile(uint16_t slave_index) {
+  if (!comm_->OpenTactile(slave_index)) {
+    return {SdkError::DEVICE_REJECTED, "open tactile failed"};
+  }
+  return {};
 }
 
-bool GHandImpl::OpenTactile() {
-  bool result = comm_->OpenTactile();
-  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
-                result ? "" : "open tactile failed");
-  return result;
+Result GHandImpl::CloseTactile(uint16_t slave_index) {
+  if (!comm_->CloseTactile(slave_index)) {
+    return {SdkError::DEVICE_REJECTED, "close tactile failed"};
+  }
+  return {};
 }
 
-bool GHandImpl::CloseTactile() {
-  bool result = comm_->CloseTactile();
-  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
-                result ? "" : "close tactile failed");
-  return result;
-}
-
-bool GHandImpl::ZeroTactile() {
-  bool result = comm_->ZeroTactile();
-  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
-                result ? "" : "zero tactile failed");
-  return result;
+Result GHandImpl::ZeroTactile(uint16_t slave_index) {
+  if (!comm_->ZeroTactile(slave_index)) {
+    return {SdkError::DEVICE_REJECTED, "zero tactile failed"};
+  }
+  return {};
 }
 
 void GHandImpl::SetJointsCallback(
-    std::function<void(const std::vector<Joint>&)> cb) {
-  callback_manager_->SetJointsCallback(cb);
+    uint16_t slave_index,
+    std::function<void(const std::vector<Joint>& joints)> cb) {
+  callback_manager_->SetJointsCallback(slave_index, cb);
 }
 
-void GHandImpl::SetHandStateCallback(std::function<void(const HandState&)> cb) {
-  callback_manager_->SetHandStateCallback(cb);
+void GHandImpl::SetHandStateCallback(
+    uint16_t slave_index,
+    std::function<void(const HandState& state)> cb) {
+  callback_manager_->SetHandStateCallback(slave_index, cb);
 }
 
 void GHandImpl::SetTactileDataCallback(
-    std::function<void(const TactileData&)> cb) {
-  callback_manager_->SetTactileDataCallback(cb);
+    uint16_t slave_index,
+    std::function<void(const TactileData& data)> cb) {
+  callback_manager_->SetTactileDataCallback(slave_index, cb);
 }
 
-HandState GHandImpl::GetHandData() const {
-  return callback_manager_->GetHandData();
+ResultOf<HandState> GHandImpl::GetHandData(uint16_t slave_index) const {
+  if (slave_index == 0) {
+    return {SdkError::INVALID_ARGUMENT,
+            "a read names exactly one hand: slave_index 0 is invalid"};
+  }
+  return ResultOf<HandState>(callback_manager_->GetHandData(slave_index));
 }
 
-std::vector<Joint> GHandImpl::GetJointsData() const {
-  return callback_manager_->GetJointsData();
+ResultOf<std::vector<Joint>> GHandImpl::GetJointsData(
+    uint16_t slave_index) const {
+  if (slave_index == 0) {
+    return {SdkError::INVALID_ARGUMENT,
+            "a read names exactly one hand: slave_index 0 is invalid"};
+  }
+  return ResultOf<std::vector<Joint>>(
+      callback_manager_->GetJointsData(slave_index));
 }
 
-TactileData GHandImpl::GetTactileData() const {
-  return callback_manager_->GetTactileData();
+ResultOf<TactileData> GHandImpl::GetTactileData(
+    uint16_t slave_index) const {
+  if (slave_index == 0) {
+    return {SdkError::INVALID_ARGUMENT,
+            "a read names exactly one hand: slave_index 0 is invalid"};
+  }
+  return ResultOf<TactileData>(callback_manager_->GetTactileData(slave_index));
 }
 
-SelfTestErrorInfo GHandImpl::GetSelfTestErrorInfo() const {
+ResultOf<SelfTestErrorInfo> GHandImpl::GetSelfTestErrorInfo(
+    uint16_t slave_index) const {
+  if (slave_index == 0) {
+    return {SdkError::INVALID_ARGUMENT,
+            "a read names exactly one hand: slave_index 0 is invalid"};
+  }
   if (!IsConnected()) {
     GHAND_LOG_ERROR("GetSelfTestErrorInfo called while disconnected");
-    throw std::runtime_error("Device is not connected");
+    return {SdkError::NOT_CONNECTED, "device is not connected"};
   }
-  return comm_->GetSelfTestErrorInfo();
+  return ResultOf<SelfTestErrorInfo>(comm_->GetSelfTestErrorInfo(slave_index));
 }
 
-uint8_t GHandImpl::GetSelfTestStatus() const {
+ResultOf<uint8_t> GHandImpl::GetSelfTestStatus(uint16_t slave_index) const {
+  if (slave_index == 0) {
+    return {SdkError::INVALID_ARGUMENT,
+            "a read names exactly one hand: slave_index 0 is invalid"};
+  }
   if (!IsConnected()) {
     GHAND_LOG_ERROR("GetSelfTestStatus called while disconnected");
-    return 0;
+    return {SdkError::NOT_CONNECTED, "device is not connected"};
   }
-  return comm_->GetSelfTestStatus();
+  return ResultOf<uint8_t>(comm_->GetSelfTestStatus(slave_index));
 }
 
 FirmwareUpdateError GHandImpl::BootUpdate(
@@ -577,7 +566,11 @@ FirmwareUpdateError GHandImpl::BootUpdate(
 
   const int retry_count = 10;
   const int retry_delay_ms = 2000;
-  std::string last_version = comm_->GetDeviceInfo().software_version;
+  // Firmware update is bus level today, so it reads the first hand's version.
+  const std::vector<ConnectedHand> hands = comm_->GetConnectedHands();
+  const uint16_t update_slave = hands.empty() ? 0 : hands.front().slave_index;
+  std::string last_version =
+      comm_->GetDeviceInfo(update_slave).software_version;
 
   FirmwareUpdateError ret =
       comm_->BootUpdate(filename, progress_callback);
@@ -610,7 +603,7 @@ FirmwareUpdateError GHandImpl::BootUpdate(
 
         if (!IsVersionNewer(
                 last_version,
-                comm_->GetDeviceInfo().software_version)) {
+                comm_->GetDeviceInfo(update_slave).software_version)) {
           GHAND_LOG_WARNING("Firmware version not updated after upgrade");
           // GHAND_LOG_WARNING("Current version: " << comm_->GetDeviceInfo().software_version);
           // GHAND_LOG_WARNING("Last version: " << last_version);
@@ -651,8 +644,8 @@ void GHandImpl::ClampJointAngle(JointCommand& joint) {
   }
 }
 
-void GHandImpl::ClampJointVelocity(JointCommand& joint) {
-  if (control_mode_ == ControlMode::POSITION) {
+void GHandImpl::ClampJointVelocity(JointCommand& joint, ControlMode mode) {
+  if (mode == ControlMode::POSITION) {
     // Position mode: velocity range 0-100, negative values take absolute
     // value, absolute value > 100 clamped to 100.
     if (joint.velocity < 0) {
@@ -673,7 +666,7 @@ void GHandImpl::ClampJointVelocity(JointCommand& joint) {
                                    << "clamped to 100");
     }
 
-  } else if (control_mode_ == ControlMode::TORQUE) {
+  } else if (mode == ControlMode::TORQUE) {
     // Torque mode encodes velocity as 0-100.
     int velocity = static_cast<int>(joint.velocity);
     if (velocity > 100) {
@@ -684,7 +677,7 @@ void GHandImpl::ClampJointVelocity(JointCommand& joint) {
       velocity = -velocity;
     }
     joint.velocity = static_cast<int8_t>(velocity);
-  } else if (control_mode_ == ControlMode::SPEED) {
+  } else if (mode == ControlMode::SPEED) {
     if (joint.velocity < -100) {
       int8_t original = joint.velocity;
       joint.velocity = -100;
@@ -703,12 +696,11 @@ void GHandImpl::ClampJointVelocity(JointCommand& joint) {
   }
 }
 
-void GHandImpl::ClampJointTorque(JointCommand& joint) {
+void GHandImpl::ClampJointTorque(JointCommand& joint, ControlMode mode) {
   int original = static_cast<int>(joint.torque);
   int torque = original;
 
-  if (control_mode_ == ControlMode::POSITION ||
-      control_mode_ == ControlMode::SPEED) {
+  if (mode == ControlMode::POSITION || mode == ControlMode::SPEED) {
     // Position mode and speed mode: torque range 0-100, negative values take
     // absolute value, absolute value > 100 clamped to 100.
     if (joint.torque < 0) {
@@ -717,7 +709,7 @@ void GHandImpl::ClampJointTorque(JointCommand& joint) {
       if (torque_abs > 100) torque_abs = 100;
       joint.torque = static_cast<int8_t>(torque_abs);
       const char* mode_name =
-          (control_mode_ == ControlMode::POSITION) ? "POSITION" : "SPEED";
+          (mode == ControlMode::POSITION) ? "POSITION" : "SPEED";
       GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " torque "
                                    << static_cast<int>(original)
                                    << " is negative in " << mode_name
@@ -728,13 +720,13 @@ void GHandImpl::ClampJointTorque(JointCommand& joint) {
       int8_t original = joint.torque;
       joint.torque = 100;
       const char* mode_name =
-          (control_mode_ == ControlMode::POSITION) ? "POSITION" : "SPEED";
+          (mode == ControlMode::POSITION) ? "POSITION" : "SPEED";
       GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " torque "
                                    << static_cast<int>(original)
                                    << " exceeds limit in " << mode_name
                                    << " mode, clamped to 100");
     }
-  } else if (control_mode_ == ControlMode::TORQUE) {
+  } else if (mode == ControlMode::TORQUE) {
     // Torque mode: torque range -100 to 100
     if (joint.torque < -100) {
       int8_t original = joint.torque;
@@ -756,10 +748,9 @@ void GHandImpl::ClampJointTorque(JointCommand& joint) {
   if (torque != original) {
     joint.torque = static_cast<int8_t>(torque);
 
-    const char* mode_name =
-        (control_mode_ == ControlMode::POSITION)
-            ? "POSITION"
-            : (control_mode_ == ControlMode::SPEED ? "SPEED" : "TORQUE");
+    const char* mode_name = (mode == ControlMode::POSITION)
+                                ? "POSITION"
+                                : (mode == ControlMode::SPEED ? "SPEED" : "TORQUE");
 
     GHAND_LOG_WARNING("[Joint] "
                       << ToString(joint.id) << " torque " << original

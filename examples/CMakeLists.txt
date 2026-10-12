@@ -85,6 +85,11 @@ add_executable(switch_baud_rate tutorial/10switch_baud_rate.cc)
 target_link_libraries(switch_baud_rate ghand)
 copy_runtime_for_target(switch_baud_rate)
 
+# 11. Multi-hand example: EtherCAT / CAN-FD / RS485 (auto-detect + control)
+add_executable(connect_hands tutorial/12connect_hands.cc)
+target_link_libraries(connect_hands ghand)
+copy_runtime_for_target(connect_hands)
+
 # Gesture dance demo
 add_executable(gesture_dance demo/gesture_dance.cc)
 target_link_libraries(gesture_dance ghand)

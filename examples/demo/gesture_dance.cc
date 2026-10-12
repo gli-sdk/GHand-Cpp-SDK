@@ -180,60 +180,60 @@ std::vector<ghand::JointCommand> MakeOK() {
 
 // Action execution functions.
 
-bool HandZero(ghand::GHand& hand) {
+bool HandZero(ghand::Master& master) {
   auto joints = MakeOpenHand();
-  return hand.MoveJoints(joints);
+  return master.MoveJoints(joints);
 }
 
-bool ThumbTouch(ghand::GHand& hand) {
+bool ThumbTouch(ghand::Master& master) {
   const std::vector<std::vector<ghand::JointCommand>> poses = {
       MakeThumbTouchLittle(), MakeThumbTouchRing(), MakeThumbTouchMiddle(),
       MakeThumbTouchIndex()};
   for (const auto& pose : poses) {
-    if (!hand.MoveJoints(pose)) return false;
+    if (!master.MoveJoints(pose)) return false;
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
-  return HandZero(hand);
+  return HandZero(master);
 }
 
-bool FistThenOpen(ghand::GHand& hand) {
-  if (!hand.MoveJoints(MakeFist())) return false;
+bool FistThenOpen(ghand::Master& master) {
+  if (!master.MoveJoints(MakeFist())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  return HandZero(hand);
+  return HandZero(master);
 }
 
-bool SeqOpenFinger(ghand::GHand& hand) {
-  if (!hand.MoveJoints(MakeFist())) return false;
+bool SeqOpenFinger(ghand::Master& master) {
+  if (!master.MoveJoints(MakeFist())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  if (!hand.MoveJoints(MakeOpenIndexFinger())) return false;
+  if (!master.MoveJoints(MakeOpenIndexFinger())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  if (!hand.MoveJoints(MakeOpenMiddleFinger())) return false;
+  if (!master.MoveJoints(MakeOpenMiddleFinger())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  return HandZero(hand);
+  return HandZero(master);
 }
 
-bool MakeOKGesture(ghand::GHand& hand) {
-  if (!hand.MoveJoints(MakeOK())) return false;
+bool MakeOKGesture(ghand::Master& master) {
+  if (!master.MoveJoints(MakeOK())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  return HandZero(hand);
+  return HandZero(master);
 }
 
 // First action group.
-bool FirstAction(ghand::GHand& hand) {
-  if (!ThumbTouch(hand)) return false;
+bool FirstAction(ghand::Master& master) {
+  if (!ThumbTouch(master)) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
   for (int i = 0; i < 2; i++) {
-    if (!FistThenOpen(hand)) return false;
+    if (!FistThenOpen(master)) return false;
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
   return true;
 }
 
 // Second action group.
-bool SecondAction(ghand::GHand& hand) {
-  if (!SeqOpenFinger(hand)) return false;
+bool SecondAction(ghand::Master& master) {
+  if (!SeqOpenFinger(master)) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  if (!MakeOKGesture(hand)) return false;
+  if (!MakeOKGesture(master)) return false;
   return true;
 }
 
@@ -241,13 +241,13 @@ bool SecondAction(ghand::GHand& hand) {
 int main() {
   std::cout << "***** GHand SDK - Gesture Dance Demo *****\n"
             << '\n';
-  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
-  if (!hand) {
+  if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
-  bool connected = hand->Connect("auto");
+  bool connected = master->Connect("auto");
   if (!connected) {
     std::cout << "\n[Scan complete] Failed to connect to dexterous hand."
               << '\n';
@@ -266,13 +266,13 @@ int main() {
     std::cout << "\n--- Round " << gesture_cycle << " gesture demo started ---"
               << '\n';
 
-    if (!FirstAction(*hand)) {
+    if (!FirstAction(*master)) {
       std::cout << "Round " << gesture_cycle
                 << " first action group execution failed" << '\n';
       break;
     }
 
-    if (!SecondAction(*hand)) {
+    if (!SecondAction(*master)) {
       std::cout << "Round " << gesture_cycle
                 << " second action group execution failed" << '\n';
       break;
@@ -286,7 +286,7 @@ int main() {
     }
   }
 
-  hand->Disconnect();
+  master->Disconnect();
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   std::cout << "\n--- Demo finished, disconnecting ---" << '\n';
   return 0;

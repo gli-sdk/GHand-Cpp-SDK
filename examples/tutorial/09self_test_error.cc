@@ -119,29 +119,45 @@ std::string MotorErrors(
 }  // namespace
 
 int main() {
-  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                   ghand::CommType::ETHERCAT);
-  if (!hand) {
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                      ghand::CommType::ETHERCAT);
+  if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
 
   std::cout << "Connecting to dexterous hand..." << '\n';
-  if (!hand->AutoConnect()) {
-    std::cout << "Failed to connect to the dexterous hand!" << '\n';
+  const auto connected = master->Connect("auto");
+  if (!connected) {
+    std::cout << "Failed to connect to the dexterous hand: "
+              << connected.message << '\n';
     return 1;
   }
+  ghand::GHand* hand = connected.value.front();
   std::cout << "Connected." << '\n';
 
-  ghand::HandState hand_info = hand->GetHandData();
+  const auto hand_data = hand->GetHandData();
+  if (!hand_data) {
+    std::cerr << "Failed to read hand data: " << hand_data.message << '\n';
+    master->Disconnect();
+    return 1;
+  }
+  const ghand::HandState& hand_info = hand_data.value;
   if (hand_info.error != ghand::ErrorCode::SELF_CHECK_ERROR) {
     std::cout << "No self-test error (device error="
               << ghand::ToString(hand_info.error) << ")" << '\n';
-    hand->Disconnect();
+    master->Disconnect();
     return 0;
   }
 
-  ghand::SelfTestErrorInfo info = hand->GetSelfTestErrorInfo();
+  const auto error_info = hand->GetSelfTestErrorInfo();
+  if (!error_info) {
+    std::cerr << "Failed to read self-test error info: " << error_info.message
+              << '\n';
+    master->Disconnect();
+    return 1;
+  }
+  const ghand::SelfTestErrorInfo& info = error_info.value;
 
   std::cout << "Self-test failed! Error details:" << '\n';
   std::printf("  %-16s 0x%02X  (%s)\n", "summary", info.summary,
@@ -159,6 +175,6 @@ int main() {
                 MotorErrors(info.motor, MotorErrorName).c_str());
   }
 
-  hand->Disconnect();
+  master->Disconnect();
   return 0;
 }
