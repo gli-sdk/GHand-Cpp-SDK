@@ -161,7 +161,8 @@ enum class SdkError : uint8_t {
   PROTOCOL_ERROR,
   CONFIG_ERROR,
   DEVICE_REJECTED,
-  INTERNAL_ERROR
+  INTERNAL_ERROR,
+  PRODUCT_MISMATCH
 };
 
 GHAND_API const char* ToString(SdkError error);  // NOLINT(runtime/string)
@@ -396,18 +397,13 @@ GHAND_API std::string ToString(const Joint& joint);
 // ============================================================================
 
 /**
- * @brief A0 self-test summary bit mask. Multiple bits may be set simultaneously.
+ * @brief A0 module error bit mask. Motor reads A8, Sensor A2, Joint A6.
  */
 enum class SelfTestError : uint8_t {
-  None                   = 0x00,
-  Motor                  = 0x01,
-  PositionSensorUnmapped = 0x02,
-  Zeroing                = 0x04,
-  Fan                    = 0x08,
-  TemperatureSensor      = 0x10,
-  TactileSensor          = 0x20,
-  PositionSensor         = 0x40,
-  Version                = 0x80,
+  None   = 0x00,
+  Motor  = 0x01,
+  Sensor = 0x02,
+  Joint  = 0x04,
 };
 
 inline uint8_t operator&(uint8_t lhs, SelfTestError rhs) {
@@ -419,38 +415,22 @@ inline bool HasSelfTestError(uint8_t summary, SelfTestError bit) {
 }
 
 /**
- * @brief A1 version-mismatch bit mask.
+ * @brief A2 sensor error bit mask per channel. Multiple bits may be set.
  */
-enum class VersionCheckError : uint8_t {
-  None           = 0x00,
-  MotorDriver    = 0x20,
-  TactileSensor  = 0x40,
-  PositionSensor = 0x80,
+enum class SensorError : uint8_t {
+  None            = 0x00,
+  SelfCheckFailed = 0x01,
+  MappingFailed   = 0x02,
+  TravelDeviation = 0x04,
 };
 
 /**
- * @brief A3 tactile-sensor error bit mask (per motor channel).
+ * @brief A6 joint error bit mask per channel. Multiple bits may be set.
  */
-enum class TactileCheckError : uint8_t {
-  None                    = 0x00,
-  ThumbTipDisconnected    = 0x01,
-  FfTipDisconnected       = 0x02,
-  MfTipDisconnected       = 0x04,
-  RfTipDisconnected       = 0x08,
-  LfTipDisconnected       = 0x10,
-  CommunicationFailed     = 0x80,
-};
-
-/**
- * @brief A6 zeroing error (single-value enum, per motor channel).
- */
-enum class ZeroingCheckError : uint8_t {
-  None                   = 0x00,
-  MotorAbnormal          = 0x01,
-  JointStall             = 0x02,
-  BrakeTimeout           = 0x03,
-  GlobalTimeout          = 0x04,
-  CommunicationFault     = 0x05,
+enum class JointError : uint8_t {
+  None    = 0x00,
+  Stall   = 0x01,
+  Timeout = 0x02,
 };
 
 /**
@@ -474,7 +454,7 @@ enum class MotorCheckError : uint8_t {
 };
 
 /**
- * @brief Diagnostic error entry for a single 13-channel motor slot.
+ * @brief Diagnostic error entry for a 13-channel motor, sensor or joint slot.
  *
  * ``motor_index`` is the raw index (0..12) into the protocol error array.
  * ``joint_id`` is the resolved JointId when the product configuration owns a
@@ -494,13 +474,9 @@ struct MotorDiagnosticError {
  * populated; the rest remain at their default values.
  */
 struct SelfTestErrorInfo {
-  uint8_t summary = 0;              // Raw A0 bit mask
-  uint8_t version = 0;              // Raw A1 bit mask
-  std::vector<MotorDiagnosticError> position_sensor;
-  std::vector<MotorDiagnosticError> tactile_sensor;
-  uint8_t temperature = 0;          // Raw A4 value
-  uint8_t fan = 0;                  // Raw A5 value
-  std::vector<MotorDiagnosticError> zeroing;
+  uint8_t summary = 0;              // Raw A0 module bit mask
+  std::vector<MotorDiagnosticError> sensor;
+  std::vector<MotorDiagnosticError> joint;
   std::vector<MotorDiagnosticError> motor;
 };
 

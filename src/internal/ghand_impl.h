@@ -112,6 +112,7 @@ class GHandImpl {
   CommType comm_type_;
   ProductType product_type_;
   std::string device_name_;
+  DeviceInfo device_info_;
   ProductConfig config_;
   mutable std::mutex last_result_mutex_;
   OperationResult last_result_;

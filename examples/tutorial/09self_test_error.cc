@@ -2,8 +2,10 @@
 #include <cstdio>
 #include <functional>
 #include <iostream>
+#include <initializer_list>
 #include <string>
 #include <vector>
+#include <utility>
 
 #include "ghand/ghand.h"
 
@@ -24,13 +26,9 @@ std::string SummaryName(uint8_t summary) {
       out += name;
     }
   };
-  append(ghand::SelfTestError::Version, "VERSION");
-  append(ghand::SelfTestError::PositionSensor, "POSITION_SENSOR");
-  append(ghand::SelfTestError::TactileSensor, "TACTILE_SENSOR");
-  append(ghand::SelfTestError::TemperatureSensor, "TEMPERATURE_SENSOR");
-  append(ghand::SelfTestError::Fan, "FAN");
-  append(ghand::SelfTestError::Zeroing, "ZEROING");
   append(ghand::SelfTestError::Motor, "MOTOR");
+  append(ghand::SelfTestError::Sensor, "SENSOR");
+  append(ghand::SelfTestError::Joint, "JOINT");
   return out;
 }
 
@@ -69,49 +67,32 @@ const char* MotorErrorName(uint8_t code) {
   }
 }
 
-const char* ZeroingErrorName(uint8_t code) {
-  switch (static_cast<ghand::ZeroingCheckError>(code)) {
-    case ghand::ZeroingCheckError::None:
-      return "NONE";
-    case ghand::ZeroingCheckError::MotorAbnormal:
-      return "MOTOR_ABNORMAL";
-    case ghand::ZeroingCheckError::JointStall:
-      return "JOINT_STALL";
-    case ghand::ZeroingCheckError::BrakeTimeout:
-      return "BRAKE_TIMEOUT";
-    case ghand::ZeroingCheckError::GlobalTimeout:
-      return "GLOBAL_TIMEOUT";
-    case ghand::ZeroingCheckError::CommunicationFault:
-      return "COMMUNICATION_FAULT";
-    default:
-      return "UNKNOWN";
-  }
-}
-
-std::string TactileErrorName(uint8_t code) {
-  if (code == 0) {
-    return "NONE";
-  }
+std::string FlagErrorName(
+    uint8_t code,
+    std::initializer_list<std::pair<uint8_t, const char*>> flags) {
   std::string out;
-  auto append = [&out, code](ghand::TactileCheckError flag, const char* name) {
-    if ((code & static_cast<uint8_t>(flag)) != 0) {
+  for (const auto& flag : flags) {
+    if ((code & flag.first) != 0) {
       if (!out.empty()) {
         out += "|";
       }
-      out += name;
+      out += flag.second;
     }
-  };
-  append(ghand::TactileCheckError::ThumbTipDisconnected,
-         "THUMB_TIP_DISCONNECTED");
-  append(ghand::TactileCheckError::FfTipDisconnected, "FF_TIP_DISCONNECTED");
-  append(ghand::TactileCheckError::MfTipDisconnected, "MF_TIP_DISCONNECTED");
-  append(ghand::TactileCheckError::RfTipDisconnected, "RF_TIP_DISCONNECTED");
-  append(ghand::TactileCheckError::LfTipDisconnected, "LF_TIP_DISCONNECTED");
-  append(ghand::TactileCheckError::CommunicationFailed, "COMMUNICATION_FAILED");
-  if (out.empty()) {
-    return "UNKNOWN";
   }
-  return out;
+  return out.empty() ? "UNKNOWN" : out;
+}
+
+std::string SensorErrorName(uint8_t code) {
+  return FlagErrorName(code, {
+      {static_cast<uint8_t>(ghand::SensorError::SelfCheckFailed), "SELF_CHECK_FAILED"},
+      {static_cast<uint8_t>(ghand::SensorError::MappingFailed), "MAPPING_FAILED"},
+      {static_cast<uint8_t>(ghand::SensorError::TravelDeviation), "TRAVEL_DEVIATION"}});
+}
+
+std::string JointErrorName(uint8_t code) {
+  return FlagErrorName(code, {
+      {static_cast<uint8_t>(ghand::JointError::Stall), "STALL"},
+      {static_cast<uint8_t>(ghand::JointError::Timeout), "TIMEOUT"}});
 }
 
 std::string MotorErrors(
@@ -133,19 +114,6 @@ std::string MotorErrors(
     out += buf;
   }
   return out;
-}
-
-std::string SingleCode(uint8_t summary, ghand::SelfTestError flag,
-                       uint8_t code, const char* description) {
-  if (!ghand::HasSelfTestError(summary, flag)) {
-    return "none";
-  }
-  if (code == 0) {
-    return "0x00";
-  }
-  char buf[64];
-  std::snprintf(buf, sizeof(buf), "0x%02X (%s)", code, description);
-  return buf;
 }
 
 }  // namespace
@@ -178,26 +146,10 @@ int main() {
   std::cout << "Self-test failed! Error details:" << '\n';
   std::printf("  %-16s 0x%02X  (%s)\n", "summary", info.summary,
               SummaryName(info.summary).c_str());
-  std::printf("  %-16s 0x%02X\n", "version", info.version);
-  std::printf("  %-16s %s\n", "position_sensor",
-              MotorErrors(info.position_sensor,
-                          [](uint8_t code) {
-                            return code == 0 ? "" : "position sensor abnormal";
-                          })
-                  .c_str());
-  std::printf("  %-16s %s\n", "tactile_sensor",
-              MotorErrors(info.tactile_sensor, TactileErrorName).c_str());
-  std::printf("  %-16s %s\n", "temperature",
-              SingleCode(info.summary,
-                         ghand::SelfTestError::TemperatureSensor,
-                         info.temperature, "temperature sensor abnormal")
-                  .c_str());
-  std::printf("  %-16s %s\n", "fan",
-              SingleCode(info.summary, ghand::SelfTestError::Fan, info.fan,
-                         "fan abnormal")
-                  .c_str());
-  std::printf("  %-16s %s\n", "zeroing",
-              MotorErrors(info.zeroing, ZeroingErrorName).c_str());
+  std::printf("  %-16s %s\n", "sensor",
+              MotorErrors(info.sensor, SensorErrorName).c_str());
+  std::printf("  %-16s %s\n", "joint",
+              MotorErrors(info.joint, JointErrorName).c_str());
   std::printf("  %-16s %s\n", "motor",
               MotorErrors(info.motor, MotorErrorName).c_str());
 

@@ -165,6 +165,7 @@ void GHandImpl::SetupCallbacks() {
 bool GHandImpl::ConnectToDevice(const std::string& device_name,
                               uint8_t slave_id,
                               uint8_t baudrate_gear) {
+  device_info_ = DeviceInfo();
   GHAND_LOG_INFO("op=connect comm=" << ToString(comm_type_)
                                     << " device=" << device_name
                                     << " slave_id=0x" << std::hex
@@ -181,7 +182,8 @@ bool GHandImpl::ConnectToDevice(const std::string& device_name,
                                       << device_name);
 
     // Post-connection verification / auto-detection
-    std::string dev_name = comm_->GetDeviceInfo().device_name;
+    device_info_ = comm_->GetDeviceInfo();
+    std::string dev_name = device_info_.device_name;
     if (!dev_name.empty()) {
       if (product_type_ == ProductType::AUTO) {
         config_ = FindConfigByName(dev_name);
@@ -215,7 +217,7 @@ bool GHandImpl::ConnectToDevice(const std::string& device_name,
           GHAND_LOG_ERROR("Device name mismatch: device reports \""
                       << dev_name << "\", config expects \"" << config_.name
                       << "\"");
-          SetLastResult(SdkError::DEVICE_REJECTED,
+          SetLastResult(SdkError::PRODUCT_MISMATCH,
                         "device name mismatch: " + dev_name);
           comm_->Disconnect();
           return false;
@@ -241,11 +243,31 @@ bool GHandImpl::AutoConnect() {
 }
 
 bool GHandImpl::AutoConnect(uint8_t slave_id, uint8_t baudrate_gear) {
+  device_info_ = DeviceInfo();
+  OperationResult mismatch_result;
+  DeviceInfo mismatch_info;
+  std::string mismatch_device;
   std::map<std::string, std::string> adapter_names = SearchAdapters();
+  if (adapter_names.empty()) {
+    SetLastResult(SdkError::NOT_CONNECTED, "no communication adapters found");
+    return false;
+  }
   for (const auto& adapter_pair : adapter_names) {
     if (ConnectToDevice(adapter_pair.first, slave_id, baudrate_gear)) {
       return true;
     }
+    OperationResult result = GetLastResult();
+    if (result.code == SdkError::PRODUCT_MISMATCH &&
+        mismatch_result.code != SdkError::PRODUCT_MISMATCH) {
+      mismatch_result = result;
+      mismatch_info = device_info_;
+      mismatch_device = adapter_pair.first;
+    }
+  }
+  if (mismatch_result.code == SdkError::PRODUCT_MISMATCH) {
+    device_info_ = mismatch_info;
+    device_name_ = mismatch_device;
+    SetLastResult(mismatch_result.code, mismatch_result.message);
   }
   return false;
 }
@@ -261,6 +283,7 @@ bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
 bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
                         RS485BaudRate baud_rate) {
   if (comm_type_ != CommType::RS485) {
+    device_info_ = DeviceInfo();
     GHAND_LOG_ERROR("RS485BaudRate requires RS485 communication");
     SetLastResult(SdkError::INVALID_ARGUMENT,
                   "RS485BaudRate requires RS485 communication");
@@ -272,6 +295,7 @@ bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
 bool GHandImpl::Connect(const std::string& device_name, uint8_t slave_id,
                         CANFDBitTiming timing) {
   if (comm_type_ != CommType::CANFD) {
+    device_info_ = DeviceInfo();
     GHAND_LOG_ERROR("CANFDBitTiming requires CANFD communication");
     SetLastResult(SdkError::INVALID_ARGUMENT,
                   "CANFDBitTiming requires CANFD communication");
@@ -401,7 +425,9 @@ std::map<std::string, std::string> GHandImpl::SearchAdapters() const {
 
 HandType GHandImpl::GetHandType() const { return comm_->GetHandType(); }
 
-DeviceInfo GHandImpl::GetDeviceInfo() const { return comm_->GetDeviceInfo(); }
+DeviceInfo GHandImpl::GetDeviceInfo() const {
+  return IsConnected() ? comm_->GetDeviceInfo() : device_info_;
+}
 
 void GHandImpl::SetControlMode(ControlMode mode) { control_mode_ = mode; }
 
@@ -594,6 +620,11 @@ FirmwareUpdateError GHandImpl::BootUpdate(
     }
     comm_->Disconnect();
     return FirmwareUpdateError::RECONNECT_FAILED;
+  }
+  if (comm_type_ == CommType::ETHERCAT &&
+      (ret == FirmwareUpdateError::ENTER_BOOT_MODE_FAILED ||
+       ret == FirmwareUpdateError::SWITCH_COMM_STATE_FAILED)) {
+    comm_->Disconnect();
   }
   return ret;
 }

@@ -40,7 +40,7 @@ struct SelfTestRegisterIO {
 };
 
 /**
- * @brief Execute the A0 summary + on-demand A1~A8 flow.
+ * @brief Execute the A0 summary + on-demand A2/A6/A8 flow.
  *
  * Only categories flagged by the A0 summary are queried in detail. Returns
  * an empty ``SelfTestErrorInfo{}`` (summary=0) on any transport error, since

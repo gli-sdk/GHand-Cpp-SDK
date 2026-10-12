@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `SdkError::PRODUCT_MISMATCH` so callers can distinguish an unexpected product from other connection failures.
+- Added `SensorError` (A2 bit mask) and `JointError` (A6 bit mask), matching Python SDK `pan_fix_sn`.
+
+### Changed
+- **BREAKING:** Aligned self-test diagnostics with Python SDK `pan_fix_sn`: A0 flags are `Motor=0x01`, `Sensor=0x02`, and `Joint=0x04`; detail queries are A8, A2, and A6 respectively. `SelfTestErrorInfo` now contains `summary`, `sensor`, `joint`, and `motor`. Removed the legacy summary flags, `VersionCheckError`, `TactileCheckError`, `ZeroingCheckError`, and their result fields. A2 `SensorError::MappingFailed=0x02` replaces the old A0 unmapped interpretation. Callers must rebuild and migrate to the new fields; firmware must implement the matching diagnostic protocol.
+
+### Fixed
+- Disconnect EtherCAT after a failed BOOT entry or communication-state transition during firmware update, preserving the original firmware-update error.
+- Preserve device information after disconnecting a mismatched product so callers can select the actual product and reconnect. Clear the information before each new connection attempt.
+- Continue adapter auto-search after product mismatch. If no adapter connects successfully, report the first product mismatch and preserve its device information instead of overwriting it with later transport failures.
+
 ## [2.2.2] - 2026-09-02
 
 ### Added

@@ -154,6 +154,8 @@ const char* ToString(SdkError error) {
       return "DEVICE_REJECTED";
     case SdkError::INTERNAL_ERROR:
       return "INTERNAL_ERROR";
+    case SdkError::PRODUCT_MISMATCH:
+      return "PRODUCT_MISMATCH";
     default:
       return "UNKNOWN";
   }

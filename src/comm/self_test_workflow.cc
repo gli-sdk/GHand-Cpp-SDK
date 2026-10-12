@@ -115,44 +115,19 @@ SelfTestErrorInfo BuildSelfTestErrorInfo(const ProductConfig& config,
     return info;
   }
 
-  if (HasSelfTestError(info.summary, SelfTestError::Version)) {
-    if (ReadDiagnosticErrorCodes(0xA1, io, &codes)) {
-      info.version = codes[0];
-      GHAND_LOG_INFO("Self-test error: version mismatch (0x"
-                     << std::hex << static_cast<int>(info.version) << ")");
-    }
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::PositionSensorUnmapped)) {
-    GHAND_LOG_INFO("Self-test error: position sensor unmapped");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::PositionSensor)) {
-    if (ReadDiagnosticErrorCodes(0xA2, io, &codes)) {
-      info.position_sensor = CollectMotorErrors(config, codes);
-    }
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::TactileSensor)) {
-    if (ReadDiagnosticErrorCodes(0xA3, io, &codes)) {
-      info.tactile_sensor = CollectMotorErrors(config, codes);
-    }
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::TemperatureSensor)) {
-    if (ReadDiagnosticErrorCodes(0xA4, io, &codes)) {
-      info.temperature = codes[0];
-    }
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::Fan)) {
-    if (ReadDiagnosticErrorCodes(0xA5, io, &codes)) {
-      info.fan = codes[0];
-    }
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::Zeroing)) {
-    if (ReadDiagnosticErrorCodes(0xA6, io, &codes)) {
-      info.zeroing = CollectMotorErrors(config, codes);
-    }
-  }
   if (HasSelfTestError(info.summary, SelfTestError::Motor)) {
     if (ReadDiagnosticErrorCodes(0xA8, io, &codes)) {
       info.motor = CollectMotorErrors(config, codes);
+    }
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::Sensor)) {
+    if (ReadDiagnosticErrorCodes(0xA2, io, &codes)) {
+      info.sensor = CollectMotorErrors(config, codes);
+    }
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::Joint)) {
+    if (ReadDiagnosticErrorCodes(0xA6, io, &codes)) {
+      info.joint = CollectMotorErrors(config, codes);
     }
   }
   return info;

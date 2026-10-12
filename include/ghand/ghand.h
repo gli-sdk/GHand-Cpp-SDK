@@ -52,6 +52,9 @@ class GHAND_API GHand {
   // Connection management
   /**
    * @brief Auto-connect to device
+   * @details Searches all adapters until a matching product connects. If none
+   * connects, reports the first PRODUCT_MISMATCH, when present, and preserves
+   * that device's information for GetDeviceInfo().
    * @return true on success; call GetLastResult() when false
    */
   bool AutoConnect();
@@ -183,6 +186,10 @@ class GHAND_API GHand {
 
   /**
    * @brief Get device info
+   * @details While disconnected, returns the information read during the last
+   * connection attempt, including after PRODUCT_MISMATCH. A new connection
+   * attempt clears this information. Recreate the SDK with the actual product
+   * type before reconnecting to a mismatched device.
    */
   DeviceInfo GetDeviceInfo();
 
@@ -252,7 +259,7 @@ class GHAND_API GHand {
    * Reads only the already-latched self-test result stored on the device
    * (object dictionary ``0x2008``). This method does NOT trigger a manual
    * self-test or manual zeroing. Only categories flagged by the A0 summary
-   * are queried in detail.
+   * are queried in detail: Motor reads A8, Sensor reads A2, Joint reads A6.
    */
   SelfTestErrorInfo GetSelfTestErrorInfo();
 

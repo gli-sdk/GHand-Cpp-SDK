@@ -1105,43 +1105,13 @@ uint8_t EtherCATComm::GetSelfTestSummaryErrorCode() {
   return codes[0];
 }
 
-uint8_t EtherCATComm::GetVersionCheckErrorCode() {
-  std::array<uint8_t, 13> codes{};
-  if (!ReadDiagnosticErrorCodes(0xA1, &codes)) {
-    return 0;
-  }
-  return codes[0];
-}
-
-std::array<uint8_t, 13> EtherCATComm::GetPositionSensorErrorCodes() {
+std::array<uint8_t, 13> EtherCATComm::GetSensorErrorCodes() {
   std::array<uint8_t, 13> codes{};
   ReadDiagnosticErrorCodes(0xA2, &codes);
   return codes;
 }
 
-std::array<uint8_t, 13> EtherCATComm::GetTactileSensorErrorCodes() {
-  std::array<uint8_t, 13> codes{};
-  ReadDiagnosticErrorCodes(0xA3, &codes);
-  return codes;
-}
-
-uint8_t EtherCATComm::GetTemperatureSensorErrorCode() {
-  std::array<uint8_t, 13> codes{};
-  if (!ReadDiagnosticErrorCodes(0xA4, &codes)) {
-    return 0;
-  }
-  return codes[0];
-}
-
-uint8_t EtherCATComm::GetFanErrorCode() {
-  std::array<uint8_t, 13> codes{};
-  if (!ReadDiagnosticErrorCodes(0xA5, &codes)) {
-    return 0;
-  }
-  return codes[0];
-}
-
-std::array<uint8_t, 13> EtherCATComm::GetZeroingErrorCodes() {
+std::array<uint8_t, 13> EtherCATComm::GetJointErrorCodes() {
   std::array<uint8_t, 13> codes{};
   ReadDiagnosticErrorCodes(0xA6, &codes);
   return codes;
@@ -1187,46 +1157,20 @@ SelfTestErrorInfo EtherCATComm::GetSelfTestErrorInfo() {
     return info;
   }
 
-  if (HasSelfTestError(info.summary, SelfTestError::Version)) {
-    info.version = GetVersionCheckErrorCode();
-    GHAND_LOG_INFO("Self-test error: version mismatch (0x" << std::hex
-                                                           << static_cast<int>(info.version)
-                                                           << ")");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::PositionSensorUnmapped)) {
-    GHAND_LOG_INFO("Self-test error: position sensor unmapped");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::PositionSensor)) {
-    info.position_sensor = CollectMotorErrors(GetPositionSensorErrorCodes());
-    GHAND_LOG_INFO("Self-test error: position sensor ("
-                   << info.position_sensor.size() << " motors)");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::TactileSensor)) {
-    info.tactile_sensor = CollectMotorErrors(GetTactileSensorErrorCodes());
-    GHAND_LOG_INFO("Self-test error: tactile sensor ("
-                   << info.tactile_sensor.size() << " motors)");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::TemperatureSensor)) {
-    info.temperature = GetTemperatureSensorErrorCode();
-    GHAND_LOG_INFO("Self-test error: temperature (0x" << std::hex
-                                                      << static_cast<int>(info.temperature)
-                                                      << ")");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::Fan)) {
-    info.fan = GetFanErrorCode();
-    GHAND_LOG_INFO("Self-test error: fan (0x" << std::hex
-                                              << static_cast<int>(info.fan)
-                                              << ")");
-  }
-  if (HasSelfTestError(info.summary, SelfTestError::Zeroing)) {
-    info.zeroing = CollectMotorErrors(GetZeroingErrorCodes());
-    GHAND_LOG_INFO("Self-test error: zeroing (" << info.zeroing.size()
-                                                << " motors)");
-  }
   if (HasSelfTestError(info.summary, SelfTestError::Motor)) {
     info.motor = CollectMotorErrors(GetMotorErrorCodes());
     GHAND_LOG_INFO("Self-test error: motor check (" << info.motor.size()
                                                     << " motors)");
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::Sensor)) {
+    info.sensor = CollectMotorErrors(GetSensorErrorCodes());
+    GHAND_LOG_INFO("Self-test error: sensor (" << info.sensor.size()
+                                              << " channels)");
+  }
+  if (HasSelfTestError(info.summary, SelfTestError::Joint)) {
+    info.joint = CollectMotorErrors(GetJointErrorCodes());
+    GHAND_LOG_INFO("Self-test error: joint (" << info.joint.size()
+                                             << " channels)");
   }
   return info;
 }
