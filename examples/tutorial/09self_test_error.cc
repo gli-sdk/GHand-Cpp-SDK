@@ -146,12 +146,18 @@ int main() {
   std::cout << "Self-test failed! Error details:" << '\n';
   std::printf("  %-16s 0x%02X  (%s)\n", "summary", info.summary,
               SummaryName(info.summary).c_str());
-  std::printf("  %-16s %s\n", "sensor",
-              MotorErrors(info.sensor, SensorErrorName).c_str());
-  std::printf("  %-16s %s\n", "joint",
-              MotorErrors(info.joint, JointErrorName).c_str());
-  std::printf("  %-16s %s\n", "motor",
-              MotorErrors(info.motor, MotorErrorName).c_str());
+  if (ghand::HasSelfTestError(info.summary, ghand::SelfTestError::Sensor)) {
+    std::printf("  %-16s %s\n", "sensor",
+                MotorErrors(info.sensor, SensorErrorName).c_str());
+  }
+  if (ghand::HasSelfTestError(info.summary, ghand::SelfTestError::Joint)) {
+    std::printf("  %-16s %s\n", "joint",
+                MotorErrors(info.joint, JointErrorName).c_str());
+  }
+  if (ghand::HasSelfTestError(info.summary, ghand::SelfTestError::Motor)) {
+    std::printf("  %-16s %s\n", "motor",
+                MotorErrors(info.motor, MotorErrorName).c_str());
+  }
 
   hand->Disconnect();
   return 0;

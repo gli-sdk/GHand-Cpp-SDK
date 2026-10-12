@@ -25,6 +25,7 @@
 #include <memory>
 #include <sstream>
 #include <thread>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -1047,11 +1048,9 @@ constexpr uint8_t kSelfTestSubErrorCode = 0x03;
 constexpr uint8_t kSelfTestStateSuccess = 2;
 constexpr uint8_t kSelfTestStateFailed = 3;
 
-constexpr int kSelfTestPollAttempts = 100;
-
 }  // namespace
 
-bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
+void EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
                                             std::array<uint8_t, 13>* codes) {
   codes->fill(0);
 
@@ -1061,47 +1060,41 @@ bool EtherCATComm::ReadDiagnosticErrorCodes(uint8_t command,
                EC_TIMEOUTRXM) <= 0) {
     GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                    << ": SDO write failed");
-    return false;
+    throw std::runtime_error("Self-test command SDO write failed");
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
 
   uint8_t state = 0xFF;
-  int attempts = kSelfTestPollAttempts;
-  while (attempts--) {
+  auto deadline = std::chrono::steady_clock::now() +
+                  std::chrono::milliseconds(1000);
+  while (true) {
     int state_size = sizeof(uint8_t);
     if (SDORead(1, kSelfTestIndex, kSelfTestSubState, &state_size, &state,
                 EC_TIMEOUTRXM) <= 0) {
       GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                      << ": state read failed");
-      return false;
+      throw std::runtime_error("Self-test state SDO read failed");
     }
     if (state == kSelfTestStateSuccess || state == kSelfTestStateFailed) {
       break;
     }
+    if (std::chrono::steady_clock::now() >= deadline) {
+      throw std::runtime_error("Self-test state poll timeout");
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
-  if (state != kSelfTestStateSuccess && state != kSelfTestStateFailed) {
-    GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
-                                   << ": state poll timeout (state="
-                                   << std::dec << static_cast<int>(state)
-                                   << ")");
-    return false;
-  }
-
   int codes_size = static_cast<int>(codes->size());
   if (SDORead(1, kSelfTestIndex, kSelfTestSubErrorCode, &codes_size,
               codes->data(), EC_TIMEOUTRXM) <= 0) {
     GHAND_LOG_ERROR("Self-test 0x" << std::hex << static_cast<int>(command)
                                    << ": error_code read failed");
-    return false;
+    throw std::runtime_error("Self-test error code SDO read failed");
   }
-  return true;
 }
 
 uint8_t EtherCATComm::GetSelfTestSummaryErrorCode() {
   std::array<uint8_t, 13> codes{};
-  if (!ReadDiagnosticErrorCodes(0xA0, &codes)) {
-    return 0;
-  }
+  ReadDiagnosticErrorCodes(0xA0, &codes);
   return codes[0];
 }
 
@@ -1159,8 +1152,6 @@ SelfTestErrorInfo EtherCATComm::GetSelfTestErrorInfo() {
 
   if (HasSelfTestError(info.summary, SelfTestError::Motor)) {
     info.motor = CollectMotorErrors(GetMotorErrorCodes());
-    GHAND_LOG_INFO("Self-test error: motor check (" << info.motor.size()
-                                                    << " motors)");
   }
   if (HasSelfTestError(info.summary, SelfTestError::Sensor)) {
     info.sensor = CollectMotorErrors(GetSensorErrorCodes());

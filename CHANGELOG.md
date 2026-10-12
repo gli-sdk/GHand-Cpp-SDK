@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **BREAKING:** Aligned self-test diagnostics with Python SDK `pan_fix_sn`: A0 flags are `Motor=0x01`, `Sensor=0x02`, and `Joint=0x04`; detail queries are A8, A2, and A6 respectively. `SelfTestErrorInfo` now contains `summary`, `sensor`, `joint`, and `motor`. Removed the legacy summary flags, `VersionCheckError`, `TactileCheckError`, `ZeroingCheckError`, and their result fields. A2 `SensorError::MappingFailed=0x02` replaces the old A0 unmapped interpretation. Callers must rebuild and migrate to the new fields; firmware must implement the matching diagnostic protocol.
 
+- EtherCAT, CANFD, and RS485 query failures and timeouts throw `std::runtime_error` instead of returning empty or partial self-test diagnostics.
+
 ### Fixed
 - Disconnect EtherCAT after a failed BOOT entry or communication-state transition during firmware update, preserving the original firmware-update error.
 - Preserve device information after disconnecting a mismatched product so callers can select the actual product and reconnect. Clear the information before each new connection attempt.

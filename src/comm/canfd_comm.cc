@@ -829,7 +829,9 @@ bool CANFDComm::InitJoint() {
 }
 
 SelfTestErrorInfo CANFDComm::GetSelfTestErrorInfo() {
-  if (!IsConnected()) return SelfTestErrorInfo{};
+  if (!IsConnected()) {
+    throw std::runtime_error("Self-test query requires a connected device");
+  }
 
   SelfTestRegisterIO io;
   io.read_registers =

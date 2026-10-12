@@ -166,7 +166,7 @@ class EtherCATComm : public IComm {
   void ParseAndNotify(const uint8_t* data, size_t size);
 
   // Self-test error helpers (object dictionary 0x2008). A2/A6/A8 are internal.
-  bool ReadDiagnosticErrorCodes(uint8_t command,
+  void ReadDiagnosticErrorCodes(uint8_t command,
                                 std::array<uint8_t, 13>* codes);
   uint8_t GetSelfTestSummaryErrorCode();
   std::array<uint8_t, 13> GetSensorErrorCodes();
