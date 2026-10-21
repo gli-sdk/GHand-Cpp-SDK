@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <chrono>
 #include <iostream>
 #include <thread>
@@ -48,61 +51,65 @@ bool Hold(ghand::Master& master) {
   return master.MoveJoints(joints);
 }
 
-bool HandZero(ghand::Master& master) {
+bool ResetToOpenHand(ghand::Master& master) {
   auto joints = MakeOpenHand();
   return master.MoveJoints(joints);
 }
 
 int main() {
-  std::cout << "***** GHand SDK - Hold Demo *****\n" << '\n';
+  std::cout << "***** GHand SDK - Hold Demo *****\n\n";
   auto master = ghand::Master::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
   if (!master) {
-    std::cerr << "Failed to create GHand" << '\n';
-    return -1;
+    std::cerr << "Failed to create GHand\n";
+    return 1;
   }
-  bool connected = master->Connect("auto");
+
+  const auto connected = master->Connect("auto");
   if (!connected) {
-    std::cout << "\n[Scan complete] Failed to connect to dexterous hand."
+    std::cerr << "Failed to connect to dexterous hand: " << connected.message
               << '\n';
     return 1;
   }
-  std::cout << "\n--- Device ready, starting hold demo ---\n" << '\n';
+  std::cout << "\n--- Device ready, starting hold demo ---\n";
+  std::cout << "Press Ctrl+C to stop demo and exit\n\n";
 
-  int gesture_cycle = 0;
-  const int max_cycles = 0;
-
+  bool failed = false;
+  int round = 0;
   while (true) {
-    gesture_cycle++;
-    if (max_cycles > 0 && gesture_cycle > max_cycles) break;
-
-    std::cout << "\n--- Round " << gesture_cycle << " demo started ---"
-              << '\n';
+    ++round;
+    std::cout << "\n--- Round " << round << " demo started ---\n";
 
     if (!Hold(*master)) {
-      std::cout << "Round " << gesture_cycle << " hold action execution failed"
-                << '\n';
+      std::cerr << "Round " << round << " hold action execution failed\n";
+      failed = true;
       break;
     }
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
-    if (!HandZero(*master)) {
-      std::cout << "Round " << gesture_cycle
-                << " reset action execution failed" << '\n';
+    if (!ResetToOpenHand(*master)) {
+      std::cerr << "Round " << round << " reset action execution failed\n";
+      failed = true;
       break;
     }
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
-    std::cout << "--- Round " << gesture_cycle << " demo finished ---\n"
-              << '\n';
+    std::cout << "--- Round " << round << " demo finished ---\n";
+  }
 
-    if (max_cycles == 0) {
-      std::cout << "Press Ctrl+C to stop demo and exit\n" << '\n';
+  if (failed) {
+    const auto stopped = master->Stop();
+    if (!stopped) {
+      std::cerr << "Stop failed: " << stopped.message << '\n';
     }
   }
 
-  master->Disconnect();
+  const auto disconnected = master->Disconnect();
+  if (!disconnected) {
+    std::cerr << "Disconnect failed: " << disconnected.message << '\n';
+    return 1;
+  }
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  std::cout << "\n--- Demo finished, disconnecting ---" << '\n';
-  return 0;
+  std::cout << "\n--- Demo finished, disconnected ---\n";
+  return failed ? 1 : 0;
 }

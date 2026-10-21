@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <chrono>
 #include <iostream>
 #include <map>
@@ -97,10 +100,11 @@ int main(int argc, char* argv[]) {
   std::cout << "Connected on " << device << " - " << hands.size()
             << " hand(s):\n";
   for (ghand::GHand* hand : hands) {
+    const ghand::DeviceInfo info = hand->device_info();
     std::cout << "  slave 0x" << std::hex << hand->slave_index() << std::dec
               << ": " << ghand::ToString(hand->hand_type())
-              << " device=" << hand->device_info().device_name
-              << " serial=" << hand->device_info().serial_number << '\n';
+              << " device=" << info.device_name
+              << " serial=" << info.serial_number << '\n';
   }
 
   // Each callback is registered on one hand and only receives that hand's
@@ -133,10 +137,16 @@ int main(int argc, char* argv[]) {
     }
   };
 
+  bool failed = false;
+
   // A session-level call drives every hand at once, so a shared pose needs no
   // loop at all.
   std::cout << "\nMove the hands to a light grasp pose...\n";
-  master->MoveJoints(BuildPose(25.0f, 35.0f));
+  const auto grasp_result = master->MoveJoints(BuildPose(25.0f, 35.0f));
+  if (!grasp_result) {
+    std::cerr << "Grasp command failed: " << grasp_result.message << '\n';
+    failed = true;
+  }
   std::this_thread::sleep_for(std::chrono::seconds(2));
   print_feedback();
 
@@ -144,20 +154,38 @@ int main(int argc, char* argv[]) {
   std::cout << "Mirror the index/middle finger pose...\n";
   for (ghand::GHand* hand : hands) {
     const bool is_left = hand->hand_type() == ghand::HandType::LEFT;
-    hand->MoveJoints(is_left ? BuildPose(45.0f, 60.0f)
-                             : BuildPose(10.0f, 15.0f));
+    const auto result = hand->MoveJoints(
+        is_left ? BuildPose(45.0f, 60.0f) : BuildPose(10.0f, 15.0f));
+    if (!result) {
+      std::cerr << "Mirror command failed on slave 0x" << std::hex
+                << hand->slave_index() << std::dec << ": " << result.message
+                << '\n';
+      failed = true;
+    }
   }
   std::this_thread::sleep_for(std::chrono::seconds(2));
   print_feedback();
 
   std::cout << "Reset the hands...\n";
-  master->MoveJoints(BuildPose(0.0f, 0.0f));
+  const auto reset_result = master->MoveJoints(BuildPose(0.0f, 0.0f));
+  if (!reset_result) {
+    std::cerr << "Reset command failed: " << reset_result.message << '\n';
+    failed = true;
+  }
   std::this_thread::sleep_for(std::chrono::seconds(1));
   print_feedback();
 
-  master->Stop();
-  master->Disconnect();
+  const auto stop_result = master->Stop();
+  if (!stop_result) {
+    std::cerr << "Stop failed: " << stop_result.message << '\n';
+    failed = true;
+  }
+  const auto disconnected = master->Disconnect();
+  if (!disconnected) {
+    std::cerr << "Disconnect failed: " << disconnected.message << '\n';
+    return 1;
+  }
 
   std::cout << "\nDemo completed.\n";
-  return 0;
+  return failed ? 1 : 0;
 }

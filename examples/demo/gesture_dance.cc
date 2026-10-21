@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <chrono>
 #include <iostream>
 #include <thread>
@@ -180,7 +183,7 @@ std::vector<ghand::JointCommand> MakeOK() {
 
 // Action execution functions.
 
-bool HandZero(ghand::Master& master) {
+bool ResetToOpenHand(ghand::Master& master) {
   auto joints = MakeOpenHand();
   return master.MoveJoints(joints);
 }
@@ -193,13 +196,13 @@ bool ThumbTouch(ghand::Master& master) {
     if (!master.MoveJoints(pose)) return false;
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
-  return HandZero(master);
+  return ResetToOpenHand(master);
 }
 
 bool FistThenOpen(ghand::Master& master) {
   if (!master.MoveJoints(MakeFist())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  return HandZero(master);
+  return ResetToOpenHand(master);
 }
 
 bool SeqOpenFinger(ghand::Master& master) {
@@ -209,13 +212,13 @@ bool SeqOpenFinger(ghand::Master& master) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
   if (!master.MoveJoints(MakeOpenMiddleFinger())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  return HandZero(master);
+  return ResetToOpenHand(master);
 }
 
 bool MakeOKGesture(ghand::Master& master) {
   if (!master.MoveJoints(MakeOK())) return false;
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  return HandZero(master);
+  return ResetToOpenHand(master);
 }
 
 // First action group.
@@ -237,57 +240,58 @@ bool SecondAction(ghand::Master& master) {
   return true;
 }
 
-// Main function.
 int main() {
-  std::cout << "***** GHand SDK - Gesture Dance Demo *****\n"
-            << '\n';
+  std::cout << "***** GHand SDK - Gesture Dance Demo *****\n\n";
   auto master = ghand::Master::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
   if (!master) {
-    std::cerr << "Failed to create GHand" << '\n';
-    return -1;
+    std::cerr << "Failed to create GHand\n";
+    return 1;
   }
-  bool connected = master->Connect("auto");
+
+  const auto connected = master->Connect("auto");
   if (!connected) {
-    std::cout << "\n[Scan complete] Failed to connect to dexterous hand."
+    std::cerr << "Failed to connect to dexterous hand: " << connected.message
               << '\n';
     return 1;
   }
-  std::cout << "\n--- Device ready, starting gesture dance demo ---\n"
-            << '\n';
+  std::cout << "\n--- Device ready, starting gesture dance demo ---\n";
+  std::cout << "Press Ctrl+C to stop demo and exit\n\n";
 
-  int gesture_cycle = 0;
-  const int max_cycles = 0;
-
+  bool failed = false;
+  int round = 0;
   while (true) {
-    gesture_cycle++;
-    if (max_cycles > 0 && gesture_cycle > max_cycles) break;
-
-    std::cout << "\n--- Round " << gesture_cycle << " gesture demo started ---"
-              << '\n';
+    ++round;
+    std::cout << "\n--- Round " << round << " gesture demo started ---\n";
 
     if (!FirstAction(*master)) {
-      std::cout << "Round " << gesture_cycle
-                << " first action group execution failed" << '\n';
+      std::cerr << "Round " << round << " first action group failed\n";
+      failed = true;
       break;
     }
 
     if (!SecondAction(*master)) {
-      std::cout << "Round " << gesture_cycle
-                << " second action group execution failed" << '\n';
+      std::cerr << "Round " << round << " second action group failed\n";
+      failed = true;
       break;
     }
 
-    std::cout << "--- Round " << gesture_cycle
-              << " gesture demo finished ---\n" << '\n';
+    std::cout << "--- Round " << round << " gesture demo finished ---\n";
+  }
 
-    if (max_cycles == 0) {
-      std::cout << "Press Ctrl+C to stop demo and exit\n" << '\n';
+  if (failed) {
+    const auto stopped = master->Stop();
+    if (!stopped) {
+      std::cerr << "Stop failed: " << stopped.message << '\n';
     }
   }
 
-  master->Disconnect();
+  const auto disconnected = master->Disconnect();
+  if (!disconnected) {
+    std::cerr << "Disconnect failed: " << disconnected.message << '\n';
+    return 1;
+  }
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  std::cout << "\n--- Demo finished, disconnecting ---" << '\n';
-  return 0;
+  std::cout << "\n--- Demo finished, disconnected ---\n";
+  return failed ? 1 : 0;
 }

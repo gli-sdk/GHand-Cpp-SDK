@@ -1,3 +1,12 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+//
+// Data-glove control demo. The glove streams comma-separated channel values
+// over UDP; kLeftIndices maps the left glove channels to this demo's finger
+// model, and the hand driven is the left hand found by Connect(). Commands are
+// throttled to 50 Hz, so packets arriving faster are drained but not all
+// forwarded to the hand.
+
 // Define these macros before including Windows headers to avoid
 // winsock.h/winsock2.h conflicts.
 #ifdef _WIN32
@@ -11,6 +20,7 @@ typedef int socklen_t;
 #else
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 #define closesocket close
 typedef int SOCKET;
@@ -24,7 +34,6 @@ const int SOCKET_ERROR = -1;
 #include <cstring>
 #include <iomanip>
 #include <iostream>
-#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -63,7 +72,6 @@ struct HandData {
   Finger pinky;
 };
 
-constexpr char kUdpIp[] = "192.168.1.19";
 constexpr int kUdpPort = 8080;
 constexpr double kProcessInterval = 0.02;
 
@@ -211,12 +219,11 @@ bool BindUdpSocket(SOCKET sock) {
 
   if (bind(sock, (sockaddr*)&server_addr, sizeof(server_addr)) ==
       SOCKET_ERROR) {
-    std::cerr << "Error: Unable to bind to " << kUdpIp << ":" << kUdpPort
-              << '\n';
+    std::cerr << "Error: Unable to bind UDP port " << kUdpPort << '\n';
     return false;
   }
 
-  std::cout << "\nOK Listening for data on " << kUdpIp << ":" << kUdpPort
+  std::cout << "\nOK Listening for glove data on UDP port " << kUdpPort
             << "..." << '\n';
   return true;
 }
@@ -232,25 +239,6 @@ void ConfigureReceiveTimeout(SOCKET sock) {
   tv.tv_usec = 0;
   setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #endif
-}
-
-std::unique_ptr<ghand::Master> CreateConnectedMaster() {
-  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
-                                      ghand::CommType::ETHERCAT);
-  if (!master) {
-    std::cerr << "Failed to create GHand" << '\n';
-    return nullptr;
-  }
-  std::cout << "\nConnecting to dexterous hand..." << '\n';
-  const auto connected = master->Connect("auto");
-  if (!connected) {
-    std::cerr << "Error: Unable to connect to dexterous hand: "
-              << connected.message << '\n';
-    return nullptr;
-  }
-
-  std::cout << "OK Successfully connected to dexterous hand!" << '\n';
-  return master;
 }
 
 std::vector<ghand::JointCommand> BuildJointCommands(const HandData& hand) {
@@ -302,16 +290,22 @@ ReceiveStatus ReceivePacket(SOCKET sock, char* buffer, int buffer_size,
 #ifdef _WIN32
   int error = WSAGetLastError();
   if (error == WSAETIMEDOUT) return ReceiveStatus::TIMEOUT;
+#else
+  if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    return ReceiveStatus::TIMEOUT;
+  }
 #endif
   return ReceiveStatus::FAILURE;
 }
 
-void ProcessPacket(char* buffer, int recv_len, ghand::GHand& hand,
-                   int* data_count, bool joints_received,
-                   const std::vector<ghand::Joint>& last_joints) {
+// Returns false when the hand rejected the command; malformed glove frames are
+// ignored and do not count as failures.
+bool ProcessPacket(char* buffer, int recv_len, ghand::GHand& hand,
+                   int* data_count) {
   buffer[recv_len] = '\0';
-  HandData left_hand, right_hand;
-  if (!ProcessGloveData(buffer, left_hand, right_hand)) return;
+  HandData left_hand;
+  HandData right_hand;  // Parsed for stream validation; this demo drives left.
+  if (!ProcessGloveData(buffer, left_hand, right_hand)) return true;
 
   ++(*data_count);
   if (*data_count % 50 == 0) {
@@ -321,12 +315,19 @@ void ProcessPacket(char* buffer, int recv_len, ghand::GHand& hand,
               << ", roll=" << left_hand.thumb.mcp_roll << '\n';
   }
 
-  std::vector<ghand::JointCommand> joints = BuildJointCommands(left_hand);
-  hand.MoveJoints(joints);
-  if (*data_count % 100 == 0 && joints_received && !last_joints.empty()) {
+  const std::vector<ghand::JointCommand> joints =
+      BuildJointCommands(left_hand);
+  const auto result = hand.MoveJoints(joints);
+  if (!result) {
+    std::cerr << "MoveJoints failed: " << result.message << '\n';
+    return false;
+  }
+
+  if (*data_count % 100 == 0) {
     std::cout << "[Dexterous Hand Status] Processed " << *data_count
               << " frames" << '\n';
   }
+  return true;
 }
 
 void ReceiveLoop(SOCKET sock, ghand::GHand& hand) {
@@ -334,17 +335,11 @@ void ReceiveLoop(SOCKET sock, ghand::GHand& hand) {
             << '\n';
   std::cout << "Press Ctrl+C to exit program\n" << '\n';
 
-  std::vector<ghand::Joint> last_joints;
-  bool joints_received = false;
-  hand.SetJointsCallback([&](const std::vector<ghand::Joint>& joints) {
-    last_joints = joints;
-    joints_received = true;
-  });
-
   auto last_process_time = std::chrono::steady_clock::now();
   int data_count = 0;
+  int consecutive_failures = 0;
+  char buffer[32 * 1024];
   while (true) {
-    char buffer[32 * 1024];
     int recv_len = 0;
     ReceiveStatus status =
         ReceivePacket(sock, buffer, sizeof(buffer), &recv_len);
@@ -359,8 +354,13 @@ void ReceiveLoop(SOCKET sock, ghand::GHand& hand) {
         std::chrono::duration<double>(current_time - last_process_time)
             .count();
     if (elapsed >= kProcessInterval) {
-      ProcessPacket(buffer, recv_len, hand, &data_count, joints_received,
-                    last_joints);
+      if (ProcessPacket(buffer, recv_len, hand, &data_count)) {
+        consecutive_failures = 0;
+      } else if (++consecutive_failures >= 5) {
+        std::cerr << "Stopping after " << consecutive_failures
+                  << " consecutive command failures\n";
+        break;
+      }
       last_process_time = current_time;
     }
   }
@@ -387,18 +387,43 @@ int main() {
   }
 
   ConfigureReceiveTimeout(sock);
-  auto master = CreateConnectedMaster();
+
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                      ghand::CommType::ETHERCAT);
   if (!master) {
+    std::cerr << "Failed to create GHand" << '\n';
     closesocket(sock);
     CleanupSocketApi();
     return 1;
   }
-  ghand::GHand* hand = master->hands().front();
+
+  std::cout << "\nConnecting to dexterous hand..." << '\n';
+  const auto connected = master->Connect("auto");
+  if (!connected) {
+    std::cerr << "Error: Unable to connect to dexterous hand: "
+              << connected.message << '\n';
+    closesocket(sock);
+    CleanupSocketApi();
+    return 1;
+  }
+  std::cout << "OK Successfully connected to dexterous hand!" << '\n';
+
+  ghand::GHand* hand = master->hand(ghand::HandType::LEFT);
+  if (hand == nullptr) {
+    std::cerr << "Error: no left hand found on the bus" << '\n';
+    master->Disconnect();
+    closesocket(sock);
+    CleanupSocketApi();
+    return 1;
+  }
 
   ReceiveLoop(sock, *hand);
 
   std::cout << "\nCleaning up resources..." << '\n';
-  master->Disconnect();
+  const auto disconnected = master->Disconnect();
+  if (!disconnected) {
+    std::cerr << "Disconnect failed: " << disconnected.message << '\n';
+  }
   closesocket(sock);
   CleanupSocketApi();
 

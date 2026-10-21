@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <iostream>
 
 #include "ghand/ghand.h"
@@ -14,7 +17,7 @@ int main() {
   std::cout << "Connecting to dexterous hand..." << '\n';
   const auto connected = master->Connect("auto");
   if (!connected) {
-    std::cout << "Failed to connect to the dexterous hand: "
+    std::cerr << "Failed to connect to the dexterous hand: "
               << connected.message << '\n';
     return 1;
   }
@@ -26,6 +29,8 @@ int main() {
   ghand::GHand* hand = connected.value.front();
   std::cout << "Hand type: " << ghand::ToString(hand->hand_type()) << '\n';
 
+  // device_info() returns the snapshot taken during Connect(). Call
+  // QueryDeviceInfo() if you need a fresh read from the device.
   const ghand::DeviceInfo device_info = hand->device_info();
 
   std::cout << "Device name: " << device_info.device_name << '\n';
@@ -46,7 +51,11 @@ int main() {
   std::cout << "Serial number: " << device_info.serial_number << '\n';
 
   // Disconnect
-  master->Disconnect();
+  const auto disconnected = master->Disconnect();
+  if (!disconnected) {
+    std::cerr << "Failed to disconnect: " << disconnected.message << '\n';
+    return 1;
+  }
   std::cout << "Connection closed." << '\n';
 
   return 0;

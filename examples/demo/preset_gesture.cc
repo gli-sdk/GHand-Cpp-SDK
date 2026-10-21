@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <chrono>
 #include <iomanip>
 #include <iostream>
@@ -129,7 +132,6 @@ const std::unordered_map<GestureType,
 
 ghand::HandState g_hand_state;
 std::vector<ghand::Joint> g_joints;
-ghand::GHand* g_hand = nullptr;
 std::mutex g_state_mutex;
 
 void OnHandStateUpdate(const ghand::HandState& state) {
@@ -225,9 +227,9 @@ std::unique_ptr<ghand::Master> CreateConnectedHand() {
 
   std::cout << "Connected successfully" << '\n';
   // Data callbacks belong to one hand, so register on the hand itself.
-  g_hand = connected.value.front();
-  g_hand->SetJointsCallback(OnJointsUpdate);
-  g_hand->SetHandStateCallback(OnHandStateUpdate);
+  ghand::GHand* hand = connected.value.front();
+  hand->SetJointsCallback(OnJointsUpdate);
+  hand->SetHandStateCallback(OnHandStateUpdate);
   return master;
 }
 
@@ -320,7 +322,11 @@ int main() {
   }
 
   std::cout << "\nDisconnecting..." << '\n';
-  master->Disconnect();
+  const auto disconnected = master->Disconnect();
+  if (!disconnected) {
+    std::cerr << "Disconnect failed: " << disconnected.message << '\n';
+    return 1;
+  }
   std::cout << "Disconnected. Thank you!" << '\n';
 
   return has_error ? 1 : 0;

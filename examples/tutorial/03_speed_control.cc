@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <chrono>
 #include <iomanip>
 #include <iostream>
@@ -6,6 +9,7 @@
 
 #include "ghand/ghand.h"
 
+// Print a short subset of the feedback so the sample output stays readable.
 void PrintJointStates(const std::vector<ghand::Joint>& joints) {
   for (const auto& joint : joints) {
     if (joint.id != ghand::JointId::THUMB_MCP &&
@@ -42,24 +46,26 @@ int main() {
   }
   ghand::GHand* hand = connected.value.front();
 
+  // SPEED mode only uses `velocity`; `angle` is ignored. Positive velocity
+  // closes the fingers and negative opens them. This demo drives the thumb
+  // and the PIP/MCP joints of the four fingers.
   std::vector<ghand::JointCommand> joints = {
-      {ghand::JointId::THUMB_MCP, 0.0f, 0, 10},
-      {ghand::JointId::THUMB_TMC_FE, 0.0f, 0, 10},
-      {ghand::JointId::FF_PIP, 0.0f, 0, 10},
-      {ghand::JointId::FF_MCP, 0.0f, 0, 10},
-      {ghand::JointId::MF_PIP, 0.0f, 0, 10},
-      {ghand::JointId::MF_MCP, 0.0f, 0, 10},
-      {ghand::JointId::RF_PIP, 0.0f, 0, 10},
-      {ghand::JointId::RF_MCP, 0.0f, 0, 10},
-      {ghand::JointId::LF_PIP, 0.0f, 0, 10},
-      {ghand::JointId::LF_MCP, 0.0f, 0, 10},
+      {ghand::JointId::THUMB_MCP, 0.0f, 10, 10},
+      {ghand::JointId::THUMB_TMC_FE, 0.0f, 10, 10},
+      {ghand::JointId::FF_PIP, 0.0f, 10, 10},
+      {ghand::JointId::FF_MCP, 0.0f, 10, 10},
+      {ghand::JointId::MF_PIP, 0.0f, 10, 10},
+      {ghand::JointId::MF_MCP, 0.0f, 10, 10},
+      {ghand::JointId::RF_PIP, 0.0f, 10, 10},
+      {ghand::JointId::RF_MCP, 0.0f, 10, 10},
+      {ghand::JointId::LF_PIP, 0.0f, 10, 10},
+      {ghand::JointId::LF_MCP, 0.0f, 10, 10},
   };
 
-  std::cout << "Closing fingers (current=10)..." << '\n';
-  const auto close_result =
-      hand->MoveJoints(joints, ghand::ControlMode::CURRENT);
+  std::cout << "Closing fingers (speed=10)..." << '\n';
+  const auto close_result = hand->MoveJoints(joints, ghand::ControlMode::SPEED);
   if (!close_result) {
-    std::cerr << "Failed to send current command: " << close_result.message
+    std::cerr << "Failed to send speed command: " << close_result.message
               << '\n';
     master->Disconnect();
     return 1;
@@ -74,13 +80,13 @@ int main() {
   }
 
   for (auto& joint : joints) {
-    joint.current = -10;
+    joint.velocity = -10;
   }
 
-  std::cout << "Opening fingers (current=-10)..." << '\n';
-  const auto open_result = hand->MoveJoints(joints, ghand::ControlMode::CURRENT);
+  std::cout << "Opening fingers (speed=-10)..." << '\n';
+  const auto open_result = hand->MoveJoints(joints, ghand::ControlMode::SPEED);
   if (!open_result) {
-    std::cerr << "Failed to send current command: " << open_result.message
+    std::cerr << "Failed to send speed command: " << open_result.message
               << '\n';
     master->Disconnect();
     return 1;
@@ -94,8 +100,15 @@ int main() {
     std::cerr << "Failed to read joint data: " << opened_data.message << '\n';
   }
 
-  hand->Stop();
-  master->Disconnect();
+  const auto stop_result = hand->Stop();
+  if (!stop_result) {
+    std::cerr << "Failed to stop: " << stop_result.message << '\n';
+  }
+  const auto disconnected = master->Disconnect();
+  if (!disconnected) {
+    std::cerr << "Disconnect failed: " << disconnected.message << '\n';
+    return 1;
+  }
   std::cout << "Disconnected." << '\n';
   return 0;
 }

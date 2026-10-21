@@ -1,8 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
-# Helper function: add post-build commands to copy DLLs and config files for examples
+# Copy the shared library and its runtime dependencies next to an example.
 function(copy_runtime_for_target target_name)
-    # Copy ghand.dll
     add_custom_command(TARGET ${target_name} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "$<TARGET_FILE:ghand>"
@@ -10,7 +9,6 @@ function(copy_runtime_for_target target_name)
         COMMENT "Copying ghand.dll to ${target_name} directory"
     )
 
-    # Copy runtime DLLs attached to ghand target
     get_target_property(DLL_LIST ghand RUNTIME_DLL_LIST)
     if(DLL_LIST)
         foreach(dll_path ${DLL_LIST})
@@ -25,112 +23,39 @@ function(copy_runtime_for_target target_name)
     endif()
 endfunction()
 
-# 01. Basic connection example
-add_executable(basic_connection tutorial/01basic_connection.cc)
-target_link_libraries(basic_connection ghand)
-copy_runtime_for_target(basic_connection)
+function(add_ghand_example target_name source_file)
+    add_executable(${target_name} ${source_file})
+    target_link_libraries(${target_name} ghand)
+    copy_runtime_for_target(${target_name})
+endfunction()
 
-# 02. Joint movement example
-add_executable(move_joints tutorial/02move_joints.cc)
-target_link_libraries(move_joints ghand)
-copy_runtime_for_target(move_joints)
+# Tutorials, numbered in the same order as their filenames.
+add_ghand_example(basic_connection tutorial/01_basic_connection.cc)
+add_ghand_example(move_joints tutorial/02_move_joints.cc)
+add_ghand_example(speed_control tutorial/03_speed_control.cc)
+add_ghand_example(current_control tutorial/04_current_control.cc)
+add_ghand_example(tactile_callback tutorial/05_tactile_callback.cc)
+add_ghand_example(multi_hand tutorial/06_multi_hand.cc)
+add_ghand_example(glove_control tutorial/07_glove_control.cc)
+add_ghand_example(interactive_joint_control
+    tutorial/08_interactive_joint_control.cc)
+add_ghand_example(hand_state tutorial/09_hand_state.cc)
+add_ghand_example(switch_baud_rate tutorial/10_switch_baud_rate.cc)
+add_ghand_example(connect_hands tutorial/11_connect_hands.cc)
 
-# 03. Tactile callback example
-add_executable(tactile_callback tutorial/05tactile_callback.cc)
-target_link_libraries(tactile_callback ghand)
-copy_runtime_for_target(tactile_callback)
-
-# 04. Preset gesture example
-add_executable(preset_gesture demo/preset_gesture.cc)
-target_link_libraries(preset_gesture ghand)
-copy_runtime_for_target(preset_gesture)
-
-# 06. Multi-hand control example
-add_executable(multi_hand tutorial/06multi_hand.cc)
-target_link_libraries(multi_hand ghand)
-copy_runtime_for_target(multi_hand)
-
-# 06. Interactive joint control example
-add_executable(interactive_joint_control tutorial/08interactive_joint_control.cc)
-target_link_libraries(interactive_joint_control ghand)
-copy_runtime_for_target(interactive_joint_control)
-
-# 07. Data glove control example (Windows only)
+# The glove demo uses Winsock on Windows and BSD sockets elsewhere.
 if(WIN32)
-    add_executable(glove_control tutorial/07glove_control.cc)
-    target_link_libraries(glove_control ghand ws2_32)
-    set_target_properties(glove_control PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tutorial
-    )
-    copy_runtime_for_target(glove_control)
+    target_link_libraries(glove_control ws2_32)
 endif()
 
-# 08. Speed control example
-add_executable(speed_control tutorial/03speed_control.cc)
-target_link_libraries(speed_control ghand)
-copy_runtime_for_target(speed_control)
-
-# 09. Current control example
-add_executable(current_control tutorial/04current_control.cc)
-target_link_libraries(current_control ghand)
-copy_runtime_for_target(current_control)
-
-# 09. Hand and motor status example
-add_executable(hand_state tutorial/09hand_state.cc)
-target_link_libraries(hand_state ghand)
-copy_runtime_for_target(hand_state)
-
-# 10. Baud-rate switch example
-add_executable(switch_baud_rate tutorial/10switch_baud_rate.cc)
-target_link_libraries(switch_baud_rate ghand)
-copy_runtime_for_target(switch_baud_rate)
-
-# 11. Multi-hand example: EtherCAT / CAN-FD / RS485 (auto-detect + control)
-add_executable(connect_hands tutorial/12connect_hands.cc)
-target_link_libraries(connect_hands ghand)
-copy_runtime_for_target(connect_hands)
-
-# Gesture dance demo
-add_executable(gesture_dance demo/gesture_dance.cc)
-target_link_libraries(gesture_dance ghand)
-copy_runtime_for_target(gesture_dance)
-
-# Grabbing action demo
-add_executable(grabbing_action demo/grabbing_action.cc)
-target_link_libraries(grabbing_action ghand)
-copy_runtime_for_target(grabbing_action)
-
-# Press action demo
-add_executable(press_action demo/press_action.cc)
-target_link_libraries(press_action ghand)
-copy_runtime_for_target(press_action)
-
-# Clap action demo
-add_executable(clap_action demo/clap_action.cc)
-target_link_libraries(clap_action ghand)
-copy_runtime_for_target(clap_action)
-
-# Hold action demo
-add_executable(hold_action demo/hold_action.cc)
-target_link_libraries(hold_action ghand)
-copy_runtime_for_target(hold_action)
-
-# Knock action demo
-add_executable(knock_action demo/knock_action.cc)
-target_link_libraries(knock_action ghand)
-copy_runtime_for_target(knock_action)
-
-# Lift action demo
-add_executable(lift_action demo/lift_action.cc)
-target_link_libraries(lift_action ghand)
-copy_runtime_for_target(lift_action)
-
-# Pull action demo
-add_executable(pull_action demo/pull_action.cc)
-target_link_libraries(pull_action ghand)
-copy_runtime_for_target(pull_action)
-
-# Support action demo
-add_executable(support_action demo/support_action.cc)
-target_link_libraries(support_action ghand)
-copy_runtime_for_target(support_action)
+# Action demos.
+add_ghand_example(preset_gesture demo/preset_gesture.cc)
+add_ghand_example(gesture_dance demo/gesture_dance.cc)
+add_ghand_example(grabbing_action demo/grabbing_action.cc)
+add_ghand_example(press_action demo/press_action.cc)
+add_ghand_example(clap_pose demo/clap_pose.cc)
+add_ghand_example(hold_action demo/hold_action.cc)
+add_ghand_example(knock_action demo/knock_action.cc)
+add_ghand_example(lift_action demo/lift_action.cc)
+add_ghand_example(pull_action demo/pull_action.cc)
+add_ghand_example(support_action demo/support_action.cc)

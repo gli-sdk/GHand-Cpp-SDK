@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include <chrono>
 #include <iomanip>
 #include <iostream>
@@ -7,12 +10,13 @@
 
 #include "ghand/ghand.h"
 
-// Joint status display callback function. It is registered on one hand, so it
+// Joint status display callback. It runs on the communication thread; this
+// demo only prints, so it needs no locking. A callback registered on one hand
 // only ever receives that hand's data.
 void DisplayJoints(const std::vector<ghand::Joint>& joints) {
   std::cout << "\n========== Joint Status ==========" << '\n';
-  std::cout << std::left << std::setw(20) << "Joint" << std::setw(10)
-            << "Angle(deg)" << std::setw(10) << "Velocity(%)" << std::setw(10)
+  std::cout << std::left << std::setw(20) << "Joint" << std::setw(15)
+            << "Angle(deg)" << std::setw(15) << "Velocity(%)" << std::setw(15)
             << "Current(%)" << std::setw(15) << "State"
             << "Error" << '\n';
   std::cout << std::string(80, '-') << '\n';
@@ -51,8 +55,8 @@ int main() {
   hand->SetJointsCallback(DisplayJoints);
   std::cout << "Joint display callback registered." << '\n';
 
-  // Define joint commands: control all 13 joints
-  // DIP joints will be automatically skipped, no need to control
+  // This demo only commands the index finger. Joints that are not listed keep
+  // their previous command on EtherCAT; DIP joints are not controllable.
   std::vector<ghand::JointCommand> joints = {
       {ghand::JointId::FF_MCP, 30.0f, 100, 100},
       {ghand::JointId::FF_PIP, 45.0f, 100, 100},
@@ -72,7 +76,10 @@ int main() {
         {ghand::JointId::FF_PIP, 0.0f, 100, 100}};
 
     std::cout << "Resetting joint positions..." << '\n';
-    hand->MoveJoints(reset_joints);
+    const auto reset_result = hand->MoveJoints(reset_joints);
+    if (!reset_result) {
+      std::cerr << "Failed to reset joints: " << reset_result.message << '\n';
+    }
     std::this_thread::sleep_for(std::chrono::seconds(2));
   } else {
     std::cout << "Failed to move joints: " << move_result.message << '\n';

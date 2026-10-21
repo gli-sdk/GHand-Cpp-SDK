@@ -1,3 +1,10 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+//
+// CAN-FD bit-timing configuration demo: writes a new profile while connected
+// at the current profile, then asks the user to power-cycle. For RS485, connect
+// with the RS485BaudRate overload and write SetBaudrateConfig(RS485BaudRate).
+
 #include <chrono>
 #include <iostream>
 #include <string>
