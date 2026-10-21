@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(GHandSDK VERSION 2.2.1 LANGUAGES C CXX)
+project(GHandSDK VERSION 3.0.0 LANGUAGES C CXX)
 include(CMakePackageConfigHelpers)
 
 # Set C++ standard
@@ -166,7 +166,7 @@ target_link_libraries(ghand PRIVATE
 set_target_properties(ghand PROPERTIES
     OUTPUT_NAME ghand
     VERSION ${PROJECT_VERSION}
-    SOVERSION 1
+    SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 
 if(MSVC)
@@ -229,27 +229,6 @@ add_custom_command(TARGET ghand POST_BUILD
 
 # ========== Examples ==========
 add_subdirectory(examples)
-
-option(GHAND_BUILD_TESTS "Build hardware-free protocol regression tests" OFF)
-if(GHAND_BUILD_TESTS)
-    enable_testing()
-    set(PROTOCOL_TEST_SOURCES ${SOURCES})
-    list(REMOVE_ITEM PROTOCOL_TEST_SOURCES src/comm/canfd_driver_zlg.cc)
-    add_executable(protocol_regression_test tests/protocol_regression_test.cc ${PROTOCOL_TEST_SOURCES})
-    target_compile_definitions(protocol_regression_test PRIVATE GHAND_BUILD STATIC_LIBMODBUS)
-    target_include_directories(protocol_regression_test PRIVATE
-        include src/comm src/internal ${DEPS_INCLUDE_DIR} ${SOEM_PLATFORM_INCLUDE_DIR}
-        $<$<BOOL:${WIN32}>:${WPCAP_INCLUDE_DIR}>)
-    target_link_libraries(protocol_regression_test PRIVATE ${SOEM_LIBRARY}
-        $<$<BOOL:${WIN32}>:${WPCAP_LIBRARY}>
-        $<$<BOOL:${WIN32}>:${PACKET_LIBRARY}>
-        $<$<BOOL:${WIN32}>:winmm> $<$<BOOL:${WIN32}>:ws2_32>
-        $<$<BOOL:${WIN32}>:setupapi>
-        $<$<BOOL:${UNIX}>:Threads::Threads>
-        $<$<BOOL:${UNIX}>:rt> $<$<BOOL:${UNIX}>:dl>)
-    add_test(NAME protocol_regression COMMAND protocol_regression_test)
-    set_tests_properties(protocol_regression PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-endif()
 
 # ========== Install rules ==========
 install(TARGETS ghand

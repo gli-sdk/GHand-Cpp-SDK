@@ -41,29 +41,29 @@ class EtherCATComm : public IComm {
   bool IsConnected() const override { return is_connected_; }
   std::map<std::string, std::string> SearchAdapters() override;
   void UpdateConfig(const ProductConfig& config) override;
-  bool SetSlaveId(uint8_t slave_id) override;
-  bool SetBaudrateConfig(uint8_t baudrate_gear) override;
+  bool SetSlaveId(uint16_t slave, uint8_t slave_id) override;
+  bool SetBaudrateConfig(uint16_t slave, uint8_t baudrate_gear) override;
   Diagnostics GetDiagnostics() const override;
+  std::vector<ConnectedHand> GetConnectedHands() override;
 
-  DeviceInfo GetDeviceInfo() override;
-  HandType GetHandType() override;
+  DeviceInfo GetDeviceInfo(uint16_t slave) override;
+  HandType GetHandType(uint16_t slave) override;
 
-  bool MoveJoints(const std::vector<JointCommand>& joints,
+  bool MoveJoints(uint16_t slave, const std::vector<JointCommand>& joints,
                   ControlMode mode) override;
-  void Stop() override;
-  bool DisableHand() override;
-  bool GetHandStateMachine(HandStateMachine* state) override;
-  bool GetStallTolerances(std::map<JointId, uint8_t>* values) override;
-  bool SetStallTolerances(const std::map<JointId, uint8_t>& values) override;
-  bool GetPidParameters(std::vector<uint16_t>* values) override;
-  bool SetPidParameters(const std::vector<uint16_t>& values) override;
+  bool Stop(uint16_t slave) override;
+  bool DisableHand(uint16_t slave) override;
+  bool GetHandStateMachine(uint16_t slave, HandStateMachine* state) override;
+  bool GetStallTolerances(uint16_t slave, std::map<JointId, uint8_t>* values) override;
+  bool SetStallTolerances(uint16_t slave, const std::map<JointId, uint8_t>& values) override;
+  bool GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) override;
+  bool SetPidParameters(uint16_t slave, const std::vector<uint16_t>& values) override;
 
-  bool ClearFault() override;
-  bool InitJoint() override;
+  bool ClearFault(uint16_t slave) override;
 
-  bool OpenTactile() override;
-  bool CloseTactile() override;
-  bool ZeroTactile() override;
+  bool OpenTactile(uint16_t slave) override;
+  bool CloseTactile(uint16_t slave) override;
+  bool ZeroTactile(uint16_t slave) override;
 
   void SetJointsCallback(JointsCallback cb) override;
   void SetHandStateCallback(HandStateCallback cb) override;
@@ -74,8 +74,6 @@ class EtherCATComm : public IComm {
       std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
-  SelfTestErrorInfo GetSelfTestErrorInfo() override;
-  uint8_t GetSelfTestStatus() override;
 
   // Low-level EtherCAT API (retained for internal use)
   int SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,
@@ -136,13 +134,17 @@ class EtherCATComm : public IComm {
   mutable std::mutex callback_mutex_;
 
   ProductConfig config_;
-  std::map<JointId, JointCommand> joint_commands_;
-  ControlMode hand_mode_ = ControlMode::POSITION;
+  std::map<uint16_t, std::map<JointId, JointCommand>> joint_commands_;
+  std::map<uint16_t, ControlMode> hand_modes_;
+  std::vector<ConnectedHand> hands_;
+  std::vector<uint16_t> TargetSlaves(uint16_t slave);
+  std::vector<std::vector<uint8_t>> rxpdo_buffers_;
+  std::vector<size_t> rxpdo_sizes_;
   std::mutex command_mutex_;
-  bool ExecuteSdoCommand(uint16_t index, uint8_t command,
+  bool ExecuteSdoCommand(uint16_t slave, uint16_t index, uint8_t command,
                          uint8_t command_subindex = 1,
                          uint8_t state_subindex = 2, uint8_t result_subindex = 3);
-  bool WriteSdoParameters(uint16_t index, const std::vector<uint8_t>& bytes);
+  bool WriteSdoParameters(uint16_t slave, uint16_t index, const std::vector<uint8_t>& bytes);
 
   // FOE firmware update shared state
   static std::function<void(int)> progress_callback_;
@@ -164,7 +166,7 @@ class EtherCATComm : public IComm {
   static void EcatcheckWrapper(void* arg);
 
   // Firmware version helper
-  std::string ReadFirmwareVersion(uint8_t mcu_id);
+  std::string ReadFirmwareVersion(uint16_t slave, uint8_t mcu_id);
   FirmwareUpdateError CompleteFirmwareResetHandshake(uint16_t slave);
 
   // Static helper methods
@@ -177,7 +179,7 @@ class EtherCATComm : public IComm {
                           HandState* parsed_temperature) const;
   TactileData ParseTactileData(const uint8_t* data, size_t size,
                                size_t* offset, bool compat_thumb = false) const;
-  void ParseAndNotify(const uint8_t* data, size_t size);
+  void ParseAndNotify(const uint8_t* data, size_t size, uint16_t slave);
 
 
 };

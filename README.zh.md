@@ -1,6 +1,7 @@
 # GHand SDK C++
 
-[![Version](https://img.shields.io/badge/version-v2.2.1-blue.svg)](include/ghand/version.h)
+[![Version](https://img.shields.io/badge/version-v3.0.0-blue.svg)](include/ghand/version.h)
+
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 [![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
@@ -14,11 +15,12 @@ GHand C++ SDK 用于控制 GHand 灵巧手，支持 EtherCAT、CANFD 和 RS485 �
 ## ✨ 主要功能
 
 - EtherCAT、CANFD 和 RS485 通信
-- 全部 5 根手指支持逐关节独立控制（位置、速度、力矩）
+- 全部 5 根手指支持逐关节独立控制（位置、速度、电流、MIT）
 - 关节状态与触觉数据的实时数据回调
 - 支持左手和右手设备
 - 通过设备名称匹配自动识别产品
-- 以 Windows 动态链接库（DLL）形式提供
+- 支持同款左右手共用一条总线，控制与反馈按手隔离
+- 提供 Windows DLL 与 Linux 共享库构建
 
 ## 📖 官方文档
 
@@ -118,62 +120,47 @@ target_include_directories(your_target PRIVATE /path/to/install/include)
 安装还会导出一个 CMake 包目标：
 
 ```cmake
-find_package(GHandSDK CONFIG REQUIRED)
+find_package(GHandSDK 3 CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE GHand::ghand)
 ```
 
 ## 🚀 快速开始
 
 ```cpp
+#include <iostream>
 #include "ghand/ghand.h"
 
 int main() {
-    // 显式指定产品类型
-    auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                       ghand::CommType::ETHERCAT);
-
-    // 或自动识别（连接后按设备名称匹配配置）
-    // auto hand = ghand::GHand::Create(ghand::ProductType::AUTO,
-    //                                    ghand::CommType::ETHERCAT);
-
-    if (!hand || !hand->Connect("auto")) {
-        printf("Connection failed\n");
-        return -1;
+    auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                      ghand::CommType::ETHERCAT);
+    if (!master) return 1;
+    auto connected = master->Connect("auto");
+    if (!connected) { std::cerr << connected.message; return 1; }
+    for (ghand::GHand* hand : connected.value) {
+        auto id = hand->slave_index();
+        hand->SetJointsCallback([id](const std::vector<ghand::Joint>& joints) {
+            std::cout << "Slave " << id << ": " << joints.size() << " joints\n";
+        });
+        auto state = hand->GetHandStateMachine();
+        if (!state) std::cerr << state.message << '\n';
     }
-
-    // 拉取模式：查询最新缓存数据
-    auto state   = hand->GetHandData();     // 手部状态
-    auto joints  = hand->GetJointsData();   // 关节数据
-    auto tactile = hand->GetTactileData();  // 触觉数据
-
-    // 推送模式：注册回调
-    hand->SetJointsCallback([](const std::vector<ghand::Joint>& joints) {
-        for (const auto& j : joints) {
-            printf("Joint %d: %.1f deg\n", static_cast<int>(j.id), j.angle);
-        }
-    });
-
-    // 控制关节
-    std::vector<ghand::JointCommand> cmds = {
-        {ghand::JointId::FF_PIP, 45.0f, 50, 50},
-        {ghand::JointId::FF_MCP,    30.0f, 50, 50},
-    };
-    hand->MoveJoints(cmds);
-
-    hand->Disconnect();
+    auto stopped = master->Stop();
+    if (!stopped) std::cerr << stopped.message << '\n';
+    return master->Disconnect() ? 0 : 1;
 }
 ```
 
 ### RS485 示例
 
 ```cpp
-auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                   ghand::CommType::RS485);
-auto adapters = hand->SearchAdapters();
-if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
-    auto info = hand->GetDeviceInfo();
-    printf("Device: %s\n", info.device_name.c_str());
-    hand->Disconnect();
+auto master = ghand::Master::Create(ghand::ProductType::GHand5, ghand::CommType::RS485);
+auto connected = master->Connect("COM7", 0);
+if (connected) {
+    if (auto left = master->hand(ghand::HandType::LEFT)) {
+        auto info = left->QueryDeviceInfo();
+        if (info) std::cout << info.value.device_name << '\n';
+    }
+    master->Disconnect();
 }
 ```
 
@@ -230,32 +217,32 @@ newgrp dialout
 RS485 调试时请显式指定 USB-RS485 适配器。常见设备名为 `/dev/ttyUSB0` 或 `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`：
 
 ```cpp
-auto rs485_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+auto rs485_master = ghand::Master::Create(ghand::ProductType::GHand5,
                                          ghand::CommType::RS485);
-rs485_hand->Connect("/dev/ttyUSB0");
+rs485_master->Connect("/dev/ttyUSB0");
 ```
 
 CANFD 请使用 ZQWL USB-CDC 适配器，并在设备名后追加通道号，例如 `:0`：
 
 ```cpp
-auto canfd_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+auto canfd_master = ghand::Master::Create(ghand::ProductType::GHand5,
                                          ghand::CommType::CANFD);
-canfd_hand->Connect("/dev/ttyACM0:0");
+canfd_master->Connect("/dev/ttyACM0:0");
 ```
 
 `Connect()` 支持可选的 RS485/CANFD 从站 ID 与波特率（或位时序）参数：
 
 ```cpp
 // RS485：slave_id = 0 时扫描默认 ID 0x31 和 0x32。
-hand->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
+master->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
 
 // CAN-FD：使用预定义位时序配置。
-hand->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
+master->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
 ```
 
-`SetSlaveId()` 将新的 RS485/CANFD 从站 ID 写入保持寄存器 `0x0000`。
+`SetSlaveId()` 将新的 RS485/CANFD 从站 ID 写入保持寄存器 `0x0003`。
 `SetBaudrateConfig()` 将枚举映射的协议挡位写入保持寄存器
-`0x002C`；设备保存该值并在下次上电后生效。
+`0x0004`；设备保存该值并在下次上电后生效。
 
 ```cpp
 hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_1000000);
@@ -290,7 +277,7 @@ CANFD 波特率挡位：
 ghand-sdk-cpp/
 ├── include/ghand/    # 公共 API 头文件
 ├── src/              # 源码实现
-│   ├── comm/         # 通信层（EtherCAT、CANFD）
+│   ├── comm/         # 通信层（EtherCAT、CANFD、RS485）
 │   └── internal/     # 内部状态机与配置
 ├── config/           # 产品配置（JSON）
 ├── examples/         # 教程与示例程序

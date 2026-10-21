@@ -1,5 +1,5 @@
-﻿# GHand SDK C++
-[![Version](https://img.shields.io/badge/version-v2.2.1-blue.svg)](include/ghand/version.h)
+# GHand SDK C++
+[![Version](https://img.shields.io/badge/version-v3.0.0-blue.svg)](include/ghand/version.h)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 [![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
@@ -13,11 +13,12 @@ C++ SDK for GHand dexterous hands, supporting EtherCAT, CANFD, and RS485 communi
 ## Features
 
 - EtherCAT, CANFD, and RS485 communication
-- Independent per-joint control for all 5 fingers (position, velocity, current)
+- Independent per-joint control for all 5 fingers (position, velocity, current, MIT)
 - Real-time data callbacks for joint states and tactile data
 - Left and right hand device support
 - Automatic product detection via device name matching
-- Provided as Windows dynamic-link library (DLL)
+- Same-product left and right hands sharing a bus with independent control and feedback
+- Windows DLL and Linux shared-library builds
 
 ## Official Documentation
 
@@ -119,62 +120,47 @@ target_include_directories(your_target PRIVATE /path/to/install/include)
 The install also exports a CMake package target:
 
 ```cmake
-find_package(GHandSDK CONFIG REQUIRED)
+find_package(GHandSDK 3 CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE GHand::ghand)
 ```
 
 ## Quick Start
 
 ```cpp
+#include <iostream>
 #include "ghand/ghand.h"
 
 int main() {
-    // Explicit product type
-    auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                       ghand::CommType::ETHERCAT);
-
-    // Or auto-detect (matches config by device name after connection)
-    // auto hand = ghand::GHand::Create(ghand::ProductType::AUTO,
-    //                                    ghand::CommType::ETHERCAT);
-
-    if (!hand || !hand->Connect("auto")) {
-        printf("Connection failed\n");
-        return -1;
+    auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                      ghand::CommType::ETHERCAT);
+    if (!master) return 1;
+    auto connected = master->Connect("auto");
+    if (!connected) { std::cerr << connected.message; return 1; }
+    for (ghand::GHand* hand : connected.value) {
+        auto id = hand->slave_index();
+        hand->SetJointsCallback([id](const std::vector<ghand::Joint>& joints) {
+            std::cout << "Slave " << id << ": " << joints.size() << " joints\n";
+        });
+        auto state = hand->GetHandStateMachine();
+        if (!state) std::cerr << state.message << '\n';
     }
-
-    // Pull mode: query latest cached data
-    auto state   = hand->GetHandData();     // Hand state
-    auto joints  = hand->GetJointsData();   // Joint data
-    auto tactile = hand->GetTactileData();  // Tactile data
-
-    // Push mode: register callbacks
-    hand->SetJointsCallback([](const std::vector<ghand::Joint>& joints) {
-        for (const auto& j : joints) {
-            printf("Joint %d: %.1f deg\n", static_cast<int>(j.id), j.angle);
-        }
-    });
-
-    // Control joints
-    std::vector<ghand::JointCommand> cmds = {
-        {ghand::JointId::FF_PIP, 45.0f, 50, 50},
-        {ghand::JointId::FF_MCP,    30.0f, 50, 50},
-    };
-    hand->MoveJoints(cmds);
-
-    hand->Disconnect();
+    auto stopped = master->Stop();
+    if (!stopped) std::cerr << stopped.message << '\n';
+    return master->Disconnect() ? 0 : 1;
 }
 ```
 
 ### RS485 Example
 
 ```cpp
-auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                   ghand::CommType::RS485);
-auto adapters = hand->SearchAdapters();
-if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
-    auto info = hand->GetDeviceInfo();
-    printf("Device: %s\n", info.device_name.c_str());
-    hand->Disconnect();
+auto master = ghand::Master::Create(ghand::ProductType::GHand5, ghand::CommType::RS485);
+auto connected = master->Connect("COM7", 0);
+if (connected) {
+    if (auto left = master->hand(ghand::HandType::LEFT)) {
+        auto info = left->QueryDeviceInfo();
+        if (info) std::cout << info.value.device_name << '\n';
+    }
+    master->Disconnect();
 }
 ```
 
@@ -231,17 +217,17 @@ newgrp dialout
 For RS485 debugging, specify the USB-RS485 adapter explicitly. Common device names are `/dev/ttyUSB0` or `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`:
 
 ```cpp
-auto rs485_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+auto rs485_master = ghand::Master::Create(ghand::ProductType::GHand5,
                                          ghand::CommType::RS485);
-rs485_hand->Connect("/dev/ttyUSB0");
+rs485_master->Connect("/dev/ttyUSB0");
 ```
 
 For CANFD, use the ZQWL USB-CDC adapter and append the channel number to the device name, for example `:0`:
 
 ```cpp
-auto canfd_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+auto canfd_master = ghand::Master::Create(ghand::ProductType::GHand5,
                                          ghand::CommType::CANFD);
-canfd_hand->Connect("/dev/ttyACM0:0");
+canfd_master->Connect("/dev/ttyACM0:0");
 ```
 
 `Connect()` accepts optional RS485/CANFD slave ID and typed baud-rate or bit
@@ -249,15 +235,15 @@ timing parameters:
 
 ```cpp
 // RS485: slave_id = 0 scans the default IDs 0x31 and 0x32.
-hand->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
+master->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
 
 // CAN-FD: use a predefined bit timing profile.
-hand->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
+master->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
 ```
 
-`SetSlaveId()` writes a new RS485/CANFD slave ID to holding register `0x0000`.
+`SetSlaveId()` writes a new RS485/CANFD slave ID to holding register `0x0003`.
 `SetBaudrateConfig()` writes the enum-mapped protocol gear to holding register
-`0x002C`; the device stores it and applies it after the next power-up.
+`0x0004`; the device stores it and applies it after the next power-up.
 
 ```cpp
 hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_1000000);
@@ -292,7 +278,7 @@ CANFD baud-rate gears:
 ghand-sdk-cpp/
 |-- include/ghand/    # Public API headers
 |-- src/              # Source implementation
-|   |-- comm/         # Communication layer (EtherCAT, CANFD)
+|   |-- comm/         # Communication layer (EtherCAT, CANFD, RS485)
 |   `-- internal/     # Internal state machine & config
 |-- config/           # Product configuration (JSON)
 |-- examples/         # Tutorial and demo programs

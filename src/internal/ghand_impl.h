@@ -8,26 +8,26 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
+#include "ghand/result.h"
 #include "ghand/types.h"
+#include "icomm.h"
 #include "product_config.h"
 
 namespace ghand {
 namespace internal {
 
-class IComm;
 class GHandCallbackManager;
 
 /**
  * @brief GHand internal implementation class
  *
- * This class contains all implementation details of GHand, separated from
- * the public API via the Pimpl idiom.
- * User code should not access this class directly; it is intended for SDK
- * internal use only.
+ * Owns one communication context (one adapter or serial port) and the hands
+ * found on that bus. The public Master/GHand objects forward here; every
+ * fallible call reports its own outcome through Result / ResultOf, so no state
+ * has to be remembered between calls.
  */
 class GHandImpl {
  public:
@@ -42,60 +42,63 @@ class GHandImpl {
   bool IsValid() const { return comm_ != nullptr; }
 
   // Connection management
-  bool AutoConnect();
-  bool AutoConnect(uint8_t slave_id, uint8_t baudrate_gear);
-  bool Connect(const std::string& device_name, uint8_t slave_id = 0,
-               uint8_t baudrate_gear = 0x05);
-  bool Connect(const std::string& device_name, uint8_t slave_id,
-               RS485BaudRate baud_rate);
-  bool Connect(const std::string& device_name, uint8_t slave_id,
-               CANFDBitTiming timing);
-  bool Disconnect();
+  ResultOf<std::vector<ConnectedHand>> Connect(const std::string& device_name,
+                                               uint8_t slave_id = 0,
+                                               uint8_t baudrate_gear = 0x05);
+  ResultOf<std::vector<ConnectedHand>> Connect(const std::string& device_name,
+                                               uint8_t slave_id,
+                                               RS485BaudRate baud_rate);
+  ResultOf<std::vector<ConnectedHand>> Connect(const std::string& device_name,
+                                               uint8_t slave_id,
+                                               CANFDBitTiming timing);
+  Result Disconnect();
   bool IsConnected() const;
-  bool SetSlaveId(uint8_t slave_id);
-  bool SetBaudrateConfig(RS485BaudRate baud_rate);
-  bool SetBaudrateConfig(CANFDBitTiming timing);
-  OperationResult GetLastResult() const;
+  Result SetSlaveId(uint16_t slave_index, uint8_t new_slave_id);
+  Result SetBaudrateConfig(uint16_t slave_index, RS485BaudRate baud_rate);
+  Result SetBaudrateConfig(uint16_t slave_index, CANFDBitTiming timing);
+  Result PrepareCANFDBaudrateListener(const std::string& device_name,
+                                      CANFDBitTiming timing);
+  DeviceInfo GetLastDeviceInfo() const { return device_info_; }
   Diagnostics GetDiagnostics() const;
 
   // Device info
   std::map<std::string, std::string> SearchAdapters() const;
-  HandType GetHandType() const;
-  DeviceInfo GetDeviceInfo() const;
+  ResultOf<HandType> GetHandType(uint16_t slave_index) const;
+  ResultOf<DeviceInfo> GetDeviceInfo(uint16_t slave_index) const;
 
   // Control operations
-  void SetControlMode(ControlMode mode);
-  bool MoveJoints(const std::vector<JointCommand>& joints);
-  void Stop();
-
-  // New protocol controls; queries write their result only on success.
-  bool DisableHand();
-  bool GetHandStateMachine(HandStateMachine* state);
-  bool GetStallTolerances(std::map<JointId, uint8_t>* values);
-  bool SetStallTolerances(const std::map<JointId, uint8_t>& values);
-  bool GetPidParameters(std::vector<uint16_t>* values);
-  bool SetPidParameters(const std::vector<uint16_t>& values);
-  bool ClearFault();
-  bool InitJoint();
+  Result MoveJoints(uint16_t slave_index,
+                    const std::vector<JointCommand>& joints, ControlMode mode);
+  Result Stop(uint16_t slave_index);
+  Result DisableHand(uint16_t slave_index);
+  ResultOf<HandStateMachine> GetHandStateMachine(uint16_t slave_index);
+  ResultOf<std::map<JointId, uint8_t>> GetStallTolerances(uint16_t slave_index);
+  Result SetStallTolerances(uint16_t slave_index, const std::map<JointId, uint8_t>& values);
+  ResultOf<std::vector<uint16_t>> GetPidParameters(uint16_t slave_index);
+  Result SetPidParameters(uint16_t slave_index, const std::vector<uint16_t>& values);
+  Result ClearFault(uint16_t slave_index);
 
   // Tactile sensor control
-  bool OpenTactile();
-  bool CloseTactile();
-  bool ZeroTactile();
+  Result OpenTactile(uint16_t slave_index);
+  Result CloseTactile(uint16_t slave_index);
+  Result ZeroTactile(uint16_t slave_index);
 
-  // Callback registration
-  void SetJointsCallback(std::function<void(const std::vector<Joint>&)> cb);
-  void SetHandStateCallback(std::function<void(const HandState&)> cb);
-  void SetTactileDataCallback(std::function<void(const TactileData&)> cb);
+  // Callback registration (one slot per hand)
+  void SetJointsCallback(
+      uint16_t slave_index,
+      std::function<void(const std::vector<Joint>& joints)> cb);
+  void SetHandStateCallback(
+      uint16_t slave_index,
+      std::function<void(const HandState& state)> cb);
+  void SetTactileDataCallback(
+      uint16_t slave_index,
+      std::function<void(const TactileData& data)> cb);
 
   // Data polling
-  HandState GetHandData() const;
-  std::vector<Joint> GetJointsData() const;
-  TactileData GetTactileData() const;
+  ResultOf<HandState> GetHandData(uint16_t slave_index) const;
+  ResultOf<std::vector<Joint>> GetJointsData(uint16_t slave_index) const;
+  ResultOf<TactileData> GetTactileData(uint16_t slave_index) const;
 
-  // Legacy self-test queries: report NOT_SUPPORTED without device traffic.
-  SelfTestErrorInfo GetSelfTestErrorInfo();
-  uint8_t GetSelfTestStatus();
 
   // Firmware update
   FirmwareUpdateError BootUpdate(
@@ -103,22 +106,21 @@ class GHandImpl {
       std::function<void(int)> progress_callback);
 
  private:
-  bool ConnectToDevice(const std::string& device_name, uint8_t slave_id,
-                       uint8_t baudrate_gear);
-  void SetLastResult(SdkError code, const std::string& message);
+  ResultOf<std::vector<ConnectedHand>> AutoConnect(uint8_t slave_id,
+                                                   uint8_t baudrate_gear);
+  ResultOf<std::vector<ConnectedHand>> ConnectToDevice(
+      const std::string& device_name, uint8_t slave_id, uint8_t baudrate_gear);
   void SetupCallbacks();
   void ClampJointAngle(JointCommand& joint);
 
   std::unique_ptr<IComm> comm_;
   std::unique_ptr<GHandCallbackManager> callback_manager_;
 
-  ControlMode control_mode_;
   CommType comm_type_;
   ProductType product_type_;
   std::string device_name_;
+  DeviceInfo device_info_;
   ProductConfig config_;
-  mutable std::mutex last_result_mutex_;
-  OperationResult last_result_;
 };
 
 }  // namespace internal

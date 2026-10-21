@@ -23,45 +23,56 @@ const Joint* FindJointById(const std::vector<Joint>& joints, JointId id) {
 }
 }  // namespace
 
-GHandCallbackManager::GHandCallbackManager() {
-  // Initialize cached data
-  last_joints_.clear();
-  last_state_ = HandState{};
-  last_joint_callback_time_ = std::chrono::steady_clock::now();
-  last_temp_callback_time_ = std::chrono::steady_clock::now();
+void GHandCallbackManager::SetJointsCallback(uint16_t slave,
+                                             JointsCallback callback) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  if (callback) {
+    joints_callbacks_[slave] = callback;
+  } else {
+    joints_callbacks_.erase(slave);
+  }
 }
 
-void GHandCallbackManager::SetJointsCallback(JointsCallback callback) {
+void GHandCallbackManager::SetHandStateCallback(uint16_t slave,
+                                                HandStateCallback callback) {
   std::lock_guard<std::mutex> lock(data_mutex_);
-  joints_callback_ = callback;
-}
-
-void GHandCallbackManager::SetHandStateCallback(HandStateCallback callback) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-  hand_state_callback_ = callback;
+  if (callback) {
+    hand_state_callbacks_[slave] = callback;
+  } else {
+    hand_state_callbacks_.erase(slave);
+  }
 }
 
 void GHandCallbackManager::SetTactileDataCallback(
-    TactileDataCallback callback) {
+    uint16_t slave, TactileDataCallback callback) {
   std::lock_guard<std::mutex> lock(data_mutex_);
-  tactile_data_callback_ = callback;
+  if (callback) {
+    tactile_data_callbacks_[slave] = callback;
+  } else {
+    tactile_data_callbacks_.erase(slave);
+  }
 }
 
-void GHandCallbackManager::UpdateJoints(const std::vector<Joint>& joints) {
+void GHandCallbackManager::UpdateJoints(uint16_t slave,
+                                        const std::vector<Joint>& joints) {
   JointsCallback callback;
   std::vector<Joint> payload;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
-    // Always cache the lastest temp frame for GetJointsData() to poll
-    last_joints_ = joints;
-    // Change detection is based on the "last actually delivered value",
-    // not on the previous polled frame.
-    if (HasJointDataChanged(joints)) {
-      callback = joints_callback_;
-      last_delivered_joints_ = joints;  // Advance the baseline only when delivering
-      last_joint_callback_time_ = std::chrono::steady_clock::now();
-      payload = joints;  // Always deliver the full joint set, not a subset
+    SlaveCache& cache = caches_[slave];
+    const auto it = joints_callbacks_.find(slave);
+    if (it != joints_callbacks_.end()) {
+      // Change detection is based on the "last actually delivered value", not
+      // on the previous polled frame.
+      if (HasJointDataChanged(cache, joints)) {
+        callback = it->second;
+        cache.delivered_joints =
+            joints;  // Advance the baseline only when delivering
+        cache.last_joint_callback_time = std::chrono::steady_clock::now();
+        payload = joints;  // Always deliver the full joint set, not a subset
+      }
     }
+    cache.joints = joints;
   }
 
   if (callback) {
@@ -69,28 +80,39 @@ void GHandCallbackManager::UpdateJoints(const std::vector<Joint>& joints) {
   }
 }
 
-void GHandCallbackManager::UpdateTemperature(const HandState& temperature) {
+void GHandCallbackManager::UpdateTemperature(uint16_t slave,
+                                             const HandState& temperature) {
   HandStateCallback callback;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
-    if (HasTemperatureChanged(temperature)) {
-      callback = hand_state_callback_;
-      last_temp_callback_time_ = std::chrono::steady_clock::now();
+    SlaveCache& cache = caches_[slave];
+    const auto it = hand_state_callbacks_.find(slave);
+    if (it != hand_state_callbacks_.end()) {
+      // Change detection runs against the previous cached state, so check
+      // before overwriting it.
+      if (HasTemperatureChanged(cache, temperature)) {
+        callback = it->second;
+        cache.last_temp_callback_time = std::chrono::steady_clock::now();
+      }
     }
-    last_state_ = temperature;
+    cache.state = temperature;
   }
   if (callback) {
     callback(temperature);
   }
 }
 
-void GHandCallbackManager::UpdateTactileData(const TactileData& data) {
+void GHandCallbackManager::UpdateTactileData(uint16_t slave,
+                                             const TactileData& data) {
   TactileDataCallback callback;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
-    last_tactile_data_ = data;
-    has_tactile_data_ = true;
-    callback = tactile_data_callback_;
+    SlaveCache& cache = caches_[slave];
+    cache.tactile = data;
+    const auto it = tactile_data_callbacks_.find(slave);
+    if (it != tactile_data_callbacks_.end()) {
+      callback = it->second;
+    }
   }
   if (callback) {
     callback(data);
@@ -99,42 +121,54 @@ void GHandCallbackManager::UpdateTactileData(const TactileData& data) {
 
 // Polling access
 
-HandState GHandCallbackManager::GetHandData() const {
+HandState GHandCallbackManager::GetHandData(uint16_t slave) const {
   std::lock_guard<std::mutex> lock(data_mutex_);
-  return last_state_;
+  const auto it = caches_.find(slave);
+  if (it == caches_.end()) {
+    return HandState{};
+  }
+  return it->second.state;
 }
 
-std::vector<Joint> GHandCallbackManager::GetJointsData() const {
+std::vector<Joint> GHandCallbackManager::GetJointsData(uint16_t slave) const {
   std::lock_guard<std::mutex> lock(data_mutex_);
-  return last_joints_;
+  const auto it = caches_.find(slave);
+  if (it == caches_.end()) {
+    return std::vector<Joint>{};
+  }
+  return it->second.joints;
 }
 
-TactileData GHandCallbackManager::GetTactileData() const {
+TactileData GHandCallbackManager::GetTactileData(uint16_t slave) const {
   std::lock_guard<std::mutex> lock(data_mutex_);
-  return last_tactile_data_;
+  const auto it = caches_.find(slave);
+  if (it == caches_.end()) {
+    return TactileData{};
+  }
+  return it->second.tactile;
 }
 
 bool GHandCallbackManager::HasJointDataChanged(
-    const std::vector<Joint>& joints) {
+    const SlaveCache& cache, const std::vector<Joint>& joints) {
   // First delivery
-  if (last_delivered_joints_.empty()) {
+  if (cache.delivered_joints.empty()) {
     return true;
   }
   // 1. State/error changes -> deliver immediately
   for (const auto& joint : joints) {
-    const Joint* previous = FindJointById(last_delivered_joints_, joint.id);
+    const Joint* previous = FindJointById(cache.delivered_joints, joint.id);
     if (previous == nullptr) {
       return true;
     }
-    if (joint.state != previous->state || joint.error != previous->error) {
+    if (joint.state != previous->state || joint.error != previous->error || joint.mode != previous->mode || joint.stop != previous->stop) {
       return true;
     }
   }
-  
+
   // 2. Accumulated angle change relative to the "last delivered value"
   //    exceeds the threshold.
   for (const auto& joint : joints) {
-    const Joint* previous = FindJointById(last_delivered_joints_, joint.id);
+    const Joint* previous = FindJointById(cache.delivered_joints, joint.id);
     if (previous != nullptr &&
         std::abs(joint.angle - previous->angle) > kJointAngleThreshold) {
       return true;
@@ -144,7 +178,7 @@ bool GHandCallbackManager::HasJointDataChanged(
   //    for more than 100 ms.
   auto now = std::chrono::steady_clock::now();
   auto age = std::chrono::duration_cast<std::chrono::milliseconds>(
-      now - last_joint_callback_time_);
+      now - cache.last_joint_callback_time);
   if (age.count() > kDataFreshnessMs) {
     return true;
   }
@@ -152,19 +186,19 @@ bool GHandCallbackManager::HasJointDataChanged(
 }
 
 bool GHandCallbackManager::HasTemperatureChanged(
-    const HandState& temperature) {
+    const SlaveCache& cache, const HandState& temperature) {
   // 1. State or error changes trigger immediately
-  if (temperature.state != last_state_.state ||
-      temperature.error_warn != last_state_.error_warn ||
-      temperature.error_fault != last_state_.error_fault ||
-      temperature.error_critical != last_state_.error_critical) {
+  if (temperature.state != cache.state.state ||
+      temperature.error_warn != cache.state.error_warn ||
+      temperature.error_fault != cache.state.error_fault ||
+      temperature.error_critical != cache.state.error_critical) {
     GHAND_LOG_DEBUG(
         "Hand state change detected: " << ghand::ToString(temperature.state));
     return true;
   }
 
   // 2. Temperature change triggers (>1degC)
-  int temp_diff = std::abs(temperature.temperature - last_state_.temperature);
+  int temp_diff = std::abs(temperature.temperature - cache.state.temperature);
   if (temp_diff > kTemperatureThreshold) {
     return true;
   }
@@ -172,12 +206,28 @@ bool GHandCallbackManager::HasTemperatureChanged(
   // 3. Data freshness check (100ms)
   auto now = std::chrono::steady_clock::now();
   auto age = std::chrono::duration_cast<std::chrono::milliseconds>(
-      now - last_temp_callback_time_);
+      now - cache.last_temp_callback_time);
   if (age.count() > kDataFreshnessMs) {
     return true;
   }
 
   return false;
+}
+
+void GHandCallbackManager::Clear() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  joints_callbacks_.clear(); hand_state_callbacks_.clear(); tactile_data_callbacks_.clear(); caches_.clear();
+}
+void GHandCallbackManager::RenameHand(uint16_t from, uint16_t to) {
+  if (from == to) return;
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  if (joints_callbacks_.count(from)) { joints_callbacks_[to] = joints_callbacks_[from]; joints_callbacks_.erase(from); }
+  if (hand_state_callbacks_.count(from)) { hand_state_callbacks_[to] = hand_state_callbacks_[from]; hand_state_callbacks_.erase(from); }
+  if (tactile_data_callbacks_.count(from)) { tactile_data_callbacks_[to] = tactile_data_callbacks_[from]; tactile_data_callbacks_.erase(from); }
+  if (caches_.count(from)) {
+    if (!caches_.count(to)) caches_[to] = std::move(caches_[from]);
+    caches_.erase(from);
+  }
 }
 
 }  // namespace internal

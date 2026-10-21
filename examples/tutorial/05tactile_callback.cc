@@ -1,4 +1,4 @@
-﻿#ifdef _WIN32
+#ifdef _WIN32
 #include <windows.h>
 #endif
 
@@ -79,50 +79,55 @@ void PrintTactileData(const ghand::TactileData& data, bool* first_print) {
   std::cout << std::flush;
 }
 
-void RegisterTactileCallback(ghand::GHand* hand) {
-  bool first_print = true;
-  hand->SetTactileDataCallback(
-      [first_print](const ghand::TactileData& data) mutable {
-        PrintTactileData(data, &first_print);
-      });
-}
-
-void RunTactileDemo(ghand::GHand* hand) {
-  std::cout << "Connecting to dexterous hand..." << '\n';
-  if (!hand->AutoConnect()) {
-    std::cout << "Failed to connect to the dexterous hand!" << '\n';
-    return;
-  }
-
-  std::cout << "Successfully connected to the dexterous hand!" << '\n';
-  if (!hand->OpenTactile()) {
-    std::cerr << "Failed to open tactile sensor!" << '\n';
-    hand->Disconnect();
-    return;
-  }
-  std::cout << "Tactile sensor opened." << '\n';
-  if (!hand->ZeroTactile()) {
-    std::cerr << "Failed to zero tactile sensor!" << '\n';
-  }
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  RegisterTactileCallback(hand);
-
-  std::this_thread::sleep_for(std::chrono::seconds(30));
-  hand->CloseTactile();
-  hand->Disconnect();
-  std::cout << "Connection closed." << '\n';
-}
-
 int main() {
   EnableAnsiColors();
 
-  auto hand =
-      ghand::GHand::Create(ghand::ProductType::GHand5, ghand::CommType::ETHERCAT);
-  if (!hand) {
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                      ghand::CommType::ETHERCAT);
+  if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
 
-  RunTactileDemo(hand.get());
+  std::cout << "Connecting to dexterous hand..." << '\n';
+  const auto connected = master->Connect("auto");
+  if (!connected) {
+    std::cerr << "Failed to connect to the dexterous hand: "
+              << connected.message << '\n';
+    return 1;
+  }
+  std::cout << "Successfully connected to the dexterous hand!" << '\n';
+
+  ghand::GHand* hand = connected.value.front();
+
+  const auto open_result = hand->OpenTactile();
+  if (!open_result) {
+    std::cerr << "Failed to open tactile sensor: " << open_result.message
+              << '\n';
+    master->Disconnect();
+    return 1;
+  }
+  std::cout << "Tactile sensor opened." << '\n';
+
+  const auto zero_result = hand->ZeroTactile();
+  if (!zero_result) {
+    std::cerr << "Failed to zero tactile sensor: " << zero_result.message
+              << '\n';
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  // The callback is registered on one hand, so it only ever receives that
+  // hand's data.
+  bool first_print = true;
+  hand->SetTactileDataCallback([&first_print](const ghand::TactileData& data) {
+    PrintTactileData(data, &first_print);
+  });
+
+  std::this_thread::sleep_for(std::chrono::seconds(30));
+
+  hand->CloseTactile();
+  master->Disconnect();
+  std::cout << "Connection closed." << '\n';
+
   return 0;
 }

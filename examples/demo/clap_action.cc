@@ -1,4 +1,4 @@
-﻿#include <chrono>
+#include <chrono>
 #include <iostream>
 #include <thread>
 #include <vector>
@@ -43,25 +43,25 @@ std::vector<ghand::JointCommand> MakeOpenHand() {
   };
 }
 
-bool Clap(ghand::GHand& hand) {
+bool Clap(ghand::Master& master) {
   auto joints = MakeClapPose();
-  return hand.MoveJoints(joints);
+  return master.MoveJoints(joints);
 }
 
-bool HandZero(ghand::GHand& hand) {
+bool HandZero(ghand::Master& master) {
   auto joints = MakeOpenHand();
-  return hand.MoveJoints(joints);
+  return master.MoveJoints(joints);
 }
 
 int main() {
   std::cout << "***** GHand SDK - Clap Demo *****\n" << '\n';
-  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
                                       ghand::CommType::ETHERCAT);
-  if (!hand) {
+  if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return -1;
   }
-  bool connected = hand->Connect("auto");
+  bool connected = master->Connect("auto");
   if (!connected) {
     std::cout << "\n[Scan complete] Failed to connect to dexterous hand."
               << '\n';
@@ -79,14 +79,14 @@ int main() {
     std::cout << "\n--- Round " << gesture_cycle << " demo started ---"
               << '\n';
 
-    if (!Clap(*hand)) {
+    if (!Clap(*master)) {
       std::cout << "Round " << gesture_cycle << " clap action execution failed"
                 << '\n';
       break;
     }
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
-    if (!HandZero(*hand)) {
+    if (!HandZero(*master)) {
       std::cout << "Round " << gesture_cycle
                 << " reset action execution failed" << '\n';
       break;
@@ -101,7 +101,7 @@ int main() {
     }
   }
 
-  hand->Disconnect();
+  master->Disconnect();
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   std::cout << "\n--- Demo finished, disconnecting ---" << '\n';
   return 0;

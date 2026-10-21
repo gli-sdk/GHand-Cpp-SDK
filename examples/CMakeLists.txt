@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.10)
 
 # Helper function: add post-build commands to copy DLLs and config files for examples
 function(copy_runtime_for_target target_name)
@@ -75,10 +75,20 @@ add_executable(current_control tutorial/04current_control.cc)
 target_link_libraries(current_control ghand)
 copy_runtime_for_target(current_control)
 
-# 09. Self-test error example
+# 09. Hand and motor status example
 add_executable(hand_state tutorial/09hand_state.cc)
 target_link_libraries(hand_state ghand)
 copy_runtime_for_target(hand_state)
+
+# 10. Baud-rate switch example
+add_executable(switch_baud_rate tutorial/10switch_baud_rate.cc)
+target_link_libraries(switch_baud_rate ghand)
+copy_runtime_for_target(switch_baud_rate)
+
+# 11. Multi-hand example: EtherCAT / CAN-FD / RS485 (auto-detect + control)
+add_executable(connect_hands tutorial/12connect_hands.cc)
+target_link_libraries(connect_hands ghand)
+copy_runtime_for_target(connect_hands)
 
 # Gesture dance demo
 add_executable(gesture_dance demo/gesture_dance.cc)

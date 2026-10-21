@@ -141,7 +141,7 @@ bool CANFDComm::RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len,
 
 // Modbus-over-CANFD transport
 
-bool CANFDComm::ReadRegisters(int addr, int count,
+bool CANFDComm::ReadRegisters(uint16_t slave, int addr, int count,
                               std::vector<uint8_t>* out_bytes,
                               int func_code, int timeout_ms) {
   std::lock_guard<std::mutex> io_lock(io_mutex_);
@@ -153,7 +153,7 @@ bool CANFDComm::ReadRegisters(int addr, int count,
   cmd_data[3] = count & 0xFF;
 
   uint32_t can_id =
-      PackArbitration(src_id_, slave_id_, 0, func_code, 1, 1, 0, 0);
+      PackArbitration(src_id_, slave, 0, func_code, 1, 1, 0, 0);
   if (!SendFrame(can_id, cmd_data, 4)) return false;
 
   // Gather response segments
@@ -182,7 +182,7 @@ bool CANFDComm::ReadRegisters(int addr, int count,
     UnpackArbitration(resp_id, &r_src, &r_dst, &r_ack, &r_fc, &r_start,
                        &r_end, &r_toggle, &r_seg);
 
-    if (r_ack != 1 || r_dst != src_id_ || r_src != slave_id_) continue;
+    if (r_ack != 1 || r_dst != src_id_ || r_src != slave) continue;
 
     // Exception response?
     if (r_fc == (0x80 | func_code)) {
@@ -225,7 +225,7 @@ bool CANFDComm::ReadRegisters(int addr, int count,
   }
 }
 
-bool CANFDComm::WriteRegisters(int addr, const std::vector<uint8_t>& data,
+bool CANFDComm::WriteRegisters(uint16_t slave, int addr, const std::vector<uint8_t>& data,
                                int timeout_ms) {
   std::lock_guard<std::mutex> io_lock(io_mutex_);
   uint8_t func_code;
@@ -264,7 +264,7 @@ bool CANFDComm::WriteRegisters(int addr, const std::vector<uint8_t>& data,
     int seg_len =
         std::min(kSegSize, static_cast<int>(payload.size()) - offset);
 
-    uint32_t can_id = PackArbitration(src_id_, slave_id_, 0, func_code, start,
+    uint32_t can_id = PackArbitration(src_id_, slave, 0, func_code, start,
                                        end, toggle, seg_idx);
     if (!SendFrame(can_id, payload.data() + offset, seg_len)) return false;
   }
@@ -292,7 +292,7 @@ bool CANFDComm::WriteRegisters(int addr, const std::vector<uint8_t>& data,
     UnpackArbitration(resp_id, &r_src, &r_dst, &r_ack, &r_fc, &r_start,
                        &r_end, nullptr, nullptr);
 
-    if (r_ack != 1 || r_dst != src_id_ || r_src != slave_id_) continue;
+    if (r_ack != 1 || r_dst != src_id_ || r_src != slave) continue;
     if (r_fc == (0x80 | func_code)) {
       rx_errors_++;
       return false;
@@ -305,16 +305,16 @@ bool CANFDComm::WriteRegisters(int addr, const std::vector<uint8_t>& data,
   }
 }
 
-bool CANFDComm::WriteSingleRegister(int addr, uint16_t value, int timeout_ms) {
+bool CANFDComm::WriteSingleRegister(uint16_t slave, int addr, uint16_t value, int timeout_ms) {
   std::vector<uint8_t> data = {static_cast<uint8_t>((value >> 8) & 0xFF),
                                 static_cast<uint8_t>(value & 0xFF)};
-  return WriteRegisters(addr, data, timeout_ms);
+  return WriteRegisters(slave, addr, data, timeout_ms);
 }
 
-bool CANFDComm::WaitInputResult(int addr, int baseline) {
-  return WaitCommandMailbox([this, addr](uint16_t* value) {
+bool CANFDComm::WaitInputResult(uint16_t slave, int addr, int baseline) {
+  return WaitCommandMailbox([this, addr, slave](uint16_t* value) {
     std::vector<uint8_t> bytes;
-    if (!ReadInputBytes(addr, 1, &bytes) || bytes.size() < 2) return false;
+    if (!ReadInputBytes(slave, addr, 1, &bytes) || bytes.size() < 2) return false;
     *value = static_cast<uint16_t>((bytes[0] << 8) | bytes[1]);
     return true;
   }, baseline);
@@ -322,22 +322,9 @@ bool CANFDComm::WaitInputResult(int addr, int baseline) {
 
 // Connection management
 
-
-
-bool CANFDComm::EstablishConnection(uint8_t slave_id, int timeout_ms) {
+bool CANFDComm::DetectNode(uint8_t slave_id, int timeout_ms) {
   const uint8_t candidates[] = {slave_id ? slave_id : static_cast<uint8_t>(0x31), 0x32};
   const int count = slave_id ? 1 : 2;
-  auto connect = [this](uint8_t id) {
-    slave_id_ = id;
-    if (!WriteSingleRegister(0x0000, 1, 5000)) return false;
-    if (!WaitConnectionState([this](uint16_t* value) {
-      std::vector<uint8_t> bytes;
-      if (!ReadInputBytes(0x1047, 1, &bytes) || bytes.size() < 2) return false;
-      *value = static_cast<uint16_t>((bytes[0] << 8) | bytes[1]);
-      return true;
-    })) return false;
-    return WaitInputResult(0x1026);
-  };
   auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
   while (std::chrono::steady_clock::now() < deadline) {
     uint32_t id = 0; uint8_t bytes[64] = {}; uint8_t len = 0;
@@ -345,7 +332,7 @@ bool CANFDComm::EstablishConnection(uint8_t slave_id, int timeout_ms) {
     int src, dst, ack, fc;
     UnpackArbitration(id, &src, &dst, &ack, &fc, nullptr, nullptr, nullptr, nullptr);
     if (ack == 0 && fc == 0x44 && src == dst) {
-      for (int i = 0; i < count; ++i) if (src == candidates[i]) return connect(candidates[i]);
+      for (int i = 0; i < count; ++i) if (src == candidates[i]) return true;
     }
   }
   for (int i = 0; i < count; ++i) {
@@ -361,7 +348,7 @@ bool CANFDComm::EstablishConnection(uint8_t slave_id, int timeout_ms) {
       if (ack != 1 || dst != src_id_ || src != target) continue;
       if (fc == 0xC4) break;
       if (fc == 0x44) {
-        if (connect(target)) return true;
+        return true;
         break;
       }
     }
@@ -369,8 +356,19 @@ bool CANFDComm::EstablishConnection(uint8_t slave_id, int timeout_ms) {
   return false;
 }
 
-void CANFDComm::DeleteConnection() {
-  WriteSingleRegister(0x0000, 2, 2000);
+bool CANFDComm::EstablishConnection(uint8_t slave, int timeout_ms) {
+  if (!WriteSingleRegister(slave, 0x0000, 1, timeout_ms)) return false;
+  if (!WaitConnectionState([this, slave](uint16_t* value) {
+    std::vector<uint8_t> bytes;
+    if (!ReadInputBytes(slave, 0x1047, 1, &bytes) || bytes.size() < 2) return false;
+    *value = static_cast<uint16_t>((bytes[0] << 8) | bytes[1]);
+    return true;
+  })) return false;
+  return WaitInputResult(slave, 0x1026);
+}
+
+void CANFDComm::DeleteConnection(uint16_t slave) {
+  WriteSingleRegister(slave, 0x0000, 2, 100);
 }
 
 int CANFDComm::Connect(const std::string& device_name, uint8_t slave_id,
@@ -404,24 +402,32 @@ int CANFDComm::Connect(const std::string& device_name, uint8_t slave_id,
 
   connected_.store(true);
 
-  if (!EstablishConnection(slave_id, 500)) {
+  std::vector<uint8_t> detected;
+  for (uint8_t id : (slave_id ? std::vector<uint8_t>{slave_id} : std::vector<uint8_t>{0x31, 0x32})) {
+    if (DetectNode(id, 500)) detected.push_back(id);
+  }
+  joint_modes_.clear(); hand_modes_.clear();
+  for (uint8_t id : detected) {
+    if (!EstablishConnection(id)) continue;
+    ConnectedHand hand; hand.slave_index = id;
+    hand.device_info = GetDeviceInfo(id); hand.hand_type = GetHandType(id);
+    { std::lock_guard<std::mutex> lock(hands_mutex_); hands_[id] = hand; }
+    if (!keepalive_thread_.joinable()) {
+      keepalive_stop_.store(false);
+      keepalive_thread_ = std::thread(&CANFDComm::KeepaliveLoop, this);
+    }
+  }
+  if (hands_.empty()) {
     GHAND_LOG_ERROR("Failed to establish CANFD connection");
     driver_->Close();
     connected_.store(false);
     return -3;
   }
 
-  joint_modes_.clear();
-  hand_mode_ = ControlMode::POSITION;
-  keepalive_stop_.store(false);
-  keepalive_thread_ = std::thread(&CANFDComm::KeepaliveLoop, this);
   bool should_start_poll = false;
   {
     std::lock_guard<std::mutex> lock(cb_mutex_);
-    joints_poll_enabled_ = static_cast<bool>(joints_cb_);
-    hand_state_poll_enabled_ = static_cast<bool>(hand_state_cb_);
-    should_start_poll = joints_poll_enabled_ || hand_state_poll_enabled_ ||
-                        tactile_poll_enabled_;
+    should_start_poll = static_cast<bool>(joints_cb_) || static_cast<bool>(hand_state_cb_) || static_cast<bool>(tactile_cb_);
   }
   if (should_start_poll) {
     EnsurePollStarted();
@@ -430,21 +436,16 @@ int CANFDComm::Connect(const std::string& device_name, uint8_t slave_id,
 }
 
 int CANFDComm::Disconnect() {
+  StopPoll();
   keepalive_stop_.store(true);
   if (keepalive_thread_.joinable()) keepalive_thread_.join();
-  StopPoll();
-  {
-    std::lock_guard<std::mutex> lock(cb_mutex_);
-    joints_poll_enabled_ = false;
-    hand_state_poll_enabled_ = false;
-    tactile_poll_enabled_ = false;
-  }
 
   if (connected_.load()) {
-    DeleteConnection();
+    for (uint16_t slave : TargetSlaves(0)) DeleteConnection(slave);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
+  { std::lock_guard<std::mutex> lock(hands_mutex_); hands_.clear(); tactile_open_hands_.clear(); }
   connected_.store(false);
   if (driver_) {
     driver_->Close();
@@ -461,27 +462,36 @@ std::map<std::string, std::string> CANFDComm::SearchAdapters() {
 }
 
 void CANFDComm::UpdateConfig(const ProductConfig& config) {
-  std::lock_guard<std::mutex> lock(command_mutex_);
-  config_ = config;
-  joint_modes_.clear();
-  hand_mode_ = ControlMode::POSITION;
+  StopPoll();
+  {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    config_ = config;
+    joint_modes_.clear(); hand_modes_.clear();
+  }
+  if (IsConnected()) EnsurePollStarted();
 }
 
-bool CANFDComm::SetSlaveId(uint8_t slave_id) {
-  if (!IsConnected() || slave_id == 0 || slave_id > 0x3F) return false;
-  if (!WriteSingleRegister(kSlaveIdRegister, (slave_id << 8) | 1)) return false;
-  uint8_t old_id = slave_id_;
-  slave_id_ = slave_id;
-
-  if (WaitInputResult(0x1029)) return true;
-  slave_id_ = old_id;
-  return false;
+bool CANFDComm::SetSlaveId(uint16_t slave, uint8_t new_slave_id) {
+  if (!IsConnected() || slave == 0 || new_slave_id == 0 || new_slave_id > 0x3F || TargetSlaves(slave).empty()) return false;
+  if (slave == new_slave_id) return true;
+  if (!TargetSlaves(new_slave_id).empty()) return false;
+  std::lock_guard<std::mutex> command_lock(command_mutex_);
+  if (!WriteSingleRegister(slave, kSlaveIdRegister, (new_slave_id << 8) | 1)) return false;
+  if (!WaitInputResult(new_slave_id, 0x1029)) return false;
+  std::lock_guard<std::mutex> hands_lock(hands_mutex_);
+  auto hand = hands_[slave]; hands_.erase(slave); hand.slave_index = new_slave_id; hands_[new_slave_id] = hand;
+  hand_modes_[new_slave_id] = hand_modes_[slave]; hand_modes_.erase(slave);
+  joint_modes_[new_slave_id] = std::move(joint_modes_[slave]); joint_modes_.erase(slave);
+  tactile_open_hands_[new_slave_id] = tactile_open_hands_[slave]; tactile_open_hands_.erase(slave);
+  return true;
 }
 
-bool CANFDComm::SetBaudrateConfig(uint8_t baudrate_gear) {
+bool CANFDComm::SetBaudrateConfig(uint16_t slave, uint8_t baudrate_gear) {
+  if (slave == 0 || TargetSlaves(slave).empty()) return false;
+
   if (!IsConnected() || baudrate_gear > 5) return false;
-  if (!WriteSingleRegister(kBaudrateConfigRegister, (baudrate_gear << 8) | 1)) return false;
-  return WaitInputResult(0x102A);
+  if (!WriteSingleRegister(slave, kBaudrateConfigRegister, (baudrate_gear << 8) | 1)) return false;
+  return WaitInputResult(slave, 0x102A);
 }
 
 Diagnostics CANFDComm::GetDiagnostics() const {
@@ -505,21 +515,21 @@ Diagnostics CANFDComm::GetDiagnostics() const {
 
 // Device info
 
-bool CANFDComm::ReadInputBytes(int addr, int count,
+bool CANFDComm::ReadInputBytes(uint16_t slave, int addr, int count,
                                std::vector<uint8_t>* bytes) {
   if (bytes == nullptr) return false;
-  return ReadRegisters(addr, count, bytes, 0x04);
+  return ReadRegisters(slave, addr, count, bytes, 0x04);
 }
 
-DeviceInfo CANFDComm::GetDeviceInfo() {
+DeviceInfo CANFDComm::GetDeviceInfo(uint16_t slave) {
   DeviceInfo info;
   if (!IsConnected()) return info;
   std::vector<uint8_t> bytes;
-  if (ReadInputBytes(0x100A, 8, &bytes)) info.device_name = ParseDeviceName(bytes.data(), bytes.size());
-  if (ReadInputBytes(0x1000, 10, &bytes)) info.serial_number = ParseAsciiSerialNumber(bytes.data(), bytes.size());
-  auto version = [this](int addr) -> std::string {
+  if (ReadInputBytes(slave, 0x100A, 8, &bytes)) info.device_name = ParseDeviceName(bytes.data(), bytes.size());
+  if (ReadInputBytes(slave, 0x1000, 10, &bytes)) info.serial_number = ParseAsciiSerialNumber(bytes.data(), bytes.size());
+  auto version = [this, slave](int addr) -> std::string {
     std::vector<uint8_t> bytes;
-    if (!ReadInputBytes(addr, 1, &bytes) || bytes.size() < 2) return "N/A";
+    if (!ReadInputBytes(slave, addr, 1, &bytes) || bytes.size() < 2) return "N/A";
     return ParsePackedFirmwareVersion(static_cast<uint16_t>((bytes[0] << 8) | bytes[1]));
   };
   info.software_version = version(0x1019);
@@ -530,9 +540,9 @@ DeviceInfo CANFDComm::GetDeviceInfo() {
   return info;
 }
 
-HandType CANFDComm::GetHandType() {
+HandType CANFDComm::GetHandType(uint16_t slave) {
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(0x1012, 1, &bytes)) {
+  if (!ReadInputBytes(slave, 0x1012, 1, &bytes)) {
     GHAND_LOG_ERROR("Failed to read hand type over CANFD");
     return HandType::NONE;
   }
@@ -544,104 +554,110 @@ HandType CANFDComm::GetHandType() {
 
 // Motion control
 
-bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints, ControlMode mode) {
+bool CANFDComm::MoveJoints(uint16_t slave, const std::vector<JointCommand>& joints, ControlMode mode) {
+  if (slave == 0) {
+    auto ids = TargetSlaves(0); bool ok = !ids.empty();
+    for (uint16_t id : ids) ok = MoveJoints(id, joints, mode) && ok;
+    return ok;
+  }
+  if (TargetSlaves(slave).empty()) return false;
+
   if (!IsConnected() || joints.empty()) return false;
   std::lock_guard<std::mutex> command_lock(command_mutex_);
-  auto data = EncodeHandCommand(joints, mode, config_, joint_modes_);
-  if (!WriteRegisters(config_.mode_register, RegistersToBytes(data))) return false;
-  hand_mode_ = mode;
+  auto data = EncodeHandCommand(joints, mode, config_, joint_modes_[slave]);
+  if (!WriteRegisters(slave, config_.mode_register, RegistersToBytes(data))) return false;
+  hand_modes_[slave] = mode;
   for (const auto& joint : joints) {
     if (!config_.joint_control_registers.count(joint.id)) continue;
-    auto previous = joint_modes_.find(joint.id);
-    ControlMode fallback = previous == joint_modes_.end() ? ControlMode::POSITION : previous->second;
-    joint_modes_[joint.id] = static_cast<ControlMode>(EncodeJointCommand(joint, mode, fallback)[0] & 0x0F);
+    auto previous = joint_modes_[slave].find(joint.id);
+    ControlMode fallback = previous == joint_modes_[slave].end() ? ControlMode::POSITION : previous->second;
+    joint_modes_[slave][joint.id] = static_cast<ControlMode>(EncodeJointCommand(joint, mode, fallback)[0] & 0x0F);
   }
   return true;
 }
 
-void CANFDComm::Stop() {
-  if (!IsConnected()) return;
-  std::lock_guard<std::mutex> command_lock(command_mutex_);
-  if (!WriteSingleRegister(config_.mode_register, 0x0100 | static_cast<uint8_t>(hand_mode_))) return;
-  for (const auto& entry : config_.joint_control_registers) {
-    uint16_t value = 0x0200 | static_cast<uint8_t>(joint_modes_[entry.first]);
-    if (!WriteSingleRegister(entry.second, value)) return;
+bool CANFDComm::Stop(uint16_t slave) {
+  if (slave == 0) {
+    auto ids = TargetSlaves(0); bool ok = !ids.empty();
+    for (uint16_t id : ids) ok = Stop(id) && ok;
+    return ok;
   }
-}
+  if (TargetSlaves(slave).empty()) return false;
 
-bool CANFDComm::DisableHand() {
   if (!IsConnected()) return false;
   std::lock_guard<std::mutex> command_lock(command_mutex_);
-  return WriteSingleRegister(config_.mode_register, static_cast<uint8_t>(hand_mode_));
+  if (!WriteSingleRegister(slave, config_.mode_register, 0x0100 | static_cast<uint8_t>(hand_modes_[slave]))) return false;
+  for (const auto& entry : config_.joint_control_registers) {
+    uint16_t value = 0x0200 | static_cast<uint8_t>(joint_modes_[slave][entry.first]);
+    if (!WriteSingleRegister(slave, entry.second, value)) return false;
+  }
+  return true;
+}
+
+bool CANFDComm::DisableHand(uint16_t slave) {
+  if (slave == 0) {
+    auto ids = TargetSlaves(0); bool ok = !ids.empty();
+    for (uint16_t id : ids) ok = DisableHand(id) && ok;
+    return ok;
+  }
+  if (TargetSlaves(slave).empty()) return false;
+
+  if (!IsConnected()) return false;
+  std::lock_guard<std::mutex> command_lock(command_mutex_);
+  return WriteSingleRegister(slave, config_.mode_register, static_cast<uint8_t>(hand_modes_[slave]));
 }
 
 // System operations
 
-bool CANFDComm::ClearFault() {
+bool CANFDComm::ClearFault(uint16_t slave) {
+  if (slave == 0) {
+    auto ids = TargetSlaves(0); bool ok = !ids.empty();
+    for (uint16_t id : ids) ok = ClearFault(id) && ok;
+    return ok;
+  }
+  if (TargetSlaves(slave).empty()) return false;
+
   if (!IsConnected()) return false;
   int previous = -1;
-  std::vector<uint8_t> bytes; if (ReadInputBytes(0x1027, 1, &bytes) && bytes.size() >= 2) previous = (bytes[0] << 8) | bytes[1];
-  if (!WriteSingleRegister(kClearFaultRegister, 0x0001)) return false;
-  return WaitInputResult(0x1027, previous);
+  std::vector<uint8_t> bytes; if (ReadInputBytes(slave, 0x1027, 1, &bytes) && bytes.size() >= 2) previous = (bytes[0] << 8) | bytes[1];
+  if (!WriteSingleRegister(slave, kClearFaultRegister, 0x0001)) return false;
+  return WaitInputResult(slave, 0x1027, previous);
 }
-
-bool CANFDComm::InitJoint() {
-  GHAND_LOG_ERROR("InitJoint is not supported by the new protocol");
-  return false;
-}
-
-SelfTestErrorInfo CANFDComm::GetSelfTestErrorInfo() {
-  GHAND_LOG_ERROR("Legacy self-test commands are not supported by the new protocol");
-  return SelfTestErrorInfo{};
-}
-
-uint8_t CANFDComm::GetSelfTestStatus() { return 0; }
 
 // Tactile sensor
 
-bool CANFDComm::WriteTactileControl(uint16_t command) {
+bool CANFDComm::WriteTactileControl(uint16_t slave, uint16_t command) {
   if (!IsConnected()) return false;
   int previous = -1;
-  std::vector<uint8_t> bytes; if (ReadInputBytes(0x1028, 1, &bytes) && bytes.size() >= 2) previous = (bytes[0] << 8) | bytes[1];
-  if (!WriteSingleRegister(config_.tactile_control_register, command)) return false;
-  return WaitInputResult(0x1028, previous);
+  std::vector<uint8_t> bytes; if (ReadInputBytes(slave, 0x1028, 1, &bytes) && bytes.size() >= 2) previous = (bytes[0] << 8) | bytes[1];
+  if (!WriteSingleRegister(slave, config_.tactile_control_register, command)) return false;
+  return WaitInputResult(slave, 0x1028, previous);
 }
 
-bool CANFDComm::OpenTactile() {
-  if (!WriteTactileControl(0x0001)) return false;
-
-  bool should_start = false;
-  {
-    std::lock_guard<std::mutex> lock(cb_mutex_);
-    tactile_poll_enabled_ = static_cast<bool>(tactile_cb_);
-    should_start = tactile_poll_enabled_;
-  }
-  if (should_start) {
-    EnsurePollStarted();
-  }
+bool CANFDComm::OpenTactile(uint16_t slave) {
+  if (TargetSlaves(slave).size() != 1 || slave == 0) return false;
+  if (!WriteTactileControl(slave, 1)) return false;
+  std::lock_guard<std::mutex> lock(hands_mutex_); tactile_open_hands_[slave] = true;
   return true;
 }
 
-bool CANFDComm::CloseTactile() {
-  bool ok = WriteTactileControl(0x0002);
-  bool should_stop = false;
-  {
-    std::lock_guard<std::mutex> lock(cb_mutex_);
-    tactile_poll_enabled_ = false;
-    should_stop = !joints_poll_enabled_ && !hand_state_poll_enabled_ &&
-                  !tactile_poll_enabled_;
-  }
-  if (should_stop) {
-    StopPoll();
-  }
-  return ok;
+bool CANFDComm::CloseTactile(uint16_t slave) {
+  if (TargetSlaves(slave).size() != 1 || slave == 0) return false;
+  if (!WriteTactileControl(slave, 2)) return false;
+  std::lock_guard<std::mutex> lock(hands_mutex_); tactile_open_hands_[slave] = false;
+  return true;
 }
 
-bool CANFDComm::ZeroTactile() { return WriteTactileControl(0x0004); }
+bool CANFDComm::ZeroTactile(uint16_t slave) {
+  if (TargetSlaves(slave).size() != 1 || slave == 0) return false;
+  if (!WriteTactileControl(slave, 4)) return false;
+
+  return true;
+}
 
 // Data retrieval
 
-std::vector<Joint> CANFDComm::GetJoints() {
+std::vector<Joint> CANFDComm::GetJoints(uint16_t slave) {
   if (!IsConnected() || config_.valid_joints.empty()) return {};
 
   uint16_t start_addr = 0;
@@ -649,7 +665,7 @@ std::vector<Joint> CANFDComm::GetJoints() {
   if (!GetJointInputSpan(config_, &start_addr, &count)) return {};
 
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(start_addr, count, &bytes)) {
+  if (!ReadInputBytes(slave, start_addr, count, &bytes)) {
     GHAND_LOG_ERROR("Failed to read joints over CANFD");
     return {};
   }
@@ -661,11 +677,12 @@ std::vector<Joint> CANFDComm::GetJoints() {
   return ParseJoints(regs.data(), regs.size(), config_, start_addr);
 }
 
-HandState CANFDComm::GetHandInfo() {
+HandState CANFDComm::GetHandInfo(uint16_t slave, bool* ok) {
+  if (ok) *ok = false;
   if (!IsConnected()) return HandState{};
 
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(0x1051, 14, &bytes)) {
+  if (!ReadInputBytes(slave, 0x1051, 14, &bytes)) {
     GHAND_LOG_ERROR("Failed to read hand info over CANFD");
     return HandState{};
   }
@@ -673,15 +690,16 @@ HandState CANFDComm::GetHandInfo() {
   for (size_t i = 0; i + 1 < bytes.size(); i += 2) {
     regs.push_back(static_cast<uint16_t>((bytes[i] << 8) | bytes[i + 1]));
   }
+  if (ok) *ok = true;
   return ParseHandInfo(regs.data(), regs.size());
 }
 
-TactileData CANFDComm::GetTactileData() {
+TactileData CANFDComm::GetTactileData(uint16_t slave) {
   TactileData data;
   if (!IsConnected() || !config_.has_tactile) return data;
 
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(0x111A, 16, &bytes)) {
+  if (!ReadInputBytes(slave, 0x111A, 16, &bytes)) {
     GHAND_LOG_ERROR("Failed to read tactile status over CANFD");
     return data;
   }
@@ -705,7 +723,7 @@ TactileData CANFDComm::GetTactileData() {
 
     int dist_regs = (region.sensor_count * 3 + 1) / 2;
     std::vector<uint8_t> dist_bytes;
-    if (!ReadInputBytes(current_addr, dist_regs, &dist_bytes)) {
+    if (!ReadInputBytes(slave, current_addr, dist_regs, &dist_bytes)) {
       GHAND_LOG_ERROR("Failed to read tactile region over CANFD");
       return data;
     }
@@ -721,63 +739,36 @@ TactileData CANFDComm::GetTactileData() {
 // Callbacks
 
 void CANFDComm::SetJointsCallback(JointsCallback cb) {
-  bool should_start = false;
-  bool should_stop = false;
+  bool active = false;
   {
     std::lock_guard<std::mutex> lock(cb_mutex_);
     joints_cb_ = cb;
-    if (connected_.load()) {
-      joints_poll_enabled_ = static_cast<bool>(cb);
-    }
-    should_start = joints_poll_enabled_ && connected_.load();
-    should_stop = !joints_poll_enabled_ && !hand_state_poll_enabled_ &&
-                  !tactile_poll_enabled_;
+    active = static_cast<bool>(joints_cb_) || static_cast<bool>(hand_state_cb_) || static_cast<bool>(tactile_cb_);
   }
-  if (should_start) {
-    EnsurePollStarted();
-  } else if (should_stop) {
-    StopPoll();
-  }
+  if (active && IsConnected()) EnsurePollStarted();
+  else if (!active) StopPoll();
 }
 
 void CANFDComm::SetHandStateCallback(HandStateCallback cb) {
-  bool should_start = false;
-  bool should_stop = false;
+  bool active = false;
   {
     std::lock_guard<std::mutex> lock(cb_mutex_);
     hand_state_cb_ = cb;
-    if (connected_.load()) {
-      hand_state_poll_enabled_ = static_cast<bool>(cb);
-    }
-    should_start = hand_state_poll_enabled_ && connected_.load();
-    should_stop = !joints_poll_enabled_ && !hand_state_poll_enabled_ &&
-                  !tactile_poll_enabled_;
+    active = static_cast<bool>(joints_cb_) || static_cast<bool>(hand_state_cb_) || static_cast<bool>(tactile_cb_);
   }
-  if (should_start) {
-    EnsurePollStarted();
-  } else if (should_stop) {
-    StopPoll();
-  }
+  if (active && IsConnected()) EnsurePollStarted();
+  else if (!active) StopPoll();
 }
 
 void CANFDComm::SetTactileDataCallback(TactileDataCallback cb) {
-  bool should_start = false;
-  bool should_stop = false;
+  bool active = false;
   {
     std::lock_guard<std::mutex> lock(cb_mutex_);
     tactile_cb_ = cb;
-    if (connected_.load()) {
-      tactile_poll_enabled_ = static_cast<bool>(cb);
-    }
-    should_start = tactile_poll_enabled_ && connected_.load();
-    should_stop = !joints_poll_enabled_ && !hand_state_poll_enabled_ &&
-                  !tactile_poll_enabled_;
+    active = static_cast<bool>(joints_cb_) || static_cast<bool>(hand_state_cb_) || static_cast<bool>(tactile_cb_);
   }
-  if (should_start) {
-    EnsurePollStarted();
-  } else if (should_stop) {
-    StopPoll();
-  }
+  if (active && IsConnected()) EnsurePollStarted();
+  else if (!active) StopPoll();
 }
 
 // Firmware update
@@ -801,7 +792,7 @@ void CANFDComm::KeepaliveLoop() {
       std::this_thread::sleep_for(std::chrono::milliseconds(20));
     if (keepalive_stop_.load()) break;
     std::vector<uint8_t> bytes;
-    ReadInputBytes(0x1047, 1, &bytes);
+    for (uint16_t slave : TargetSlaves(0)) ReadInputBytes(slave, 0x1047, 1, &bytes);
   }
 }
 
@@ -822,101 +813,60 @@ void CANFDComm::StopPoll() {
 }
 
 void CANFDComm::PollLoop() {
-  auto last_tactile_time = std::chrono::steady_clock::time_point{};
-
   while (!poll_stop_.load()) {
-    if (!connected_.load()) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      continue;
-    }
-
-    JointsCallback joints_cb;
-    HandStateCallback hand_state_cb;
-    TactileDataCallback tactile_cb;
-    bool joints_poll_enabled = false;
-    bool hand_state_poll_enabled = false;
-    bool tactile_poll_enabled = false;
-    {
-      std::lock_guard<std::mutex> lock(cb_mutex_);
-      joints_cb = joints_cb_;
-      hand_state_cb = hand_state_cb_;
-      tactile_cb = tactile_cb_;
-      joints_poll_enabled = joints_poll_enabled_;
-      hand_state_poll_enabled = hand_state_poll_enabled_;
-      tactile_poll_enabled = tactile_poll_enabled_;
-    }
-
-    if ((!joints_poll_enabled || !joints_cb) &&
-        (!hand_state_poll_enabled || !hand_state_cb) &&
-        (!tactile_poll_enabled || !tactile_cb)) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      continue;
-    }
-
-    std::vector<Joint> joints;
-    HandState hand_state;
-    TactileData tactile_data;
-    bool has_tactile_data = false;
-
-    if (joints_poll_enabled && joints_cb && !config_.valid_joints.empty()) {
-      joints = GetJoints();
-    }
-    if (hand_state_poll_enabled && hand_state_cb) {
-      hand_state = GetHandInfo();
-    }
-    auto now = std::chrono::steady_clock::now();
-    if (tactile_poll_enabled && tactile_cb &&
-        (last_tactile_time.time_since_epoch().count() == 0 ||
-         now - last_tactile_time >= std::chrono::milliseconds(100))) {
-      tactile_data = GetTactileData();
-      has_tactile_data = true;
-      last_tactile_time = now;
-    }
-
-    try {
-      if (joints_poll_enabled && joints_cb) joints_cb(joints);
-    } catch (const std::exception& e) {
-      callback_errors_++;
-      GHAND_LOG_ERROR("CANFD joints callback failed: " << e.what());
-    } catch (...) {
-      callback_errors_++;
-      GHAND_LOG_ERROR("CANFD joints callback failed with unknown exception");
-    }
-
-    try {
-      if (hand_state_poll_enabled && hand_state_cb) hand_state_cb(hand_state);
-    } catch (const std::exception& e) {
-      callback_errors_++;
-      GHAND_LOG_ERROR("CANFD hand-state callback failed: " << e.what());
-    } catch (...) {
-      callback_errors_++;
-      GHAND_LOG_ERROR(
-          "CANFD hand-state callback failed with unknown exception");
-    }
-
-    try {
-      if (tactile_poll_enabled && tactile_cb && has_tactile_data) {
-        tactile_cb(tactile_data);
+    JointsCallback joints; HandStateCallback state; TactileDataCallback tactile;
+    { std::lock_guard<std::mutex> lock(cb_mutex_); joints = joints_cb_; state = hand_state_cb_; tactile = tactile_cb_; }
+    if (IsConnected()) for (const auto& hand : GetConnectedHands()) {
+      uint16_t slave = hand.slave_index;
+      if (joints && !config_.valid_joints.empty()) {
+        auto data = GetJoints(slave);
+        if (!data.empty()) try { joints(slave, data); } catch (...) { callback_errors_++; }
       }
-    } catch (const std::exception& e) {
-      callback_errors_++;
-      GHAND_LOG_ERROR("CANFD tactile callback failed: " << e.what());
-    } catch (...) {
-      callback_errors_++;
-      GHAND_LOG_ERROR("CANFD tactile callback failed with unknown exception");
+      if (state) {
+        bool valid = false; auto data = GetHandInfo(slave, &valid);
+        if (valid) try { state(slave, data); } catch (...) { callback_errors_++; }
+      }
+      bool enabled = false;
+      { std::lock_guard<std::mutex> lock(hands_mutex_); enabled = tactile_open_hands_[slave]; }
+      if (enabled && tactile) {
+        auto data = GetTactileData(slave);
+        if (data.regions.size() == config_.tactile_regions.size())
+          try { tactile(slave, data); } catch (...) { callback_errors_++; }
+      }
     }
-
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
 }
 
-bool CANFDComm::GetHandStateMachine(HandStateMachine* state) {
+bool CANFDComm::GetHandStateMachine(uint16_t slave, HandStateMachine* state) {
+  if (slave == 0 || TargetSlaves(slave).empty()) return false;
+
   if (!IsConnected() || state == nullptr) return false;
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(0x1048, 1, &bytes) || bytes.size() < 2) return false;
+  if (!ReadInputBytes(slave, 0x1048, 1, &bytes) || bytes.size() < 2) return false;
   *state = static_cast<HandStateMachine>(bytes[1]);
   return true;
 }
 
+std::vector<ConnectedHand> CANFDComm::GetConnectedHands() {
+  std::lock_guard<std::mutex> lock(hands_mutex_);
+  std::vector<ConnectedHand> result;
+  for (const auto& hand : hands_) result.push_back(hand.second);
+  return result;
+}
+std::vector<uint16_t> CANFDComm::TargetSlaves(uint16_t slave) {
+  std::lock_guard<std::mutex> lock(hands_mutex_);
+  std::vector<uint16_t> result;
+  for (const auto& hand : hands_) if (slave == 0 || slave == hand.first) result.push_back(hand.first);
+  return result;
+}
+
+bool CANFDComm::PrepareBaudrateListener(const std::string& device_name, uint8_t gear) {
+  Disconnect();
+  CANFDBaudrateConfig config{};
+  if (!ResolveCANFDBaudrateConfig(gear, &config)) return false;
+  return driver_ && driver_->Open(device_name, config.bitrate, config.dbitrate,
+      config.bitrate_sample_point, config.dbitrate_sample_point) == 0;
+}
 }  // namespace internal
 }  // namespace ghand

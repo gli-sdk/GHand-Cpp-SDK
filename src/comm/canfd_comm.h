@@ -43,26 +43,27 @@ class CANFDComm : public IComm {
   int Disconnect() override;
   bool IsConnected() const override { return connected_.load(); }
   std::map<std::string, std::string> SearchAdapters() override;
+  bool PrepareBaudrateListener(const std::string& device_name, uint8_t gear) override;
   void UpdateConfig(const ProductConfig& config) override;
-  bool SetSlaveId(uint8_t slave_id) override;
-  bool SetBaudrateConfig(uint8_t baudrate_gear) override;
+  bool SetSlaveId(uint16_t slave, uint8_t new_slave_id) override;
+  bool SetBaudrateConfig(uint16_t slave, uint8_t baudrate_gear) override;
   Diagnostics GetDiagnostics() const override;
+  std::vector<ConnectedHand> GetConnectedHands() override;
 
-  DeviceInfo GetDeviceInfo() override;
-  HandType GetHandType() override;
+  DeviceInfo GetDeviceInfo(uint16_t slave) override;
+  HandType GetHandType(uint16_t slave) override;
 
-  bool MoveJoints(const std::vector<JointCommand>& joints,
+  bool MoveJoints(uint16_t slave, const std::vector<JointCommand>& joints,
                   ControlMode mode) override;
-  void Stop() override;
-  bool DisableHand() override;
-  bool GetHandStateMachine(HandStateMachine* state) override;
+  bool Stop(uint16_t slave) override;
+  bool DisableHand(uint16_t slave) override;
+  bool GetHandStateMachine(uint16_t slave, HandStateMachine* state) override;
 
-  bool ClearFault() override;
-  bool InitJoint() override;
+  bool ClearFault(uint16_t slave) override;
 
-  bool OpenTactile() override;
-  bool CloseTactile() override;
-  bool ZeroTactile() override;
+  bool OpenTactile(uint16_t slave) override;
+  bool CloseTactile(uint16_t slave) override;
+  bool ZeroTactile(uint16_t slave) override;
 
   void SetJointsCallback(JointsCallback cb) override;
   void SetHandStateCallback(HandStateCallback cb) override;
@@ -73,8 +74,6 @@ class CANFDComm : public IComm {
       std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
-  SelfTestErrorInfo GetSelfTestErrorInfo() override;
-  uint8_t GetSelfTestStatus() override;
 
  private:
   friend struct ProtocolTestAccess;
@@ -91,23 +90,24 @@ class CANFDComm : public IComm {
   bool RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len,
                  int timeout_ms);
 
-  bool ReadRegisters(int addr, int count, std::vector<uint8_t>* out_bytes,
-                     int func_code = 0x04, int timeout_ms = 500);
-  bool WriteRegisters(int addr, const std::vector<uint8_t>& data,
-                      int timeout_ms = 500);
+  bool ReadRegisters(uint16_t slave, int addr, int count, std::vector<uint8_t>* out_bytes,
+                     int func_code = 0x04, int timeout_ms = 100);
+  bool WriteRegisters(uint16_t slave, int addr, const std::vector<uint8_t>& data,
+                      int timeout_ms = 100);
 
-  bool WriteSingleRegister(int addr, uint16_t value, int timeout_ms = 500);
-  bool WaitInputResult(int addr, int baseline = -1);
+  bool WriteSingleRegister(uint16_t slave, int addr, uint16_t value, int timeout_ms = 100);
+  bool WaitInputResult(uint16_t slave, int addr, int baseline = -1);
 
-  bool EstablishConnection(uint8_t slave_id, int timeout_ms = 500);
-  void DeleteConnection();
+  bool DetectNode(uint8_t slave_id, int timeout_ms = 500);
+  bool EstablishConnection(uint8_t slave_id, int timeout_ms = 100);
+  void DeleteConnection(uint16_t slave);
 
-  bool ReadInputBytes(int addr, int count, std::vector<uint8_t>* bytes);
-  std::vector<Joint> GetJoints();
-  HandState GetHandInfo();
-  TactileData GetTactileData();
+  bool ReadInputBytes(uint16_t slave, int addr, int count, std::vector<uint8_t>* bytes);
+  std::vector<Joint> GetJoints(uint16_t slave);
+  HandState GetHandInfo(uint16_t slave, bool* ok = nullptr);
+  TactileData GetTactileData(uint16_t slave);
 
-  bool WriteTactileControl(uint16_t command);
+  bool WriteTactileControl(uint16_t slave, uint16_t command);
   void EnsurePollStarted();
   void StopPoll();
   void PollLoop();
@@ -115,7 +115,6 @@ class CANFDComm : public IComm {
   std::unique_ptr<CANFDDriver> driver_;
   std::mutex io_mutex_;
   uint8_t src_id_ = 0x0A;
-  std::atomic<uint8_t> slave_id_{0x31};
   std::atomic<bool> connected_{false};
 
   std::thread keepalive_thread_;
@@ -132,17 +131,18 @@ class CANFDComm : public IComm {
   std::atomic<uint64_t> callback_errors_{0};
 
   ProductConfig config_;
-  ControlMode hand_mode_ = ControlMode::POSITION;
-  std::map<JointId, ControlMode> joint_modes_;
+  std::map<uint16_t, ControlMode> hand_modes_;
+  std::map<uint16_t, std::map<JointId, ControlMode>> joint_modes_;
+  std::map<uint16_t, ConnectedHand> hands_;
+  std::map<uint16_t, bool> tactile_open_hands_;
+  mutable std::mutex hands_mutex_;
+  std::vector<uint16_t> TargetSlaves(uint16_t slave);
   std::mutex command_mutex_;
 
   // Callbacks
   JointsCallback joints_cb_;
   HandStateCallback hand_state_cb_;
   TactileDataCallback tactile_cb_;
-  bool joints_poll_enabled_ = false;
-  bool hand_state_poll_enabled_ = false;
-  bool tactile_poll_enabled_ = false;
   mutable std::mutex cb_mutex_;
 };
 

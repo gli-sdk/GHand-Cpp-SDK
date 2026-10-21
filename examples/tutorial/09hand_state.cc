@@ -1,27 +1,28 @@
 // SPDX-FileCopyrightText: 2026 GLITech
 // SPDX-License-Identifier: GPL-3.0-only
-
 #include <chrono>
 #include <iostream>
 #include <thread>
-
 #include "ghand/ghand.h"
-
 int main() {
-  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                 ghand::CommType::ETHERCAT);
-  if (!hand || !hand->AutoConnect()) return 1;
-  hand->SetHandStateCallback([](const ghand::HandState& state) {
-    std::cout << ghand::ToString(state) << '\n';
-  });
-  ghand::HandStateMachine state;
-  if (!hand->GetHandStateMachine(&state)) {
-    std::cerr << hand->GetLastErrorMessage() << '\n';
-    hand->Disconnect();
-    return 1;
+  auto master = ghand::Master::Create(ghand::ProductType::GHand5, ghand::CommType::ETHERCAT);
+  if (!master) return 1;
+  auto connected = master->Connect("auto");
+  if (!connected) { std::cerr << connected.message << '\n'; return 1; }
+  for (auto hand : connected.value) {
+    auto index = hand->slave_index();
+    hand->SetHandStateCallback([index](const ghand::HandState& state) {
+      std::cout << "Slave " << index << ": " << ghand::ToString(state) << '\n';
+    });
+    hand->SetJointsCallback([index](const std::vector<ghand::Joint>& joints) {
+      for (const auto& joint : joints) {
+        std::cout << "Slave " << index << ": " << ghand::ToString(joint) << '\n';
+      }
+    });
+    auto state = hand->GetHandStateMachine();
+    if (state) std::cout << "Slave " << index << " state machine: " << static_cast<int>(state.value) << '\n';
+    else std::cerr << state.message << '\n';
   }
-  std::cout << "Hand state machine: " << static_cast<int>(state) << '\n';
   std::this_thread::sleep_for(std::chrono::seconds(2));
-  hand->Disconnect();
-  return 0;
+  return master->Disconnect() ? 0 : 1;
 }
