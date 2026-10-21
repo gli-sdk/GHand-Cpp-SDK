@@ -1,4 +1,4 @@
-﻿// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-FileCopyrightText: 2025-2026 GLITech
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "ghand/types.h"
@@ -10,7 +10,8 @@
 namespace ghand {
 
 namespace {
-std::string FormatBytes(const std::array<uint8_t, 6>& bytes) {
+template <size_t N>
+std::string FormatBytes(const std::array<uint8_t, N>& bytes) {
   std::ostringstream oss;
   oss << "[";
   for (size_t i = 0; i < bytes.size(); ++i) {
@@ -26,71 +27,46 @@ const char* DescribeHandWarn(size_t byte_index, size_t bit_index) {
   if (byte_index == 0 && bit_index == 0) return "Temperature sensor 1 abnormal";
   if (byte_index == 0 && bit_index == 1) return "Temperature sensor 2 abnormal";
   if (byte_index == 0 && bit_index == 2) return "Fan abnormal";
+  if (byte_index == 0 && bit_index == 3) return "Tactile board communication abnormal";
+  if (byte_index == 0 && bit_index >= 4) return "Finger tactile sensor disconnected";
+  if (byte_index == 1 && bit_index == 0) return "Little finger tactile sensor disconnected";
+  if (byte_index == 1 && bit_index == 1) return "Self-test error";
   return "Reserved";
 }
 
 const char* DescribeHandFault(size_t byte_index, size_t bit_index) {
-  static const char* kFaults[44] = {
-      "Joint motor fault - Thumb2",
-      "Joint motor fault - Thumb3",
-      "Joint motor fault - Thumb4",
-      "Joint motor fault - Thumb5",
-      "Joint motor fault - FF2",
-      "Joint motor fault - FF3",
-      "Joint motor fault - FF4",
-      "Joint motor fault - MF2",
-      "Joint motor fault - MF3",
-      "Joint motor fault - RF2",
-      "Joint motor fault - RF3",
-      "Joint motor fault - LF2",
-      "Joint motor fault - LF3",
-      "Thumb tactile sensor abnormal",
-      "Index finger tactile sensor abnormal",
-      "Middle finger tactile sensor abnormal",
-      "Ring finger tactile sensor abnormal",
-      "Little finger tactile sensor abnormal",
-      "Position sensor abnormal - Thumb2",
-      "Position sensor abnormal - Thumb3",
-      "Position sensor abnormal - Thumb4",
-      "Position sensor abnormal - Thumb5",
-      "Position sensor abnormal - FF2",
-      "Position sensor abnormal - FF3",
-      "Position sensor abnormal - FF4",
-      "Position sensor abnormal - MF2",
-      "Position sensor abnormal - MF3",
-      "Position sensor abnormal - RF2",
-      "Position sensor abnormal - RF3",
-      "Position sensor abnormal - LF2",
-      "Position sensor abnormal - LF3",
-      "Position sensor uncalibrated - Thumb2",
-      "Position sensor uncalibrated - Thumb3",
-      "Position sensor uncalibrated - Thumb4",
-      "Position sensor uncalibrated - Thumb5",
-      "Position sensor uncalibrated - FF2",
-      "Position sensor uncalibrated - FF3",
-      "Position sensor uncalibrated - FF4",
-      "Position sensor uncalibrated - MF2",
-      "Position sensor uncalibrated - MF3",
-      "Position sensor uncalibrated - RF2",
-      "Position sensor uncalibrated - RF3",
-      "Position sensor uncalibrated - LF2",
-      "Position sensor uncalibrated - LF3",
-  };
-  const size_t index = byte_index * 8 + bit_index;
-  return index < std::size(kFaults) ? kFaults[index] : "Reserved";
+  static const std::array<std::string, 78> messages = [] {
+    const char* groups[] = {"Joint motor fault", "Position sensor abnormal",
+        "Position sensor uncalibrated", "Zeroing joint stalled", "Zeroing brake timeout",
+        "Zeroing motor communication fault"};
+    const char* joints[] = {"Thumb2", "Thumb3", "Thumb4", "Thumb5", "FF2", "FF3", "FF4",
+        "MF2", "MF3", "RF2", "RF3", "LF2", "LF3"};
+    std::array<std::string, 78> result;
+    for (size_t i = 0; i < result.size(); ++i) {
+      std::string channel = i / 13 == 5 ? "Motor" + std::to_string(i % 13) : joints[i % 13];
+      result[i] = std::string(groups[i / 13]) + " - " + channel;
+    }
+    return result;
+  }();
+  size_t bit = byte_index * 8 + bit_index;
+  return bit < messages.size() ? messages[bit].c_str() : "Reserved";
 }
 
 const char* DescribeHandCritical(size_t byte_index, size_t bit_index) {
   if (byte_index == 0 && bit_index == 0) return "Unknown error";
-  if (byte_index == 0 && bit_index == 1) return "Self-test error";
   if (byte_index == 0 && bit_index == 2) return "Position sensor version mismatch";
   if (byte_index == 0 && bit_index == 3) return "Tactile sensor version mismatch";
   if (byte_index == 0 && bit_index == 4) return "Motor driver version mismatch";
+  if (byte_index == 0 && bit_index == 5) return "Position board detection abnormal";
+  if (byte_index == 0 && bit_index == 6) return "Temperature too high";
+  if (byte_index == 0 && bit_index == 7) return "Temperature too low";
+  if (byte_index == 1 && bit_index == 0) return "Zeroing global timeout";
   return "Reserved";
 }
 
+template <size_t N>
 void AppendActiveHandErrors(std::ostringstream& oss, const char* level,
-                            const std::array<uint8_t, 6>& bytes,
+                            const std::array<uint8_t, N>& bytes,
                             const char* (*describe)(size_t, size_t)) {
   for (size_t byte_index = 0; byte_index < bytes.size(); ++byte_index) {
     for (size_t bit_index = 0; bit_index < 8; ++bit_index) {
@@ -152,16 +128,9 @@ const char* ToString(FingerType finger) {
 // State
 const char* ToString(State state) {
   switch (state) {
-    case State::STOPPED:
-      return "STOPPED";
-    case State::RUNNING:
-      return "RUNNING";
-    case State::ABNORMAL_RUNNING:
-      return "ABNORMAL_RUNNING";
-    case State::PROTECTIVE_STOPPED:
-      return "PROTECTIVE_STOPPED";
-    default:
-      return "UNKNOWN";
+    case State::DISABLED: return "DISABLED";
+    case State::ENABLED: return "ENABLED";
+    default: return "UNKNOWN_STATE";
   }
 }
 

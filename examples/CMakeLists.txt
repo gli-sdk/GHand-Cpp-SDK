@@ -76,9 +76,9 @@ target_link_libraries(current_control ghand)
 copy_runtime_for_target(current_control)
 
 # 09. Self-test error example
-add_executable(self_test_error tutorial/09self_test_error.cc)
-target_link_libraries(self_test_error ghand)
-copy_runtime_for_target(self_test_error)
+add_executable(hand_state tutorial/09hand_state.cc)
+target_link_libraries(hand_state ghand)
+copy_runtime_for_target(hand_state)
 
 # Gesture dance demo
 add_executable(gesture_dance demo/gesture_dance.cc)

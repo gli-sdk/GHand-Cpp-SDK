@@ -127,4 +127,16 @@ FirmwareUpdateError GHand::BootUpdate(
   return impl_->BootUpdate(filename, progress_callback);
 }
 
+bool GHand::DisableHand() { return impl_->DisableHand(); }
+
+bool GHand::GetHandStateMachine(HandStateMachine* state) { return impl_->GetHandStateMachine(state); }
+
+bool GHand::GetStallTolerances(std::map<JointId, uint8_t>* values) { return impl_->GetStallTolerances(values); }
+
+bool GHand::SetStallTolerances(const std::map<JointId, uint8_t>& values) { return impl_->SetStallTolerances(values); }
+
+bool GHand::GetPidParameters(std::vector<uint16_t>* values) { return impl_->GetPidParameters(values); }
+
+bool GHand::SetPidParameters(const std::vector<uint16_t>& values) { return impl_->SetPidParameters(values); }
+
 }  // namespace ghand

@@ -60,6 +60,12 @@ class IComm {
   virtual bool MoveJoints(const std::vector<JointCommand>& joints,
                           ControlMode mode) = 0;
   virtual void Stop() = 0;
+  virtual bool DisableHand() { return false; }
+  virtual bool GetHandStateMachine(HandStateMachine* state) { return false; }
+  virtual bool GetStallTolerances(std::map<JointId, uint8_t>* values) { return false; }
+  virtual bool SetStallTolerances(const std::map<JointId, uint8_t>& values) { return false; }
+  virtual bool GetPidParameters(std::vector<uint16_t>* values) { return false; }
+  virtual bool SetPidParameters(const std::vector<uint16_t>& values) { return false; }
 
   // System operations
   virtual bool ClearFault() = 0;
@@ -81,11 +87,8 @@ class IComm {
       std::function<void(int)> progress) = 0;
   virtual bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) = 0;
 
-  // Self-test error query (object dictionary 0x2008). Default implementation
-  // returns an empty result for backends that do not support the query.
+  // Legacy self-test APIs; no device traffic with the new protocol.
   virtual SelfTestErrorInfo GetSelfTestErrorInfo() { return SelfTestErrorInfo{}; }
-  // Self-test status: 0 idle, 1 processing, 2 command processed successfully,
-  // 3 failed.
   virtual uint8_t GetSelfTestStatus() { return 0; }
 };
 

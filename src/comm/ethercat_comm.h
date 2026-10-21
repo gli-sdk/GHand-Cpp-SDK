@@ -51,6 +51,12 @@ class EtherCATComm : public IComm {
   bool MoveJoints(const std::vector<JointCommand>& joints,
                   ControlMode mode) override;
   void Stop() override;
+  bool DisableHand() override;
+  bool GetHandStateMachine(HandStateMachine* state) override;
+  bool GetStallTolerances(std::map<JointId, uint8_t>* values) override;
+  bool SetStallTolerances(const std::map<JointId, uint8_t>& values) override;
+  bool GetPidParameters(std::vector<uint16_t>* values) override;
+  bool SetPidParameters(const std::vector<uint16_t>& values) override;
 
   bool ClearFault() override;
   bool InitJoint() override;
@@ -84,6 +90,7 @@ class EtherCATComm : public IComm {
   uint8_t* ReadTxPDO(uint16_t slave);
 
  private:
+  friend struct ProtocolTestAccess;
   struct SoemState;
 
   // Instance state
@@ -109,7 +116,7 @@ class EtherCATComm : public IComm {
   std::atomic<uint64_t> dispatched_frames_{0};
   std::atomic<uint64_t> callback_errors_{0};
 
-  uint8_t rxpdo_buffer_[80] = {0};
+  uint8_t rxpdo_buffer_[2 + 12 * static_cast<size_t>(JointId::NUM_JOINTS)] = {0};
   size_t rxpdo_size_ = 0;
 
   std::mutex context_mutex_;
@@ -129,6 +136,13 @@ class EtherCATComm : public IComm {
   mutable std::mutex callback_mutex_;
 
   ProductConfig config_;
+  std::map<JointId, JointCommand> joint_commands_;
+  ControlMode hand_mode_ = ControlMode::POSITION;
+  std::mutex command_mutex_;
+  bool ExecuteSdoCommand(uint16_t index, uint8_t command,
+                         uint8_t command_subindex = 1,
+                         uint8_t state_subindex = 2, uint8_t result_subindex = 3);
+  bool WriteSdoParameters(uint16_t index, const std::vector<uint8_t>& bytes);
 
   // FOE firmware update shared state
   static std::function<void(int)> progress_callback_;
@@ -162,24 +176,10 @@ class EtherCATComm : public IComm {
                           std::vector<Joint>* parsed_joints,
                           HandState* parsed_temperature) const;
   TactileData ParseTactileData(const uint8_t* data, size_t size,
-                               size_t* offset) const;
+                               size_t* offset, bool compat_thumb = false) const;
   void ParseAndNotify(const uint8_t* data, size_t size);
 
-  // Self-test error helpers (object dictionary 0x2008). A1~A8 are internal.
-  bool ReadDiagnosticErrorCodes(uint8_t command,
-                                std::array<uint8_t, 13>* codes);
-  uint8_t GetSelfTestSummaryErrorCode();
-  uint8_t GetVersionCheckErrorCode();
-  std::array<uint8_t, 13> GetPositionSensorErrorCodes();
-  std::array<uint8_t, 13> GetTactileSensorErrorCodes();
-  uint8_t GetTemperatureSensorErrorCode();
-  uint8_t GetFanErrorCode();
-  std::array<uint8_t, 13> GetZeroingErrorCodes();
-  std::array<uint8_t, 13> GetMotorErrorCodes();
 
-  JointId MotorIndexToJoint(uint8_t motor_index) const;
-  std::vector<MotorDiagnosticError> CollectMotorErrors(
-      const std::array<uint8_t, 13>& codes) const;
 };
 
 }  // namespace internal

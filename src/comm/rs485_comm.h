@@ -60,6 +60,8 @@ class RS485Comm : public IComm {
   bool MoveJoints(const std::vector<JointCommand>& joints,
                   ControlMode mode) override;
   void Stop() override;
+  bool DisableHand() override;
+  bool GetHandStateMachine(HandStateMachine* state) override;
 
   bool ClearFault() override;
   bool InitJoint() override;
@@ -81,6 +83,7 @@ class RS485Comm : public IComm {
   uint8_t GetSelfTestStatus() override;
 
  private:
+  friend struct ProtocolTestAccess;
   bool ProbeSlave(int sid, int attempt, const std::string& device_name);
   void CloseContext();
   int ReadInputRegistersCounted(int addr, int count, uint16_t* dest);
@@ -88,8 +91,7 @@ class RS485Comm : public IComm {
   int WriteRegisterCounted(int addr, uint16_t value);
   int WriteRegistersCounted(int addr, int count, const uint16_t* data);
   bool WriteTactileControl(uint16_t command);
-  bool WaitHoldingResult(int addr, int timeout_ms = 2000,
-                         int interval_ms = 50);
+  bool WaitInputResult(int addr, int baseline = -1);
   bool HasCallbacks();
   void EnsurePollStarted();
   void StopPoll();
@@ -116,6 +118,9 @@ class RS485Comm : public IComm {
   std::atomic<uint64_t> callback_errors_{0};
 
   ProductConfig config_;
+  ControlMode hand_mode_ = ControlMode::POSITION;
+  std::map<JointId, ControlMode> joint_modes_;
+  std::mutex command_mutex_;
 
   // Callbacks
   JointsCallback joints_cb_;

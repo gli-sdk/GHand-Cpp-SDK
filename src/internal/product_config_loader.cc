@@ -287,7 +287,7 @@ void ApplyGHand5ModbusProfile(ProductConfig* config) {
   config->joint_input_registers.clear();
   for (int id = 0; id < static_cast<int>(JointId::NUM_JOINTS); ++id) {
     config->joint_input_registers[static_cast<JointId>(id)] =
-        static_cast<uint16_t>(0x1023 + id * 5);
+        static_cast<uint16_t>(0x105F + id * 5);
   }
 
   // Dynamically generate control registers based on joint_limits
@@ -297,19 +297,13 @@ void ApplyGHand5ModbusProfile(ProductConfig* config) {
   config->mode_register = 0x0260;
   config->stop_register = 0x0260;
   config->tactile_control_register = 0x0020;
-  config->canfd_connection_timer_register = 0x0001;
-  config->canfd_connection_timer_count = 2;
-  config->canfd_connection_timer_values = {0x0000, 0x0000};
-  config->canfd_connection_delete_register = 0x0000;
-  config->canfd_connection_delete_count = 1;
-  config->canfd_connection_delete_values = {0x0000};
 }
 
 void ApplyGHandLite1ModbusProfile(ProductConfig* config) {
   config->joint_input_registers.clear();
   for (int id = 0; id < static_cast<int>(JointId::NUM_JOINTS); ++id) {
     config->joint_input_registers[static_cast<JointId>(id)] =
-        static_cast<uint16_t>(0x1023 + id * 5);
+        static_cast<uint16_t>(0x105F + id * 5);
   }
 
   // Dynamically generate control registers based on joint_limits
@@ -319,12 +313,6 @@ void ApplyGHandLite1ModbusProfile(ProductConfig* config) {
   config->mode_register = 0x0260;
   config->stop_register = 0x0260;
   config->tactile_control_register = 0x0020;
-  config->canfd_connection_timer_register = 0x0001;
-  config->canfd_connection_timer_count = 2;
-  config->canfd_connection_timer_values = {0x0000, 0x0000};
-  config->canfd_connection_delete_register = 0x0000;
-  config->canfd_connection_delete_count = 1;
-  config->canfd_connection_delete_values = {0x0000};
 }
 
 void ApplyProtocolDefaults(ProductType product, ProductConfig* config) {
@@ -385,8 +373,8 @@ ProductConfig ParseProductConfigJson(const nlohmann::json& j,
   config.model = JsonStringOrEmpty(j, "model");
   config.name = JsonStringOrEmpty(j, "name");
   config.aliases = JsonStringArray(j, "aliases");
-  ApplyProtocolDefaults(product, &config);
   LoadJointConfig(j, &config);
+  ApplyProtocolDefaults(product, &config);
   config.has_tactile = JsonBoolOrFalse(j, "has_tactile");
   LoadTactileConfig(j, &config);
   return config;
@@ -445,21 +433,6 @@ bool ValidateProductConfig(const ProductConfig& config,
     if (region.sensor_count <= 0) {
       fail("tactile region sensor_count must be positive");
     }
-  }
-
-  if (config.canfd_connection_timer_count < 0 ||
-      config.canfd_connection_delete_count < 0) {
-    fail("CANFD connection register counts must be non-negative");
-  }
-  if (!config.canfd_connection_timer_values.empty() &&
-      config.canfd_connection_timer_values.size() !=
-          static_cast<size_t>(config.canfd_connection_timer_count)) {
-    fail("CANFD connection timer value count mismatch");
-  }
-  if (!config.canfd_connection_delete_values.empty() &&
-      config.canfd_connection_delete_values.size() !=
-          static_cast<size_t>(config.canfd_connection_delete_count)) {
-    fail("CANFD connection delete value count mismatch");
   }
 
   return valid;

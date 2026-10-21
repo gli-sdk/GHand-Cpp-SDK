@@ -1,4 +1,4 @@
-﻿// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-FileCopyrightText: 2025-2026 GLITech
 // SPDX-License-Identifier: GPL-3.0-only
 
 #define _USE_MATH_DEFINES
@@ -8,6 +8,7 @@
 #include <cerrno>
 #include <chrono>
 #include <cmath>
+#include "modbus_codec.h"
 #include <cstdlib>
 #include <cstring>
 #include <iomanip>
@@ -369,13 +370,27 @@ bool GHandImpl::MoveJoints(const std::vector<JointCommand>& joints) {
   for (const auto& joint_id : config_.valid_joints) {
     if (config_.joint_limits.find(joint_id) == config_.joint_limits.end())
       continue;  // Skip read-only joints
-    for (const auto& joint : joints) {
+    for (auto it = joints.rbegin(); it != joints.rend(); ++it) {
+      const auto& joint = *it;
       if (joint.id == joint_id) {
         JointCommand limited = joint;
-        limited.mode = control_mode_;
+        uint8_t mode_value = static_cast<uint8_t>(limited.mode);
+        if ((limited.mode != ControlMode::INHERIT && (mode_value & 0x0F) > 3) || limited.stop > 2 ||
+            (control_mode_ != ControlMode::CUSTOM && static_cast<uint8_t>(control_mode_) > 3) ||
+            !std::isfinite(limited.angle)) {
+          SetLastResult(SdkError::INVALID_ARGUMENT, "invalid joint mode, state or angle");
+          return false;
+        }
+        ControlMode effective = control_mode_;
+        if (effective == ControlMode::CUSTOM && limited.mode != ControlMode::INHERIT)
+          effective = static_cast<ControlMode>(mode_value & 0x0F);
         ClampJointAngle(limited);
-        ClampJointVelocity(limited);
-        ClampJointCurrent(limited);
+        int speed = limited.velocity;
+        int current = limited.current;
+        limited.velocity = static_cast<int16_t>(effective == ControlMode::SPEED
+            ? std::max(-100, std::min(100, speed)) : std::min(100, std::abs(speed)));
+        limited.current = static_cast<int16_t>(effective == ControlMode::CURRENT
+            ? std::max(-100, std::min(100, current)) : std::min(100, std::abs(current)));
         ordered_joints.push_back(limited);
         break;
       }
@@ -411,14 +426,8 @@ bool GHandImpl::ClearFault() {
 }
 
 bool GHandImpl::InitJoint() {
-  GHAND_LOG_INFO("op=init_joint comm=" << ToString(comm_type_));
-  bool result = comm_->InitJoint();
-  SetLastResult(result ? SdkError::OK : SdkError::DEVICE_REJECTED,
-                result ? "" : "joint initialization failed");
-  GHAND_LOG_INFO("op=init_joint comm=" << ToString(comm_type_)
-                                       << " result="
-                                       << (result ? "ok" : "failed"));
-  return result;
+  SetLastResult(SdkError::NOT_SUPPORTED, "InitJoint is unavailable in the new protocol");
+  return false;
 }
 
 bool GHandImpl::OpenTactile() {
@@ -468,20 +477,14 @@ TactileData GHandImpl::GetTactileData() const {
   return callback_manager_->GetTactileData();
 }
 
-SelfTestErrorInfo GHandImpl::GetSelfTestErrorInfo() const {
-  if (!IsConnected()) {
-    GHAND_LOG_ERROR("GetSelfTestErrorInfo called while disconnected");
-    return SelfTestErrorInfo{};
-  }
-  return comm_->GetSelfTestErrorInfo();
+SelfTestErrorInfo GHandImpl::GetSelfTestErrorInfo() {
+  SetLastResult(SdkError::NOT_SUPPORTED, "Legacy self-test queries are unavailable; read HandState instead");
+  return SelfTestErrorInfo{};
 }
 
-uint8_t GHandImpl::GetSelfTestStatus() const {
-  if (!IsConnected()) {
-    GHAND_LOG_ERROR("GetSelfTestStatus called while disconnected");
-    return 0;
-  }
-  return comm_->GetSelfTestStatus();
+uint8_t GHandImpl::GetSelfTestStatus() {
+  SetLastResult(SdkError::NOT_SUPPORTED, "Legacy self-test queries are unavailable; read HandState instead");
+  return 0;
 }
 
 FirmwareUpdateError GHandImpl::BootUpdate(
@@ -568,121 +571,110 @@ void GHandImpl::ClampJointAngle(JointCommand& joint) {
   }
 }
 
-void GHandImpl::ClampJointVelocity(JointCommand& joint) {
-  if (control_mode_ == ControlMode::POSITION) {
-    // Position mode: velocity range 0-100, negative values take absolute
-    // value, absolute value > 100 clamped to 100.
-    if (joint.velocity < 0) {
-      int8_t original = joint.velocity;
-      joint.velocity = std::abs(joint.velocity);
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
-                                   << static_cast<int>(original)
-                                   << " is negative in POSITION mode, "
-                                   << "converted to absolute value "
-                                   << static_cast<int>(joint.velocity));
-    }
-    if (joint.velocity > 100) {
-      int8_t original = joint.velocity;
-      joint.velocity = 100;
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
-                                   << static_cast<int>(original)
-                                   << " exceeds limit in POSITION mode, "
-                                   << "clamped to 100");
-    }
 
-  } else if (control_mode_ == ControlMode::CURRENT) {
-    // Current mode encodes velocity as 0-100.
-    int velocity = static_cast<int>(joint.velocity);
-    if (velocity > 100) {
-      velocity = 100;
-    } else if (velocity < -100) {
-      velocity = 100;
-    } else if (velocity < 0) {
-      velocity = -velocity;
-    }
-    joint.velocity = static_cast<int8_t>(velocity);
-  } else if (control_mode_ == ControlMode::SPEED) {
-    if (joint.velocity < -100) {
-      int8_t original = joint.velocity;
-      joint.velocity = -100;
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
-                                   << static_cast<int>(original)
-                                   << " below limit in SPEED mode, "
-                                   << "clamped to -100");
-    } else if (joint.velocity > 100) {
-      int8_t original = joint.velocity;
-      joint.velocity = 100;
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " velocity "
-                                   << static_cast<int>(original)
-                                   << " exceeds limit in SPEED mode, "
-                                   << "clamped to 100");
-    }
+
+
+
+bool GHandImpl::DisableHand() {
+  if (!IsConnected()) {
+    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
+    return false;
   }
+  bool ok = comm_->DisableHand();
+  SetLastResult(ok ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                ok ? "" : "DisableHand failed");
+  return ok;
 }
 
-void GHandImpl::ClampJointCurrent(JointCommand& joint) {
-  int original = static_cast<int>(joint.current);
-  int current = original;
-
-  if (control_mode_ == ControlMode::POSITION ||
-      control_mode_ == ControlMode::SPEED) {
-    // Position mode and speed mode: current range 0-100, negative values take
-    // absolute value, absolute value > 100 clamped to 100.
-    if (joint.current < 0) {
-      int8_t original = joint.current;
-      int current_abs = std::abs(static_cast<int>(joint.current));
-      if (current_abs > 100) current_abs = 100;
-      joint.current = static_cast<int8_t>(current_abs);
-      const char* mode_name =
-          (control_mode_ == ControlMode::POSITION) ? "POSITION" : "SPEED";
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " current "
-                                   << static_cast<int>(original)
-                                   << " is negative in " << mode_name
-                                   << " mode, converted to absolute value "
-                                   << static_cast<int>(joint.current));
-    }
-    if (joint.current > 100) {
-      int8_t original = joint.current;
-      joint.current = 100;
-      const char* mode_name =
-          (control_mode_ == ControlMode::POSITION) ? "POSITION" : "SPEED";
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " current "
-                                   << static_cast<int>(original)
-                                   << " exceeds limit in " << mode_name
-                                   << " mode, clamped to 100");
-    }
-  } else if (control_mode_ == ControlMode::CURRENT) {
-    // Current mode: current range -100 to 100
-    if (joint.current < -100) {
-      int8_t original = joint.current;
-      joint.current = -100;
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " current "
-                                   << static_cast<int>(original)
-                                   << " below limit in current mode, "
-                                   << "clamped to -100");
-    } else if (joint.current > 100) {
-      int8_t original = joint.current;
-      joint.current = 100;
-      GHAND_LOG_WARNING("[Joint] " << ToString(joint.id) << " current "
-                                   << static_cast<int>(original)
-                                   << " exceeds limit in current mode, "
-                                   << "clamped to 100");
-    }
+bool GHandImpl::GetHandStateMachine(HandStateMachine* state) {
+  if (!IsConnected()) {
+    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
+    return false;
   }
-
-  current = static_cast<int>(joint.current);
-  if (current != original) {
-
-    const char* mode_name =
-        (control_mode_ == ControlMode::POSITION)
-            ? "POSITION"
-            : (control_mode_ == ControlMode::SPEED ? "SPEED" : "CURRENT");
-
-    GHAND_LOG_WARNING("[Joint] "
-                      << ToString(joint.id) << " current " << original
-                      << " adjusted to " << current << " in " << mode_name
-                      << " mode");
+  if (state == nullptr) {
+    SetLastResult(SdkError::INVALID_ARGUMENT, "output pointer is null");
+    return false;
   }
+  bool ok = comm_->GetHandStateMachine(state);
+  SetLastResult(ok ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                ok ? "" : "GetHandStateMachine failed");
+  return ok;
+}
+
+bool GHandImpl::GetStallTolerances(std::map<JointId, uint8_t>* values) {
+  if (!IsConnected()) {
+    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
+    return false;
+  }
+  if (comm_type_ != CommType::ETHERCAT) {
+    SetLastResult(SdkError::NOT_SUPPORTED, "parameter access requires EtherCAT");
+    return false;
+  }
+  if (values == nullptr) {
+    SetLastResult(SdkError::INVALID_ARGUMENT, "output pointer is null");
+    return false;
+  }
+  bool ok = comm_->GetStallTolerances(values);
+  SetLastResult(ok ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                ok ? "" : "GetStallTolerances failed");
+  return ok;
+}
+
+bool GHandImpl::SetStallTolerances(const std::map<JointId, uint8_t>& values) {
+  if (!IsConnected()) {
+    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
+    return false;
+  }
+  if (comm_type_ != CommType::ETHERCAT) {
+    SetLastResult(SdkError::NOT_SUPPORTED, "parameter access requires EtherCAT");
+    return false;
+  }
+  if (values.size() != 13) {
+    SetLastResult(SdkError::INVALID_ARGUMENT, "stall tolerances require all 13 active joints");
+    return false;
+  }
+  bool ok = comm_->SetStallTolerances(values);
+  SetLastResult(ok ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                ok ? "" : "SetStallTolerances failed");
+  return ok;
+}
+
+bool GHandImpl::GetPidParameters(std::vector<uint16_t>* values) {
+  if (!IsConnected()) {
+    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
+    return false;
+  }
+  if (comm_type_ != CommType::ETHERCAT) {
+    SetLastResult(SdkError::NOT_SUPPORTED, "parameter access requires EtherCAT");
+    return false;
+  }
+  if (values == nullptr) {
+    SetLastResult(SdkError::INVALID_ARGUMENT, "output pointer is null");
+    return false;
+  }
+  bool ok = comm_->GetPidParameters(values);
+  SetLastResult(ok ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                ok ? "" : "GetPidParameters failed");
+  return ok;
+}
+
+bool GHandImpl::SetPidParameters(const std::vector<uint16_t>& values) {
+  if (!IsConnected()) {
+    SetLastResult(SdkError::NOT_CONNECTED, "device is not connected");
+    return false;
+  }
+  if (comm_type_ != CommType::ETHERCAT) {
+    SetLastResult(SdkError::NOT_SUPPORTED, "parameter access requires EtherCAT");
+    return false;
+  }
+  if (values.size() != 39) {
+    SetLastResult(SdkError::INVALID_ARGUMENT, "PID parameters require 39 uint16 values");
+    return false;
+  }
+  bool ok = comm_->SetPidParameters(values);
+  SetLastResult(ok ? SdkError::OK : SdkError::DEVICE_REJECTED,
+                ok ? "" : "SetPidParameters failed");
+  return ok;
 }
 
 }  // namespace internal

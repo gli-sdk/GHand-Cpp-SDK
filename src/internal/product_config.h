@@ -43,12 +43,6 @@ struct ProductConfig {
   int mode_register = 0x0260;
   int stop_register = 0x0260;
   int tactile_control_register = 0x0020;
-  int canfd_connection_timer_register = 0x0001;
-  int canfd_connection_timer_count = 2;
-  std::vector<uint16_t> canfd_connection_timer_values;
-  int canfd_connection_delete_register = 0x0000;
-  int canfd_connection_delete_count = 1;
-  std::vector<uint16_t> canfd_connection_delete_values;
 
 };
 

@@ -1,4 +1,4 @@
-﻿// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-FileCopyrightText: 2025-2026 GLITech
 // SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef SRC_INTERNAL_GHAND_IMPL_H_
@@ -67,6 +67,14 @@ class GHandImpl {
   void SetControlMode(ControlMode mode);
   bool MoveJoints(const std::vector<JointCommand>& joints);
   void Stop();
+
+  // New protocol controls; queries write their result only on success.
+  bool DisableHand();
+  bool GetHandStateMachine(HandStateMachine* state);
+  bool GetStallTolerances(std::map<JointId, uint8_t>* values);
+  bool SetStallTolerances(const std::map<JointId, uint8_t>& values);
+  bool GetPidParameters(std::vector<uint16_t>* values);
+  bool SetPidParameters(const std::vector<uint16_t>& values);
   bool ClearFault();
   bool InitJoint();
 
@@ -85,9 +93,9 @@ class GHandImpl {
   std::vector<Joint> GetJointsData() const;
   TactileData GetTactileData() const;
 
-  // Self-test error query (object dictionary 0x2008).
-  SelfTestErrorInfo GetSelfTestErrorInfo() const;
-  uint8_t GetSelfTestStatus() const;
+  // Legacy self-test queries: report NOT_SUPPORTED without device traffic.
+  SelfTestErrorInfo GetSelfTestErrorInfo();
+  uint8_t GetSelfTestStatus();
 
   // Firmware update
   FirmwareUpdateError BootUpdate(
@@ -100,8 +108,6 @@ class GHandImpl {
   void SetLastResult(SdkError code, const std::string& message);
   void SetupCallbacks();
   void ClampJointAngle(JointCommand& joint);
-  void ClampJointVelocity(JointCommand& joint);
-  void ClampJointCurrent(JointCommand& joint);
 
   std::unique_ptr<IComm> comm_;
   std::unique_ptr<GHandCallbackManager> callback_manager_;

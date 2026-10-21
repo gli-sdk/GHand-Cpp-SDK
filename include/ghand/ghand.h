@@ -189,13 +189,24 @@ class GHAND_API GHand {
    */
   void Stop();
 
+  // New protocol controls; queries write their result only on success.
+  // GetStallTolerances/SetStallTolerances and PID access require EtherCAT.
+  // Stall tolerances contain all 13 active GHand5 JointId keys.
+  // PID parameters contain 39 uint16 values in device order.
+  bool DisableHand();
+  bool GetHandStateMachine(HandStateMachine* state);
+  bool GetStallTolerances(std::map<JointId, uint8_t>* values);
+  bool SetStallTolerances(const std::map<JointId, uint8_t>& values);
+  bool GetPidParameters(std::vector<uint16_t>* values);
+  bool SetPidParameters(const std::vector<uint16_t>& values);
+
   /**
    * @brief Clear fault state
    */
   bool ClearFault();
 
   /**
-   * @brief Initialize joints
+   * @brief Legacy API: returns false / NOT_SUPPORTED with the new protocol
    */
   bool InitJoint();
 
@@ -232,23 +243,14 @@ class GHAND_API GHand {
   TactileData GetTactileData();
 
   /**
-   * @brief Read structured self-test error information from the device.
-   *
-   * Reads only the already-latched self-test result stored on the device
-   * (object dictionary ``0x2008``). This method does NOT trigger a manual
-   * self-test or manual zeroing. Only categories flagged by the A0 summary
-   * are queried in detail.
+   * @brief Legacy API: returns an empty result and sets NOT_SUPPORTED.
+   * Read HandState warning/fault/critical fields for new protocol diagnostics.
    */
   SelfTestErrorInfo GetSelfTestErrorInfo();
 
   /**
-   * @brief Read the current self-test status byte.
-   *
-   * EtherCAT reads 0x2008:0x02. CANFD and RS485 read the low byte of holding
-   * register 0x0038.
-   *
-   * Status values: 0 idle, 1 processing, 2 command processed successfully,
-   * 3 failed.
+   * @brief Legacy API: returns 0 and sets NOT_SUPPORTED.
+   * Use GetHandStateMachine for the new protocol runtime state.
    */
   uint8_t GetSelfTestStatus();
 

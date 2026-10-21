@@ -15,7 +15,6 @@
 #include "ghand/logging.h"
 #include "logging_macros.h"
 #include "modbus_codec.h"
-#include "self_test_workflow.h"
 
 namespace ghand {
 namespace internal {
@@ -26,7 +25,6 @@ static const uint8_t kCanfdLengths[] = {0,  1,  2,  3,  4,  5,  6,  7,
 static const int kBaudrateConfigRegister = 0x0004;
 static const int kSlaveIdRegister = 0x0003;
 static const int kClearFaultRegister = 0x001F;
-static const int kInitJointRegister = 0x001E;
 static const uint8_t kDefaultBaudrateGear = 0x05;
 
 struct CANFDBaudrateConfig {
@@ -68,46 +66,6 @@ static uint8_t NearestCanfdLength(uint8_t len) {
     if (vl >= len) return vl;
   }
   return 64;
-}
-
-static std::vector<uint8_t> BuildCanfdRegisterPayload(
-    int addr, int count, const std::vector<uint16_t>& values) {
-  std::vector<uint16_t> registers;
-  registers.reserve(2 + static_cast<size_t>(count));
-  registers.push_back(static_cast<uint16_t>(addr));
-  registers.push_back(static_cast<uint16_t>(count));
-  for (int i = 0; i < count; ++i) {
-    uint16_t value = i < static_cast<int>(values.size()) ? values[i] : 0;
-    registers.push_back(value);
-  }
-  return RegistersToBytes(registers);
-}
-
-static void AddUniquePayload(std::vector<std::vector<uint8_t>>* values,
-                             const std::vector<uint8_t>& payload) {
-  if (std::find(values->begin(), values->end(), payload) == values->end()) {
-    values->push_back(payload);
-  }
-}
-
-static std::vector<std::vector<uint8_t>> BuildConnectionPayloads(
-    const ProductConfig& config, bool delete_connection) {
-  std::vector<std::vector<uint8_t>> payloads;
-  if (delete_connection) {
-    AddUniquePayload(&payloads,
-                     BuildCanfdRegisterPayload(
-                         config.canfd_connection_delete_register,
-                         config.canfd_connection_delete_count,
-                         config.canfd_connection_delete_values));
-  } else {
-    AddUniquePayload(&payloads,
-                     BuildCanfdRegisterPayload(
-                         config.canfd_connection_timer_register,
-                         config.canfd_connection_timer_count,
-                         config.canfd_connection_timer_values));
-  }
-
-  return payloads;
 }
 
 CANFDComm::CANFDComm(const ProductConfig& config)
@@ -235,15 +193,16 @@ bool CANFDComm::ReadRegisters(int addr, int count,
 
     // Single-frame response
     if (r_start == 1 && r_end == 1) {
-      if (resp_len > 1) {
-        out_bytes->assign(resp_data + 1, resp_data + resp_len);
-      }
+      if (resp_len < count * 2 + 1) continue;
+      out_bytes->assign(resp_data + 1, resp_data + 1 + count * 2);
       return true;
     }
 
     // Multi-frame response
+    if ((r_start == 1 && r_seg != 0) || (r_seg == 0 && r_start != 1) ||
+        r_toggle != r_seg % 2 || (r_seg > 0 && !segments.count(r_seg - 1))) continue;
     std::vector<uint8_t> seg_data(resp_data, resp_data + resp_len);
-    if (r_seg == 0 && seg_data.size() > 1) {
+    if (r_seg == 0 && !seg_data.empty()) {
       seg_data.erase(seg_data.begin());  // strip Modbus byte-count prefix
     }
     segments[r_seg] = std::move(seg_data);
@@ -255,6 +214,12 @@ bool CANFDComm::ReadRegisters(int addr, int count,
         out_bytes->insert(out_bytes->end(), kv.second.begin(),
                           kv.second.end());
       }
+      if (segments.size() != static_cast<size_t>(r_seg + 1)) continue;
+      if (out_bytes->size() < static_cast<size_t>(count * 2)) {
+        segments.clear();
+        continue;
+      }
+      out_bytes->resize(count * 2);
       return true;
     }
   }
@@ -346,83 +311,58 @@ bool CANFDComm::WriteSingleRegister(int addr, uint16_t value, int timeout_ms) {
   return WriteRegisters(addr, data, timeout_ms);
 }
 
-bool CANFDComm::WaitHoldingResult(int addr, int timeout_ms, int interval_ms) {
-  auto deadline =
-      std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
-  while (std::chrono::steady_clock::now() < deadline) {
+bool CANFDComm::WaitInputResult(int addr, int baseline) {
+  return WaitCommandMailbox([this, addr](uint16_t* value) {
     std::vector<uint8_t> bytes;
-    if (ReadRegisters(addr, 1, &bytes, 0x03) && bytes.size() >= 2) {
-      uint16_t reg =
-          (static_cast<uint16_t>(bytes[0]) << 8) | bytes[1];
-      uint8_t status = static_cast<uint8_t>(reg & 0x00FF);
-      if (status == 1) return true;
-      if (status == 2) return false;
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
-  }
-  return false;
+    if (!ReadInputBytes(addr, 1, &bytes) || bytes.size() < 2) return false;
+    *value = static_cast<uint16_t>((bytes[0] << 8) | bytes[1]);
+    return true;
+  }, baseline);
 }
 
 // Connection management
 
-bool CANFDComm::NodeIdDetection(int timeout_ms) {
-  auto deadline =
-      std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
-  while (std::chrono::steady_clock::now() < deadline) {
-    uint32_t resp_id = 0;
-    uint8_t resp_data[64];
-    uint8_t resp_len = 0;
-    if (!RecvFrame(&resp_id, resp_data, &resp_len, 50)) continue;
 
-    int r_src = 0, r_dst = 0, r_ack = 0, r_fc = 0;
-    UnpackArbitration(resp_id, &r_src, &r_dst, &r_ack, &r_fc, nullptr,
-                       nullptr, nullptr, nullptr);
-
-    if (r_ack == 1 && r_fc == 0x09 && resp_len >= 1) {
-      if (resp_data[0] == slave_id_) {
-        GHAND_LOG_INFO("Detected slave Node ID 0x"
-                       << std::hex << static_cast<int>(slave_id_));
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 bool CANFDComm::EstablishConnection(uint8_t slave_id, int timeout_ms) {
-  const uint8_t slave_ids[] = {
-      slave_id == 0 ? static_cast<uint8_t>(0x31) : slave_id,
-      static_cast<uint8_t>(0x32)};
-  const int slave_id_count = slave_id == 0 ? 2 : 1;
-
-  auto payloads = BuildConnectionPayloads(config_, false);
-  for (const auto& data : payloads) {
-    for (int i = 0; i < slave_id_count; ++i) {
-      uint8_t target_id = slave_ids[i];
-      uint32_t can_id =
-          PackArbitration(src_id_, target_id, 0, 0x02, 1, 1, 0, 0);
-      SendFrame(can_id, data.data(), static_cast<uint8_t>(data.size()));
-
-      auto deadline = std::chrono::steady_clock::now() +
-                       std::chrono::milliseconds(timeout_ms);
-      while (std::chrono::steady_clock::now() < deadline) {
-        uint32_t resp_id = 0;
-        uint8_t resp_data[64];
-        uint8_t resp_len = 0;
-        if (!RecvFrame(&resp_id, resp_data, &resp_len, 50)) continue;
-
-        int r_src = 0, r_dst = 0, r_ack = 0, r_fc = 0;
-        UnpackArbitration(resp_id, &r_src, &r_dst, &r_ack, &r_fc, nullptr,
-                           nullptr, nullptr, nullptr);
-
-        if (r_ack != 1 || r_dst != src_id_ || r_src != target_id) continue;
-        if (r_fc == 0x82) {
-          break;  // Exception, try next payload
-        }
-        if (r_fc == 0x02) {
-          slave_id_ = target_id;
-          return true;
-        }
+  const uint8_t candidates[] = {slave_id ? slave_id : static_cast<uint8_t>(0x31), 0x32};
+  const int count = slave_id ? 1 : 2;
+  auto connect = [this](uint8_t id) {
+    slave_id_ = id;
+    if (!WriteSingleRegister(0x0000, 1, 5000)) return false;
+    if (!WaitConnectionState([this](uint16_t* value) {
+      std::vector<uint8_t> bytes;
+      if (!ReadInputBytes(0x1047, 1, &bytes) || bytes.size() < 2) return false;
+      *value = static_cast<uint16_t>((bytes[0] << 8) | bytes[1]);
+      return true;
+    })) return false;
+    return WaitInputResult(0x1026);
+  };
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+  while (std::chrono::steady_clock::now() < deadline) {
+    uint32_t id = 0; uint8_t bytes[64] = {}; uint8_t len = 0;
+    if (!RecvFrame(&id, bytes, &len, 50)) continue;
+    int src, dst, ack, fc;
+    UnpackArbitration(id, &src, &dst, &ack, &fc, nullptr, nullptr, nullptr, nullptr);
+    if (ack == 0 && fc == 0x44 && src == dst) {
+      for (int i = 0; i < count; ++i) if (src == candidates[i]) return connect(candidates[i]);
+    }
+  }
+  for (int i = 0; i < count; ++i) {
+    uint8_t target = candidates[i];
+    uint8_t probe[8] = {0, 0, 0, 1, target, 0, 0, 0};
+    if (!SendFrame(PackArbitration(src_id_, target, 0, 0x44), probe, 8)) continue;
+    deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (std::chrono::steady_clock::now() < deadline) {
+      uint32_t id = 0; uint8_t bytes[64] = {}; uint8_t len = 0;
+      if (!RecvFrame(&id, bytes, &len, 50)) continue;
+      int src, dst, ack, fc;
+      UnpackArbitration(id, &src, &dst, &ack, &fc, nullptr, nullptr, nullptr, nullptr);
+      if (ack != 1 || dst != src_id_ || src != target) continue;
+      if (fc == 0xC4) break;
+      if (fc == 0x44) {
+        if (connect(target)) return true;
+        break;
       }
     }
   }
@@ -430,16 +370,12 @@ bool CANFDComm::EstablishConnection(uint8_t slave_id, int timeout_ms) {
 }
 
 void CANFDComm::DeleteConnection() {
-  auto payloads = BuildConnectionPayloads(config_, true);
-  for (const auto& data : payloads) {
-    uint32_t can_id =
-        PackArbitration(src_id_, slave_id_, 0, 0x05, 1, 1, 0, 0);
-    SendFrame(can_id, data.data(), static_cast<uint8_t>(data.size()));
-  }
+  WriteSingleRegister(0x0000, 2, 2000);
 }
 
 int CANFDComm::Connect(const std::string& device_name, uint8_t slave_id,
                        uint8_t baudrate_gear) {
+  if (IsConnected()) return 0;
   if (!driver_) {
     GHAND_LOG_ERROR("CANFD driver not available");
     return -1;
@@ -475,6 +411,10 @@ int CANFDComm::Connect(const std::string& device_name, uint8_t slave_id,
     return -3;
   }
 
+  joint_modes_.clear();
+  hand_mode_ = ControlMode::POSITION;
+  keepalive_stop_.store(false);
+  keepalive_thread_ = std::thread(&CANFDComm::KeepaliveLoop, this);
   bool should_start_poll = false;
   {
     std::lock_guard<std::mutex> lock(cb_mutex_);
@@ -490,6 +430,8 @@ int CANFDComm::Connect(const std::string& device_name, uint8_t slave_id,
 }
 
 int CANFDComm::Disconnect() {
+  keepalive_stop_.store(true);
+  if (keepalive_thread_.joinable()) keepalive_thread_.join();
   StopPoll();
   {
     std::lock_guard<std::mutex> lock(cb_mutex_);
@@ -518,41 +460,28 @@ std::map<std::string, std::string> CANFDComm::SearchAdapters() {
   return {};
 }
 
-void CANFDComm::UpdateConfig(const ProductConfig& config) { config_ = config; }
+void CANFDComm::UpdateConfig(const ProductConfig& config) {
+  std::lock_guard<std::mutex> lock(command_mutex_);
+  config_ = config;
+  joint_modes_.clear();
+  hand_mode_ = ControlMode::POSITION;
+}
 
 bool CANFDComm::SetSlaveId(uint8_t slave_id) {
-  if (!IsConnected()) return false;
-  if (!WriteSingleRegister(kSlaveIdRegister, slave_id)) return false;
+  if (!IsConnected() || slave_id == 0 || slave_id > 0x3F) return false;
+  if (!WriteSingleRegister(kSlaveIdRegister, (slave_id << 8) | 1)) return false;
+  uint8_t old_id = slave_id_;
   slave_id_ = slave_id;
-  GHAND_LOG_INFO("CANFD slave ID set to 0x"
-                 << std::hex << static_cast<int>(slave_id) << std::dec);
-  return true;
+
+  if (WaitInputResult(0x1029)) return true;
+  slave_id_ = old_id;
+  return false;
 }
 
 bool CANFDComm::SetBaudrateConfig(uint8_t baudrate_gear) {
-  if (!IsConnected()) return false;
-
-  CANFDBaudrateConfig baudrate_config = {};
-  if (!ResolveCANFDBaudrateConfig(baudrate_gear, &baudrate_config)) {
-    GHAND_LOG_ERROR("Invalid CANFD baudrate gear: 0x"
-                    << std::hex << static_cast<int>(baudrate_gear)
-                    << std::dec);
-    return false;
-  }
-
-  if (!WriteSingleRegister(kBaudrateConfigRegister, baudrate_gear)) {
-    return false;
-  }
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  GHAND_LOG_INFO("CANFD baudrate config set to gear 0x"
-                 << std::hex << static_cast<int>(baudrate_gear) << std::dec
-                 << " (bitrate=" << baudrate_config.bitrate << "/"
-                 << static_cast<int>(baudrate_config.bitrate_sample_point)
-                 << "%, dbitrate=" << baudrate_config.dbitrate << "/"
-                 << static_cast<int>(baudrate_config.dbitrate_sample_point)
-                 << "%, effective after next power-up)");
-  return true;
+  if (!IsConnected() || baudrate_gear > 5) return false;
+  if (!WriteSingleRegister(kBaudrateConfigRegister, (baudrate_gear << 8) | 1)) return false;
+  return WaitInputResult(0x102A);
 }
 
 Diagnostics CANFDComm::GetDiagnostics() const {
@@ -584,63 +513,26 @@ bool CANFDComm::ReadInputBytes(int addr, int count,
 
 DeviceInfo CANFDComm::GetDeviceInfo() {
   DeviceInfo info;
+  if (!IsConnected()) return info;
   std::vector<uint8_t> bytes;
-  auto read_version = [this](int addr, const char* name) -> std::string {
-    std::vector<uint8_t> version_bytes;
-    if (!ReadInputBytes(addr, 1, &version_bytes) ||
-        version_bytes.size() < 2) {
-      return "N/A";
-    }
-    uint16_t raw =
-        (static_cast<uint16_t>(version_bytes[0]) << 8) | version_bytes[1];
-    if (raw == 0) {
-      return "N/A";
-    }
-    return ParsePackedFirmwareVersion(raw);
+  if (ReadInputBytes(0x100A, 8, &bytes)) info.device_name = ParseDeviceName(bytes.data(), bytes.size());
+  if (ReadInputBytes(0x1000, 10, &bytes)) info.serial_number = ParseAsciiSerialNumber(bytes.data(), bytes.size());
+  auto version = [this](int addr) -> std::string {
+    std::vector<uint8_t> bytes;
+    if (!ReadInputBytes(addr, 1, &bytes) || bytes.size() < 2) return "N/A";
+    return ParsePackedFirmwareVersion(static_cast<uint16_t>((bytes[0] << 8) | bytes[1]));
   };
-
-  if (ReadInputBytes(0x1000, 8, &bytes)) {
-    info.device_name = ParseDeviceName(bytes.data(), bytes.size());
-    if (info.device_name.empty()) {
-      info.device_name = "N/A";
-    }
-  }
-
-  if (ReadInputBytes(0x1008, 8, &bytes)) {
-    info.hardware_version = ParseHardwareVersion(bytes.data(), bytes.size());
-    if (info.hardware_version.empty()) {
-      info.hardware_version = "N/A";
-    }
-  }
-
-  if (ReadInputBytes(0x1010, 8, &bytes)) {
-    info.software_version = ParseFirmwareVersion(bytes.data(), bytes.size());
-    if (info.software_version.empty()) {
-      info.software_version = "N/A";
-    }
-  }
-
-  if (ReadInputBytes(0x119A, 10, &bytes)) {
-    std::string serial = ParseAsciiSerialNumber(bytes.data(), bytes.size());
-    if (!serial.empty()) {
-      info.serial_number = serial;
-    }
-  }
-
-  info.firmware_package_version = read_version(0x1185, "firmware package");
-  info.position_sensor_version = read_version(0x1186, "position sensor");
-  info.tactile_sensor_version = read_version(0x1187, "tactile MCU");
-  info.motor_driver_version = read_version(0x1188, "motor driver");
-  info.thumb_tactile_sensor_version =
-      read_version(0x1189, "thumb tactile sensor");
-  info.finger_tactile_sensor_version =
-      read_version(0x118A, "finger tactile sensor");
+  info.software_version = version(0x1019);
+  info.position_sensor_version = version(0x101A);
+  info.tactile_sensor_version = version(0x101B);
+  info.motor_driver_version = version(0x101C);
+  info.firmware_package_version = version(0x101D);
   return info;
 }
 
 HandType CANFDComm::GetHandType() {
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(0x1020, 1, &bytes)) {
+  if (!ReadInputBytes(0x1012, 1, &bytes)) {
     GHAND_LOG_ERROR("Failed to read hand type over CANFD");
     return HandType::NONE;
   }
@@ -652,118 +544,71 @@ HandType CANFDComm::GetHandType() {
 
 // Motion control
 
-bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints,
-                           ControlMode mode) {
+bool CANFDComm::MoveJoints(const std::vector<JointCommand>& joints, ControlMode mode) {
   if (!IsConnected() || joints.empty()) return false;
-
-  if (config_.mode_register >= 0) {
-    uint16_t mode_value = (static_cast<uint16_t>(mode) << 8) & 0xFF00;
-    if (!WriteSingleRegister(config_.mode_register, mode_value)) return false;
-  }
-
-  if (config_.product_type == ProductType::GHandLite1) {
-    const auto& control_map = config_.joint_control_registers;
-    for (const auto& joint : joints) {
-      auto it = control_map.find(joint.id);
-      if (it == control_map.end()) continue;
-
-      std::vector<uint16_t> registers = EncodeJointCommand(joint, mode);
-      if (!WriteRegisters(it->second, RegistersToBytes(registers))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  const auto& control_map = config_.joint_control_registers;
-
-  // Write each joint
+  std::lock_guard<std::mutex> command_lock(command_mutex_);
+  auto data = EncodeHandCommand(joints, mode, config_, joint_modes_);
+  if (!WriteRegisters(config_.mode_register, RegistersToBytes(data))) return false;
+  hand_mode_ = mode;
   for (const auto& joint : joints) {
-    auto it = control_map.find(joint.id);
-    if (it == control_map.end()) continue;
-
-    std::vector<uint16_t> registers = EncodeJointCommand(joint, mode);
-    if (!WriteRegisters(it->second, RegistersToBytes(registers))) return false;
+    if (!config_.joint_control_registers.count(joint.id)) continue;
+    auto previous = joint_modes_.find(joint.id);
+    ControlMode fallback = previous == joint_modes_.end() ? ControlMode::POSITION : previous->second;
+    joint_modes_[joint.id] = static_cast<ControlMode>(EncodeJointCommand(joint, mode, fallback)[0] & 0x0F);
   }
-
   return true;
 }
 
 void CANFDComm::Stop() {
   if (!IsConnected()) return;
-  if (config_.stop_register >= 0) {
-    WriteSingleRegister(config_.stop_register, 0x0001);
-    return;
+  std::lock_guard<std::mutex> command_lock(command_mutex_);
+  if (!WriteSingleRegister(config_.mode_register, 0x0100 | static_cast<uint8_t>(hand_mode_))) return;
+  for (const auto& entry : config_.joint_control_registers) {
+    uint16_t value = 0x0200 | static_cast<uint8_t>(joint_modes_[entry.first]);
+    if (!WriteSingleRegister(entry.second, value)) return;
   }
+}
 
-  const auto& control_map = config_.joint_control_registers;
-  for (JointId joint_id : config_.valid_joints) {
-    auto it = control_map.find(joint_id);
-    if (it != control_map.end()) {
-      WriteSingleRegister(it->second, 0x0001);
-    }
-  }
+bool CANFDComm::DisableHand() {
+  if (!IsConnected()) return false;
+  std::lock_guard<std::mutex> command_lock(command_mutex_);
+  return WriteSingleRegister(config_.mode_register, static_cast<uint8_t>(hand_mode_));
 }
 
 // System operations
 
 bool CANFDComm::ClearFault() {
   if (!IsConnected()) return false;
-  if (!WriteSingleRegister(kClearFaultRegister, 0x0100)) return false;
-  if (!WaitHoldingResult(kClearFaultRegister)) {
-    GHAND_LOG_ERROR("Fault clearance failed or timed out over CANFD");
-    return false;
-  }
-  GHAND_LOG_INFO("Fault cleared");
-  return true;
+  int previous = -1;
+  std::vector<uint8_t> bytes; if (ReadInputBytes(0x1027, 1, &bytes) && bytes.size() >= 2) previous = (bytes[0] << 8) | bytes[1];
+  if (!WriteSingleRegister(kClearFaultRegister, 0x0001)) return false;
+  return WaitInputResult(0x1027, previous);
 }
 
 bool CANFDComm::InitJoint() {
-  if (!IsConnected()) return false;
-  if (!WriteSingleRegister(kInitJointRegister, 0x0001)) return false;
-  GHAND_LOG_INFO("Joint initialization completed");
-  return true;
+  GHAND_LOG_ERROR("InitJoint is not supported by the new protocol");
+  return false;
 }
 
 SelfTestErrorInfo CANFDComm::GetSelfTestErrorInfo() {
-  if (!IsConnected()) return SelfTestErrorInfo{};
-
-  SelfTestRegisterIO io;
-  io.read_registers =
-      [this](uint16_t address, int count) -> std::vector<uint8_t> {
-    std::vector<uint8_t> bytes;
-    if (!ReadRegisters(address, count, &bytes, 0x03)) {
-      return {};
-    }
-    if (static_cast<int>(bytes.size()) < count * 2) {
-      return {};
-    }
-    return bytes;
-  };
-  io.write_register = [this](uint16_t address, uint16_t value) -> bool {
-    return WriteSingleRegister(address, value);
-  };
-  return BuildSelfTestErrorInfo(config_, io);
+  GHAND_LOG_ERROR("Legacy self-test commands are not supported by the new protocol");
+  return SelfTestErrorInfo{};
 }
 
-uint8_t CANFDComm::GetSelfTestStatus() {
-  if (!IsConnected()) return 0;
-  std::vector<uint8_t> bytes;
-  if (!ReadRegisters(0x0038, 1, &bytes, 0x03) || bytes.size() < 2) {
-    return 0;
-  }
-  return bytes[1];
-}
+uint8_t CANFDComm::GetSelfTestStatus() { return 0; }
 
 // Tactile sensor
 
 bool CANFDComm::WriteTactileControl(uint16_t command) {
   if (!IsConnected()) return false;
-  return WriteSingleRegister(config_.tactile_control_register, command);
+  int previous = -1;
+  std::vector<uint8_t> bytes; if (ReadInputBytes(0x1028, 1, &bytes) && bytes.size() >= 2) previous = (bytes[0] << 8) | bytes[1];
+  if (!WriteSingleRegister(config_.tactile_control_register, command)) return false;
+  return WaitInputResult(0x1028, previous);
 }
 
 bool CANFDComm::OpenTactile() {
-  if (!WriteTactileControl(0x0100)) return false;
+  if (!WriteTactileControl(0x0001)) return false;
 
   bool should_start = false;
   {
@@ -778,7 +623,7 @@ bool CANFDComm::OpenTactile() {
 }
 
 bool CANFDComm::CloseTactile() {
-  bool ok = WriteTactileControl(0x0200);
+  bool ok = WriteTactileControl(0x0002);
   bool should_stop = false;
   {
     std::lock_guard<std::mutex> lock(cb_mutex_);
@@ -792,7 +637,7 @@ bool CANFDComm::CloseTactile() {
   return ok;
 }
 
-bool CANFDComm::ZeroTactile() { return WriteTactileControl(0x0400); }
+bool CANFDComm::ZeroTactile() { return WriteTactileControl(0x0004); }
 
 // Data retrieval
 
@@ -820,7 +665,7 @@ HandState CANFDComm::GetHandInfo() {
   if (!IsConnected()) return HandState{};
 
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(0x1047, 11, &bytes)) {
+  if (!ReadInputBytes(0x1051, 14, &bytes)) {
     GHAND_LOG_ERROR("Failed to read hand info over CANFD");
     return HandState{};
   }
@@ -836,7 +681,7 @@ TactileData CANFDComm::GetTactileData() {
   if (!IsConnected() || !config_.has_tactile) return data;
 
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(0x1110, 16, &bytes)) {
+  if (!ReadInputBytes(0x111A, 16, &bytes)) {
     GHAND_LOG_ERROR("Failed to read tactile status over CANFD");
     return data;
   }
@@ -849,7 +694,7 @@ TactileData CANFDComm::GetTactileData() {
   data.sensor_state = tactile_err.first;
   data.sensor_error = tactile_err.second;
 
-  int current_addr = 0x1110 + 16;
+  int current_addr = 0x111A + 16;
   for (size_t i = 0; i < config_.tactile_regions.size(); ++i) {
     const auto& region = config_.tactile_regions[i];
     RegionTactile rt;
@@ -948,6 +793,16 @@ FirmwareUpdateError CANFDComm::BootUpdate(const std::string& filename,
 bool CANFDComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
   (void)results;
   return false;
+}
+
+void CANFDComm::KeepaliveLoop() {
+  while (!keepalive_stop_.load()) {
+    for (int i = 0; i < 10 && !keepalive_stop_.load(); ++i)
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    if (keepalive_stop_.load()) break;
+    std::vector<uint8_t> bytes;
+    ReadInputBytes(0x1047, 1, &bytes);
+  }
 }
 
 // Polling subscription
@@ -1053,6 +908,14 @@ void CANFDComm::PollLoop() {
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
+}
+
+bool CANFDComm::GetHandStateMachine(HandStateMachine* state) {
+  if (!IsConnected() || state == nullptr) return false;
+  std::vector<uint8_t> bytes;
+  if (!ReadInputBytes(0x1048, 1, &bytes) || bytes.size() < 2) return false;
+  *state = static_cast<HandStateMachine>(bytes[1]);
+  return true;
 }
 
 }  // namespace internal

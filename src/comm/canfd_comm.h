@@ -54,6 +54,8 @@ class CANFDComm : public IComm {
   bool MoveJoints(const std::vector<JointCommand>& joints,
                   ControlMode mode) override;
   void Stop() override;
+  bool DisableHand() override;
+  bool GetHandStateMachine(HandStateMachine* state) override;
 
   bool ClearFault() override;
   bool InitJoint() override;
@@ -75,6 +77,7 @@ class CANFDComm : public IComm {
   uint8_t GetSelfTestStatus() override;
 
  private:
+  friend struct ProtocolTestAccess;
   // CANFD arbitration helpers (Python SDK compatible)
   static uint32_t PackArbitration(int src_id, int dst_id, int ack,
                                   int func_code, int start = 1, int end = 1,
@@ -94,10 +97,8 @@ class CANFDComm : public IComm {
                       int timeout_ms = 500);
 
   bool WriteSingleRegister(int addr, uint16_t value, int timeout_ms = 500);
-  bool WaitHoldingResult(int addr, int timeout_ms = 2000,
-                         int interval_ms = 50);
+  bool WaitInputResult(int addr, int baseline = -1);
 
-  bool NodeIdDetection(int timeout_ms = 500);
   bool EstablishConnection(uint8_t slave_id, int timeout_ms = 500);
   void DeleteConnection();
 
@@ -114,9 +115,12 @@ class CANFDComm : public IComm {
   std::unique_ptr<CANFDDriver> driver_;
   std::mutex io_mutex_;
   uint8_t src_id_ = 0x0A;
-  uint8_t slave_id_ = 0x31;
+  std::atomic<uint8_t> slave_id_{0x31};
   std::atomic<bool> connected_{false};
 
+  std::thread keepalive_thread_;
+  std::atomic<bool> keepalive_stop_{true};
+  void KeepaliveLoop();
   std::thread poll_thread_;
   std::atomic<bool> poll_running_{false};
   std::atomic<bool> poll_stop_{false};
@@ -128,6 +132,9 @@ class CANFDComm : public IComm {
   std::atomic<uint64_t> callback_errors_{0};
 
   ProductConfig config_;
+  ControlMode hand_mode_ = ControlMode::POSITION;
+  std::map<JointId, ControlMode> joint_modes_;
+  std::mutex command_mutex_;
 
   // Callbacks
   JointsCallback joints_cb_;

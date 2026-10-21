@@ -3,6 +3,9 @@
 
 #include "modbus_codec.h"
 
+#include <chrono>
+#include <thread>
+
 namespace ghand {
 namespace internal {
 
@@ -10,15 +13,44 @@ namespace {
 
 constexpr float kAngleScale = 10.0f;
 
-float DecodeJointAngle(int16_t raw) {
-  return raw / kAngleScale;
-}
-
 int16_t EncodeJointAngle(const JointCommand& joint) {
   return static_cast<int16_t>(joint.angle * kAngleScale);
 }
 
 }  // namespace
+
+bool WaitCommandMailbox(const std::function<bool(uint16_t*)>& read,
+                        int baseline, int timeout_ms) {
+  auto start = std::chrono::steady_clock::now();
+  bool busy_seen = false;
+  while (std::chrono::steady_clock::now() - start <
+         std::chrono::milliseconds(timeout_ms)) {
+    uint16_t value = 0;
+    if (read(&value)) {
+      if (value == 0x0001) busy_seen = true;
+      bool terminal = value == 0x0100 || value == 0x0200 || value == 0x0300;
+      if (terminal && (busy_seen || value != baseline ||
+          std::chrono::steady_clock::now() - start >= std::chrono::milliseconds(300))) {
+        return value == 0x0100;
+      }
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+  return false;
+}
+
+bool WaitConnectionState(const std::function<bool(uint16_t*)>& read) {
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+  while (std::chrono::steady_clock::now() < deadline) {
+    uint16_t value = 0;
+    if (read(&value)) {
+      if ((value & 0xFF) == 1) return true;
+      if ((value & 0xFF) == 3) return false;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+  return false;
+}
 
 std::vector<uint8_t> RegistersToBytes(const std::vector<uint16_t>& registers) {
   std::vector<uint8_t> bytes;
@@ -83,7 +115,7 @@ std::string ParsePackedFirmwareVersion(uint16_t raw) {
   uint8_t major = (version_high >> 5) & 0x07;
   uint8_t minor = version_high & 0x1F;
   uint8_t patch = (version_low >> 4) & 0x0F;
-  return std::to_string(major) + "." + std::to_string(minor) + "." +
+  return "V" + std::to_string(major) + "." + std::to_string(minor) + "." +
          std::to_string(patch);
 }
 
@@ -106,27 +138,16 @@ uint8_t ParseHandType(const uint8_t* raw_bytes, size_t len) {
 
 HandState ParseHandInfo(const uint16_t* raw, size_t count) {
   HandState hs;
-  if (count >= 1) {
-    hs.state = static_cast<State>(raw[0] & 0xFF);
+  if (count < 14) return hs;
+  hs.state = static_cast<State>(raw[0]);
+  for (size_t i = 0; i < 6; ++i) {
+    hs.error_warn[i] = static_cast<uint8_t>(raw[1 + i / 2] >> ((i % 2) * 8));
+    hs.error_critical[i] = static_cast<uint8_t>(raw[10 + i / 2] >> ((i % 2) * 8));
   }
-  const auto copy_low_high = [raw](size_t start, std::array<uint8_t, 6>* out) {
-    for (size_t i = 0; i < out->size(); ++i) {
-      const uint16_t reg = raw[start + i / 2];
-      (*out)[i] = static_cast<uint8_t>((i % 2 == 0) ? reg : (reg >> 8));
-    }
-  };
-  if (count >= 4) {
-    copy_low_high(1, &hs.error_warn);
+  for (size_t i = 0; i < 12; ++i) {
+    hs.error_fault[i] = static_cast<uint8_t>(raw[4 + i / 2] >> ((i % 2) * 8));
   }
-  if (count >= 7) {
-    copy_low_high(4, &hs.error_fault);
-  }
-  if (count >= 10) {
-    copy_low_high(7, &hs.error_critical);
-  }
-  if (count >= 11) {
-    hs.temperature = static_cast<int16_t>(raw[10]);
-  }
+  hs.temperature = static_cast<int16_t>(raw[13]);
   return hs;
 }
 
@@ -142,7 +163,7 @@ Joint ParseJointData(const uint16_t* raw, JointId joint_id) {
   joint.stop = static_cast<uint8_t>((raw[1] >> 8) & 0xFF);
 
   int16_t angle_raw = static_cast<int16_t>(raw[2]);
-  joint.angle = angle_raw / 100.0f;
+  joint.angle = angle_raw / 10.0f;
 
   int16_t speed = static_cast<int16_t>(raw[3]);
   int16_t current = static_cast<int16_t>(raw[4]);
@@ -183,25 +204,17 @@ std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
 }
 
 std::pair<uint8_t, uint8_t> ParseTactileStateError(uint16_t first_reg) {
-  return {static_cast<uint8_t>((first_reg >> 8) & 0xFF),
-          static_cast<uint8_t>(first_reg & 0xFF)};
+  return {static_cast<uint8_t>(first_reg & 0xFF),
+          static_cast<uint8_t>(first_reg >> 8)};
 }
 
 Force ParseTactileResultant(const uint16_t* raw, int region_index) {
   int base = 1 + region_index * 3;
-  uint8_t raw_fx = (raw[base] >> 8) & 0xFF;
-  uint8_t raw_fy = (raw[base + 1] >> 8) & 0xFF;
-  uint8_t raw_fz = (raw[base + 2] >> 8) & 0xFF;
-
-  float fx = (raw_fx >= 0x80) ? (raw_fx - 0x100) / 10.0f : raw_fx / 10.0f;
-  float fy = (raw_fy >= 0x80) ? (raw_fy - 0x100) / 10.0f : raw_fy / 10.0f;
-  float fz = raw_fz / 10.0f;
-
-  Force f;
-  f.x = fx;
-  f.y = fy;
-  f.z = fz;
-  return f;
+  Force force;
+  force.x = static_cast<int16_t>(raw[base]) / 10.0f;
+  force.y = static_cast<int16_t>(raw[base + 1]) / 10.0f;
+  force.z = static_cast<int16_t>(raw[base + 2]) / 10.0f;
+  return force;
 }
 
 std::vector<Force> ParseTactileDistributed(const uint8_t* data_bytes,
@@ -219,22 +232,23 @@ std::vector<Force> ParseTactileDistributed(const uint8_t* data_bytes,
     int8_t fy_d = static_cast<int8_t>(data_bytes[i + 1]);
     uint8_t fz_d = data_bytes[i + 2];
     Force f;
-    f.x = fx_d / 10.0f;
-    f.y = fy_d / 10.0f;
-    f.z = fz_d / 10.0f;
+    f.x = static_cast<float>(fx_d);
+    f.y = static_cast<float>(fy_d);
+    f.z = static_cast<float>(fz_d);
     forces.push_back(f);
   }
   return forces;
 }
 
 std::vector<uint16_t> EncodeJointCommand(const JointCommand& joint,
-                                         ControlMode mode) {
+                                         ControlMode mode, ControlMode default_mode) {
   int16_t angle_raw = EncodeJointAngle(joint);
   ControlMode joint_mode =
-      joint.mode == ControlMode::POSITION ? mode : joint.mode;
+      joint.mode == ControlMode::INHERIT
+          ? (mode == ControlMode::CUSTOM ? default_mode : mode) : joint.mode;
   uint16_t mode_stop =
       static_cast<uint16_t>(((joint.stop & 0xFFu) << 8) |
-                            (static_cast<uint8_t>(joint_mode) & 0x0Fu));
+                            static_cast<uint8_t>(joint_mode));
   return {
       mode_stop,
       static_cast<uint16_t>(angle_raw),
@@ -243,6 +257,52 @@ std::vector<uint16_t> EncodeJointCommand(const JointCommand& joint,
       static_cast<uint16_t>(joint.kp),
       static_cast<uint16_t>(joint.kd),
   };
+}
+
+std::vector<uint16_t> EncodeHandCommand(
+    const std::vector<JointCommand>& joints, ControlMode mode,
+    const ProductConfig& config, const std::map<JointId, ControlMode>& modes) {
+  std::map<JointId, JointCommand> commands;
+  for (const auto& joint : joints) commands[joint.id] = joint;
+  std::vector<uint16_t> registers(1, 0x0100 | static_cast<uint8_t>(mode));
+  std::map<uint16_t, JointId> addresses;
+  for (const auto& entry : config.joint_control_registers) addresses[entry.second] = entry.first;
+  for (const auto& entry : addresses) {
+    auto previous = modes.find(entry.second);
+    ControlMode default_mode = previous == modes.end() ? ControlMode::POSITION : previous->second;
+    JointCommand joint;
+    joint.id = entry.second;
+    joint.mode = default_mode;
+    joint.stop = static_cast<uint8_t>(JointControlState::STOPPED);
+    auto command = commands.find(entry.second);
+    if (command != commands.end()) joint = command->second;
+    auto encoded = EncodeJointCommand(joint, mode, default_mode);
+    size_t offset = entry.first - config.mode_register;
+    registers.resize(offset);
+    registers.insert(registers.end(), encoded.begin(), encoded.end());
+  }
+  return registers;
+}
+
+std::vector<uint8_t> EncodeEthercatCommand(
+    const ProductConfig& config, ControlMode mode, bool enabled,
+    const std::map<JointId, JointCommand>& commands) {
+  std::vector<uint8_t> bytes = {static_cast<uint8_t>(mode), static_cast<uint8_t>(enabled)};
+  for (JointId id : config.valid_joints) {
+    if (!config.joint_limits.count(id)) continue;
+    JointCommand joint;
+    joint.stop = 0;
+    auto it = commands.find(id);
+    if (it != commands.end()) joint = it->second;
+    auto encoded = EncodeJointCommand(joint, ControlMode::POSITION);
+    bytes.push_back(static_cast<uint8_t>(encoded[0]));
+    bytes.push_back(static_cast<uint8_t>(encoded[0] >> 8));
+    for (size_t i = 1; i < encoded.size(); ++i) {
+      bytes.push_back(static_cast<uint8_t>(encoded[i]));
+      bytes.push_back(static_cast<uint8_t>(encoded[i] >> 8));
+    }
+  }
+  return bytes;
 }
 
 }  // namespace internal

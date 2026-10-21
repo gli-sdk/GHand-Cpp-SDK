@@ -1,4 +1,4 @@
-﻿// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-FileCopyrightText: 2025-2026 GLITech
 // SPDX-License-Identifier: GPL-3.0-only
 
 #ifndef INCLUDE_GHAND_TYPES_H_
@@ -53,11 +53,12 @@ struct Force {
       : x(x_val), y(y_val), z(z_val) {}
 };
 
-enum class State : uint8_t {
-  STOPPED = 0,            // Stopped
-  RUNNING = 1,            // Normal operation
-  ABNORMAL_RUNNING = 2,   // Abnormal operation
-  PROTECTIVE_STOPPED = 3  // Protective stop
+enum class State : uint16_t {
+  DISABLED = 0,
+  ENABLED = 1,
+  UNKNOWN_STATE = 255,
+  STOPPED = DISABLED,  // Source-compatible names for the hand enable state.
+  RUNNING = ENABLED
 };
 
 /**
@@ -310,8 +311,17 @@ enum class ControlMode : uint8_t {
   POSITION = 0,
   SPEED = 1,
   CURRENT = 2,
-  MIT = 3
+  MIT = 3,
+  CUSTOM = 0x0F,
+  INHERIT = 0xFF  // JointCommand only: inherit the hand or previous joint mode.
 };
+
+enum class HandStateMachine : uint8_t {
+  INITIALIZED = 0, POWER_ON_SELF_TEST = 1, IDLE = 2, MOVING = 3,
+  FAULT = 4, LOW_POWER = 5, FIRMWARE_UPGRADE = 6, UNKNOWN_STATE = 255
+};
+
+enum class JointControlState : uint8_t { DISABLED = 0, RUNNING = 1, STOPPED = 2 };
 
 // Firmware update error codes
 enum class FirmwareUpdateError : int {
@@ -352,9 +362,9 @@ struct DeviceInfo {
 struct HandState {
   State state = State::STOPPED;
   std::array<uint8_t, 6> error_warn{};
-  std::array<uint8_t, 6> error_fault{};
+  std::array<uint8_t, 12> error_fault{};
   std::array<uint8_t, 6> error_critical{};
-  int16_t temperature = 0;  // Back-of-hand temperature, 0.1 degC units.
+  int16_t temperature = 0;  // Back-of-hand temperature in degrees Celsius.
 };
 
 /**
@@ -380,8 +390,8 @@ struct RegionTactile {
  * - sensor_error is global error code
  */
 struct TactileData {
-  uint8_t sensor_state;  // Raw byte reserved (for debugging)
-  uint8_t sensor_error;  // Global error code
+  uint8_t sensor_state = 0;  // Raw byte reserved (for debugging)
+  uint8_t sensor_error = 0;  // Global error code
 
   std::vector<RegionTactile> regions;
 };
@@ -390,9 +400,9 @@ struct TactileData {
 struct JointCommand {
   JointId id = JointId::THUMB_IP;  // Joint identifier
   float angle = 0.0f;              // Target angle (deg)
-  int8_t velocity = 0;             // Target velocity (-100~100%, depending on control mode)
-  int8_t current = 0;              // Target current (-100~100%, depending on control mode)
-  ControlMode mode = ControlMode::POSITION;
+  int16_t velocity = 0;             // Target velocity (-100~100%, depending on control mode)
+  int16_t current = 0;              // Target current (-100~100%, depending on control mode)
+  ControlMode mode = ControlMode::INHERIT;
   uint8_t stop = 1;
   int16_t kp = 0;                  // MIT proportional gain
   int16_t kd = 0;                  // MIT derivative gain
@@ -412,24 +422,20 @@ struct Joint {
 // HandState / Joint query functions
 
 inline bool IsNormal(const HandState& hs) {
-  const auto has_bits = [](const std::array<uint8_t, 6>& codes) {
-    for (uint8_t code : codes) {
-      if (code != 0) return true;
-    }
-    return false;
-  };
-  return (hs.state == State::STOPPED || hs.state == State::RUNNING) &&
-         !has_bits(hs.error_warn) && !has_bits(hs.error_fault) &&
-         !has_bits(hs.error_critical);
+  for (uint8_t code : hs.error_warn) if (code) return false;
+  for (uint8_t code : hs.error_fault) if (code) return false;
+  for (uint8_t code : hs.error_critical) if (code) return false;
+  return hs.state == State::DISABLED || hs.state == State::ENABLED;
 }
 
 inline bool HasError(const HandState& hs) {
   return !IsNormal(hs) ||
-         (hs.state != State::RUNNING && hs.state != State::STOPPED);
+         (hs.state != State::ENABLED && hs.state != State::DISABLED);
 }
 
 inline bool IsNormal(const Joint& j) {
-  return (j.state == JointStateCode::RUNNING ||
+  return (j.state == JointStateCode::DISABLED ||
+          j.state == JointStateCode::RUNNING ||
           j.state == JointStateCode::STOPPED) &&
          j.error == JointErrorCode::NORMAL;
 }
@@ -437,7 +443,8 @@ inline bool IsNormal(const Joint& j) {
 inline bool HasError(const Joint& j) {
   return j.error != JointErrorCode::NORMAL ||
          (j.state != JointStateCode::RUNNING &&
-          j.state != JointStateCode::STOPPED);
+          j.state != JointStateCode::STOPPED &&
+          j.state != JointStateCode::DISABLED);
 }
 
 GHAND_API std::string ToString(const HandState& hs);
