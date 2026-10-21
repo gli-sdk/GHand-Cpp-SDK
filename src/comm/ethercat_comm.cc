@@ -265,23 +265,6 @@ int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
     return -3;
   }
 
-  for (uint16_t si = 1; si <= soem_->ctx.slavecount; ++si) {
-    HandType type = GetHandType(si);
-    if (type != HandType::LEFT && type != HandType::RIGHT) continue;
-    ConnectedHand hand; hand.slave_index = si; hand.hand_type = type; hand.device_info = GetDeviceInfo(si);
-    hands_.push_back(hand);
-  }
-  if (hands_.empty()) { device_lock_.Release(); return -3; }
-  if (config_.valid_joints.empty()) {
-    config_ = FindConfigByName(hands_.front().device_info.device_name);
-    if (config_.valid_joints.empty()) { device_lock_.Release(); return -3; }
-  }
-  rxpdo_size_ = EthercatRxpdoSize(config_);
-  rxpdo_buffers_.assign(static_cast<size_t>(soem_->ctx.slavecount) + 1,
-                        std::vector<uint8_t>(sizeof(rxpdo_buffer_), 0));
-  rxpdo_sizes_.assign(static_cast<size_t>(soem_->ctx.slavecount) + 1, 0);
-  for (const auto& hand : hands_) rxpdo_sizes_[hand.slave_index] = rxpdo_size_;
-
   ec_groupt* group = &soem_->ctx.grouplist[0];
   int map_result = ecx_config_map_group(&soem_->ctx, &soem_->io_map, 0);
   if (map_result <= 0) {
@@ -289,10 +272,46 @@ int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
     return -4;
   }
 
+  uint16_t safe_op_state =
+      ecx_statecheck(&soem_->ctx, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
+
+  if (safe_op_state != EC_STATE_SAFE_OP) {
+    device_lock_.Release();
+    return -5;
+  }
+
+  // The hand firmware serves SDO reads only from SAFE_OP onwards.
+  for (uint16_t si = 1; si <= soem_->ctx.slavecount; ++si) {
+    HandType type = GetHandType(si);
+    if (type != HandType::LEFT && type != HandType::RIGHT) continue;
+    ConnectedHand hand; hand.slave_index = si; hand.hand_type = type; hand.device_info = GetDeviceInfo(si);
+    hands_.push_back(hand);
+  }
+  if (hands_.empty()) {
+    GHAND_LOG_ERROR("No controllable hands found on adapter: " << device_name);
+    device_lock_.Release();
+    return -3;
+  }
+  if (config_.valid_joints.empty()) {
+    config_ = FindConfigByName(hands_.front().device_info.device_name);
+    if (config_.valid_joints.empty()) {
+      GHAND_LOG_ERROR("Unknown product \"" << hands_.front().device_info.device_name
+                      << "\" reported by slave " << hands_.front().slave_index);
+      device_lock_.Release();
+      return -3;
+    }
+  }
+  rxpdo_size_ = EthercatRxpdoSize(config_);
+  rxpdo_buffers_.assign(static_cast<size_t>(soem_->ctx.slavecount) + 1,
+                        std::vector<uint8_t>(sizeof(rxpdo_buffer_), 0));
+  rxpdo_sizes_.assign(static_cast<size_t>(soem_->ctx.slavecount) + 1, 0);
+  for (const auto& hand : hands_) rxpdo_sizes_[hand.slave_index] = rxpdo_size_;
+
   for (const auto& hand : hands_) {
     auto& entry = soem_->ctx.slavelist[hand.slave_index];
     if (entry.Obytes != rxpdo_size_ ||
         (entry.Ibytes != EthercatTxpdoSize(config_) && entry.Ibytes != EthercatTxpdoSize(config_, true))) {
+      GHAND_LOG_ERROR("EtherCAT PDO mapping does not match the configured product");
       hands_.clear(); device_lock_.Release(); return -4;
     }
   }
@@ -302,14 +321,6 @@ int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
   expectedWKC_ = (group->outputsWKC * 2) + group->inputsWKC;
 
   ecx_configdc(&soem_->ctx);
-
-  uint16_t safe_op_state =
-      ecx_statecheck(&soem_->ctx, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE);
-
-  if (safe_op_state != EC_STATE_SAFE_OP) {
-    device_lock_.Release();
-    return -5;
-  }
 
   soem_->ctx.slavelist[0].state = EC_STATE_OPERATIONAL;
   ecx_writestate(&soem_->ctx, 0);

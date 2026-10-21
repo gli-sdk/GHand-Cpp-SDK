@@ -166,7 +166,7 @@ ResultOf<std::vector<ConnectedHand>> GHandImpl::ConnectToDevice(
 
     // Post-connection verification / auto-detection. The first hand on the
     // bus identifies the product.
-    device_info_ = comm_->GetDeviceInfo(hands.front().slave_index);
+    device_info_ = hands.front().device_info;
     std::string dev_name = device_info_.device_name;
     if (!dev_name.empty()) {
       if (product_type_ == ProductType::AUTO) {
