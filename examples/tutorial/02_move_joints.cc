@@ -23,7 +23,7 @@ void DisplayJoints(const std::vector<ghand::Joint>& joints) {
 
   for (const auto& joint : joints) {
     std::cout << std::left << std::setw(20) << ghand::ToString(joint.id)
-              << std::fixed << std::setprecision(1) << std::setw(10)
+              << std::fixed << std::setprecision(1) << std::setw(15)
               << joint.angle << std::setw(15) << +joint.velocity
               << std::setw(15) << +joint.current << std::setw(15)
               << ghand::ToString(joint.state) << ghand::ToString(joint.error)
@@ -55,15 +55,37 @@ int main() {
   hand->SetJointsCallback(DisplayJoints);
   std::cout << "Joint display callback registered." << '\n';
 
+  // JointCommand's four constructor arguments are:
+  //   id       joint to move
+  //   angle    target angle in degrees (clamped to the configured range)
+  //   velocity velocity in percent (-100 to 100); target in SPEED mode
+  //   current  current in percent (-100 to 100); target in CURRENT mode
+  //
+  // MoveJoints(joints, mode) interprets the fields by mode:
+  //   POSITION (default): angle is the target; velocity/current are limits
+  //   SPEED:              velocity is the target
+  //   CURRENT:            current is the target
+  //   MIT:                angle is the target with the kp/kd gains
+  //   CUSTOM:             each JointCommand.mode applies; INHERIT keeps the
+  //                       previous mode
+  //
+  // The remaining fields keep their defaults: mode = INHERIT, stop = 1 (run),
+  // kp = 0 and kd = 0 (MIT gains). See examples 03 and 04 for SPEED/CURRENT.
+  //
   // This demo only commands the index finger. Joints that are not listed keep
-  // their previous command on EtherCAT; DIP joints are not controllable.
-  std::vector<ghand::JointCommand> joints = {
+  // their previous command on EtherCAT; on Modbus transports omitted joints
+  // are sent as stopped entries. DIP joints are not controllable.
+  const std::vector<ghand::JointCommand> joints = {
+      // {id, target angle (deg), speed limit (%), current limit (%)}
       {ghand::JointId::FF_MCP, 30.0f, 100, 100},
       {ghand::JointId::FF_PIP, 45.0f, 100, 100},
   };
 
   std::cout << "Moving joints..." << '\n';
-  const auto move_result = hand->MoveJoints(joints);
+  // MoveJoints(joints, mode): mode defaults to POSITION; passing it explicitly
+  // makes the interpretation of angle/velocity/current clear.
+  const auto move_result =
+      hand->MoveJoints(joints, ghand::ControlMode::POSITION);
   if (move_result) {
     std::cout << "Joints moved successfully!" << '\n';
 
@@ -71,18 +93,19 @@ int main() {
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
     // Reset joint positions
-    std::vector<ghand::JointCommand> reset_joints = {
+    const std::vector<ghand::JointCommand> reset_joints = {
         {ghand::JointId::FF_MCP, 0.0f, 100, 100},
         {ghand::JointId::FF_PIP, 0.0f, 100, 100}};
 
     std::cout << "Resetting joint positions..." << '\n';
-    const auto reset_result = hand->MoveJoints(reset_joints);
+    const auto reset_result =
+        hand->MoveJoints(reset_joints, ghand::ControlMode::POSITION);
     if (!reset_result) {
       std::cerr << "Failed to reset joints: " << reset_result.message << '\n';
     }
     std::this_thread::sleep_for(std::chrono::seconds(2));
   } else {
-    std::cout << "Failed to move joints: " << move_result.message << '\n';
+    std::cerr << "Failed to move joints: " << move_result.message << '\n';
   }
 
   master->Disconnect();
