@@ -19,14 +19,18 @@ constexpr uint8_t kSlaveId = 0x31;
 
 std::string CanfdTimingName(ghand::CANFDBitTiming timing) {
   switch (timing) {
+    case ghand::CANFDBitTiming::TIMING_500K_800K:
+      return "TIMING_500K_800K";
     case ghand::CANFDBitTiming::TIMING_500K_1M:
       return "TIMING_500K_1M";
     case ghand::CANFDBitTiming::TIMING_500K_2M:
       return "TIMING_500K_2M";
     case ghand::CANFDBitTiming::TIMING_500K_4M:
       return "TIMING_500K_4M";
-    case ghand::CANFDBitTiming::TIMING_500K_5M:
-      return "TIMING_500K_5M";
+    case ghand::CANFDBitTiming::TIMING_1M_1M:
+      return "TIMING_1M_1M";
+    case ghand::CANFDBitTiming::TIMING_1M_2M:
+      return "TIMING_1M_2M";
     case ghand::CANFDBitTiming::TIMING_1M_4M:
       return "TIMING_1M_4M";
     case ghand::CANFDBitTiming::TIMING_1M_5M:
@@ -34,7 +38,6 @@ std::string CanfdTimingName(ghand::CANFDBitTiming timing) {
   }
   return "UNKNOWN";
 }
-
 }  // namespace
 
 int main() {

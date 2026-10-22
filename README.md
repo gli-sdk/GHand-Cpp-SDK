@@ -32,9 +32,10 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 - [Dependencies](#dependencies)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Examples](#examples)
 - [Build from Source](#build-from-source)
-- [Directory Structure](#-directory-structure)
-- [Open Source & Ecosystem Resources](#-open-source--ecosystem-resources)
+- [Directory Structure](#directory-structure)
+- [Open Source & Ecosystem Resources](#open-source--ecosystem-resources)
 - [Changelog](#changelog)
 - [Support & Feedback](#support--feedback)
 - [License](#license)
@@ -164,6 +165,40 @@ if (connected) {
 }
 ```
 
+## Examples
+
+Tutorial sources are numbered in learning order under `examples/tutorial/`.
+Executable names omit the numeric prefix and are defined in `examples/CMakeLists.txt`.
+
+| Source | Executable | Purpose |
+| --- | --- | --- |
+| [01_basic_connection.cc](examples/tutorial/01_basic_connection.cc) | `basic_connection` | Connect and query device information |
+| [02_move_joints.cc](examples/tutorial/02_move_joints.cc) | `move_joints` | Position commands, parameter units, control modes and joint feedback |
+| [03_speed_control.cc](examples/tutorial/03_speed_control.cc) | `speed_control` | Velocity control |
+| [04_current_control.cc](examples/tutorial/04_current_control.cc) | `current_control` | Current control |
+| [05_tactile_callback.cc](examples/tutorial/05_tactile_callback.cc) | `tactile_callback` | Tactile feedback callbacks |
+| [06_multi_hand.cc](examples/tutorial/06_multi_hand.cc) | `multi_hand` | Multi-hand control |
+| [07_glove_control.cc](examples/tutorial/07_glove_control.cc) | `glove_control` | Glove control |
+| [08_interactive_joint_control.cc](examples/tutorial/08_interactive_joint_control.cc) | `interactive_joint_control` | Interactive joint commands and feedback |
+| [09_hand_state.cc](examples/tutorial/09_hand_state.cc) | `hand_state` | Hand state and joint feedback |
+| [10_switch_baud_rate.cc](examples/tutorial/10_switch_baud_rate.cc) | `switch_baud_rate` | CANFD bit-timing configuration |
+| [11_connect_hands.cc](examples/tutorial/11_connect_hands.cc) | `connect_hands` | Shared-bus discovery, bus-wide and per-hand commands |
+
+Action demos, including `preset_gesture`, `gesture_dance` and `clap_pose`, are in
+[`examples/demo/`](examples/demo/).
+
+After building, run `connect_hands` with a transport and optional device:
+
+```bash
+./build/examples/connect_hands ethcat auto
+./build/examples/connect_hands canfd /dev/ttyACM0:0
+./build/examples/connect_hands rs485 /dev/ttyUSB0
+```
+
+On Windows, use `build\examples\Release\connect_hands.exe` with devices such as
+`COM17:0` (CANFD) or `COM7` (RS485). The example moves the connected hands;
+use `--help` to view its arguments and supported topologies.
+
 ## Build from Source
 
 Build from the repository or release package root that contains `deps/`.
@@ -281,9 +316,9 @@ ghand-sdk-cpp/
 |   |-- comm/         # Communication layer (EtherCAT, CANFD, RS485)
 |   `-- internal/     # Internal state machine & config
 |-- config/           # Product configuration (JSON)
+|-- cmake/            # CMake package config template
 |-- examples/         # Tutorial and demo programs
-|-- deps/             # Release-package prebuilt dependencies
-`-- lib/              # Precompiled libraries
+`-- deps/             # Release-package prebuilt dependencies
 ```
 
 ## Open Source & Ecosystem Resources

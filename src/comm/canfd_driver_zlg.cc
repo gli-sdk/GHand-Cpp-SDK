@@ -33,7 +33,9 @@ typedef LARGE_INTEGER PHYSICAL_ADDRESS;
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <iomanip>
 #include <map>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -52,6 +54,35 @@ const uint8_t kCanfdTail = 0xA5;
 const uint8_t kHeartbeat12Channel = 0xFF;
 const uint8_t kHeartbeat4Channel = 0xFE;
 const int kDefaultSerialBaudrate = 2000000;
+const int kConfigAckTimeoutMs = 200;
+const int kConfigAckReadSliceMs = 50;
+const int kConfigAckRetries = 3;
+const int kConfigAckRetryDelayMs = 50;
+const int kBitrateApplySettleMs = 50;
+
+std::string HexByte(uint8_t value) {
+  std::ostringstream oss;
+  oss << "0x" << std::hex << std::uppercase << std::setw(2)
+      << std::setfill('0') << static_cast<int>(value);
+  return oss.str();
+}
+
+std::string FormatHex(const uint8_t* data, size_t size) {
+  std::ostringstream oss;
+  oss << std::hex << std::uppercase << std::setfill('0');
+  for (size_t i = 0; i < size; ++i) {
+    if (i > 0) oss << ' ';
+    oss << std::setw(2) << static_cast<int>(data[i]);
+  }
+  return oss.str();
+}
+
+bool LooksLikeConfigAck(const uint8_t* data, size_t size) {
+  const size_t min_size = sizeof(kConfigHead) + sizeof(kConfigTail);
+  return size >= min_size && data[0] == kConfigHead[0] &&
+         data[1] == kConfigHead[1] && data[size - 2] == kConfigTail[0] &&
+         data[size - 1] == kConfigTail[1];
+}
 
 std::map<uint32_t, uint8_t> CommonBitrateCodes() {
   return {{1000000, 0x0}, {800000, 0x1}, {500000, 0x2}, {400000, 0x3},
@@ -232,6 +263,9 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
   }
 
   void Close() override {
+    if (IsOpen() && !SetChannelEnabled(false)) {
+      GHAND_LOG_WARNING("Failed to stop ZQWL CANFD channel before close");
+    }
 #ifdef _WIN32
     if (handle_ != INVALID_HANDLE_VALUE) {
       CloseHandle(handle_);
@@ -392,6 +426,7 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
     timeouts.ReadTotalTimeoutConstant = 20;
     timeouts.WriteTotalTimeoutConstant = 1000;
     SetCommTimeouts(handle_, &timeouts);
+    PurgeInputBuffer();
     return true;
 #else
     fd_ = open(port_name.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
@@ -440,10 +475,45 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
                     << "% dbitrate=" << dbitrate << "/"
                     << static_cast<int>(dbitrate_sample_point) << "%");
     if (!WriteConfig(0x42, params, sizeof(params))) return false;
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(kBitrateApplySettleMs));
+    uint8_t probe[16] = {0};
+    probe[0] = static_cast<uint8_t>(can_index_ & 0xFF);
+    uint8_t readback[22] = {0};
+    size_t readback_size = ReadConfigProbe(0x42, probe, sizeof(probe), readback,
+                                           sizeof(readback));
+    if (readback_size == 0) {
+      GHAND_LOG_DEBUG("ZQWL bitrate read-back not supported (no answer to "
+                      "func=0x42 read); continuing without verification");
+    } else if (!LooksLikeConfigAck(readback, readback_size) ||
+               readback_size < 7) {
+      GHAND_LOG_WARNING("ZQWL bitrate read-back unparsable: "
+                        << readback_size << " bytes ["
+                        << FormatHex(readback, readback_size)
+                        << "]; continuing without verification");
+    } else {
+      uint8_t actual_code = readback[6];
+      if (actual_code != bitrate_code) {
+        GHAND_LOG_WARNING("ZQWL bitrate read-back mismatch: requested="
+                          << HexByte(bitrate_code) << " adapter reports="
+                          << HexByte(actual_code) << " (raw ["
+                          << FormatHex(readback, readback_size)
+                          << "]); re-issuing bitrate config");
+        if (!WriteConfig(0x42, params, sizeof(params))) return false;
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(kBitrateApplySettleMs));
+      } else {
+        GHAND_LOG_INFO("ZQWL bitrate read-back confirmed: bitrate code="
+                       << HexByte(actual_code));
+      }
+    }
 
+    return SetChannelEnabled(true);
+  }
+
+  bool SetChannelEnabled(bool enabled) {
     uint8_t control[16] = {0};
-    control[0] = 0x01;
+    control[0] = enabled ? 0x01 : 0x00;
     if (can_index_ == 0) {
       control[2] = 0x01;
     } else if (can_index_ == 1) {
@@ -452,24 +522,116 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
       GHAND_LOG_ERROR("ZQWL serial backend supports CAN0/CAN1 only");
       return false;
     }
-    return WriteConfig(0x44, control, sizeof(control));
+    return WriteConfig(0x44, control, sizeof(control),
+                       enabled ? kConfigAckRetries : 1);
   }
 
-  bool WriteConfig(uint8_t func_code, const uint8_t* payload, size_t size) {
-    uint8_t cmd[22] = {0};
+  void BuildConfigFrame(uint8_t* cmd, uint8_t func_code, bool write,
+                        const uint8_t* payload, size_t size) {
+    memset(cmd, 0, 22);
     cmd[0] = kConfigHead[0];
     cmd[1] = kConfigHead[1];
     cmd[2] = func_code;
-    cmd[3] = 0x57;
+    cmd[3] = write ? 0x57 : 0x52;
     size_t copy_size = size < 16 ? size : 16;
     memcpy(cmd + 4, payload, copy_size);
     cmd[20] = kConfigTail[0];
     cmd[21] = kConfigTail[1];
-    if (!WriteAll(cmd, sizeof(cmd))) return false;
+  }
+
+  bool WriteConfig(uint8_t func_code, const uint8_t* payload, size_t size,
+                   int max_attempts = kConfigAckRetries) {
+    uint8_t cmd[22] = {0};
+    BuildConfigFrame(cmd, func_code, true, payload, size);
 
     uint8_t response[22] = {0};
-    ReadBytes(response, sizeof(response), 50);
-    return true;
+    size_t response_size = 0;
+    for (int attempt = 1; attempt <= max_attempts; ++attempt) {
+      PurgeInputBuffer();
+      if (!WriteAll(cmd, sizeof(cmd))) {
+        GHAND_LOG_WARNING("ZQWL config frame write failed: func="
+                          << HexByte(func_code) << " attempt=" << attempt << "/"
+                          << max_attempts);
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(kConfigAckRetryDelayMs));
+        continue;
+      }
+
+      response_size = ReadConfigAck(response, sizeof(response));
+      if (LooksLikeConfigAck(response, response_size)) {
+        if (attempt > 1) {
+          GHAND_LOG_INFO("ZQWL config frame acknowledged after retry: func="
+                         << HexByte(func_code) << " attempt=" << attempt);
+        }
+        GHAND_LOG_DEBUG("ZQWL config ack: func="
+                        << HexByte(func_code) << " len=" << response_size
+                        << " [" << FormatHex(response, response_size) << "]");
+        return true;
+      }
+
+      GHAND_LOG_WARNING(
+          "ZQWL config ack not confirmed: func="
+          << HexByte(func_code) << " attempt=" << attempt << "/"
+          << max_attempts << " got=" << response_size << " bytes"
+          << (response_size > 0
+                  ? " [" + FormatHex(response, response_size) + "]"
+                  : " (无应答字节)"));
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(kConfigAckRetryDelayMs));
+    }
+
+    if (response_size == 0) {
+      GHAND_LOG_WARNING("ZQWL adapter returned no bytes for config frame func="
+                        << HexByte(func_code)
+                        << "; treating adapter as write-only (ack not validated)");
+      return true;
+    }
+    GHAND_LOG_ERROR("ZQWL config frame func="
+                    << HexByte(func_code) << " not acknowledged after "
+                    << max_attempts << " attempts");
+    return false;
+  }
+
+  size_t ReadConfigAck(uint8_t* out, size_t capacity) {
+    auto deadline = std::chrono::steady_clock::now() +
+                    std::chrono::milliseconds(kConfigAckTimeoutMs);
+    size_t total = 0;
+    while (total < capacity) {
+      auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      deadline - std::chrono::steady_clock::now())
+                      .count();
+      if (left <= 0) break;
+      int slice = static_cast<int>(left < kConfigAckReadSliceMs
+                                       ? left
+                                       : kConfigAckReadSliceMs);
+      uint8_t byte = 0;
+      if (!ReadByte(&byte, slice)) break;
+      out[total++] = byte;
+      if (total >= 2 && out[total - 2] == kConfigTail[0] &&
+          out[total - 1] == kConfigTail[1]) {
+        break;
+      }
+    }
+    return total;
+  }
+
+  size_t ReadConfigProbe(uint8_t func_code, const uint8_t* payload, size_t size,
+                         uint8_t* response, size_t capacity) {
+    uint8_t cmd[22] = {0};
+    BuildConfigFrame(cmd, func_code, false, payload, size);
+    PurgeInputBuffer();
+    if (!WriteAll(cmd, sizeof(cmd))) return 0;
+    return ReadConfigAck(response, capacity);
+  }
+
+  void PurgeInputBuffer() {
+#ifdef _WIN32
+    if (handle_ != INVALID_HANDLE_VALUE) {
+      PurgeComm(handle_, PURGE_RXCLEAR | PURGE_RXABORT);
+    }
+#else
+    if (fd_ >= 0) tcflush(fd_, TCIFLUSH);
+#endif
   }
 
   bool WriteAll(const uint8_t* data, size_t size) {

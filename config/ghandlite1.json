@@ -17,10 +17,10 @@
   ],
   "has_tactile": true,
   "tactile_regions": [
-    { "id": "THUMB", "count": 80 },
-    { "id": "FF",    "count": 80 },
-    { "id": "MF",    "count": 80 },
-    { "id": "RF",    "count": 80 },
-    { "id": "LF",    "count": 80 }
+    { "id": "THUMB", "count": 38 },
+    { "id": "FF",    "count": 31 },
+    { "id": "MF",    "count": 31 },
+    { "id": "RF",    "count": 31 },
+    { "id": "LF",    "count": 31 }
   ]
 }

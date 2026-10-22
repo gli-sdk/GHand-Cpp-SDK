@@ -25,7 +25,6 @@ static const uint8_t kCanfdLengths[] = {0,  1,  2,  3,  4,  5,  6,  7,
 static const int kBaudrateConfigRegister = 0x0004;
 static const int kSlaveIdRegister = 0x0003;
 static const int kClearFaultRegister = 0x001F;
-static const uint8_t kDefaultBaudrateGear = 0x05;
 
 struct CANFDBaudrateConfig {
   uint32_t bitrate;
@@ -37,23 +36,29 @@ struct CANFDBaudrateConfig {
 static bool ResolveCANFDBaudrateConfig(uint8_t baudrate_gear,
                                        CANFDBaudrateConfig* config) {
   if (config == nullptr) return false;
-  switch (baudrate_gear) {
-    case 0x00:
+  switch (static_cast<CANFDBitTiming>(baudrate_gear)) {
+    case CANFDBitTiming::TIMING_500K_800K:
+      *config = CANFDBaudrateConfig{500000, 80, 800000, 80};
+      return true;
+    case CANFDBitTiming::TIMING_500K_1M:
       *config = CANFDBaudrateConfig{500000, 80, 1000000, 75};
       return true;
-    case 0x01:
+    case CANFDBitTiming::TIMING_500K_2M:
       *config = CANFDBaudrateConfig{500000, 80, 2000000, 80};
       return true;
-    case 0x02:
+    case CANFDBitTiming::TIMING_500K_4M:
       *config = CANFDBaudrateConfig{500000, 80, 4000000, 80};
       return true;
-    case 0x03:
-      *config = CANFDBaudrateConfig{500000, 80, 5000000, 75};
+    case CANFDBitTiming::TIMING_1M_1M:
+      *config = CANFDBaudrateConfig{1000000, 75, 1000000, 75};
       return true;
-    case 0x04:
+    case CANFDBitTiming::TIMING_1M_2M:
+      *config = CANFDBaudrateConfig{1000000, 75, 2000000, 80};
+      return true;
+    case CANFDBitTiming::TIMING_1M_4M:
       *config = CANFDBaudrateConfig{1000000, 75, 4000000, 80};
       return true;
-    case 0x05:
+    case CANFDBitTiming::TIMING_1M_5M:
       *config = CANFDBaudrateConfig{1000000, 75, 5000000, 75};
       return true;
     default:
@@ -107,6 +112,7 @@ bool CANFDComm::SendFrame(uint32_t can_id, const uint8_t* data, uint8_t len) {
 
   canfd::Frame frame;
   frame.id = can_id;
+  memset(frame.data, 0, sizeof(frame.data));
   memcpy(frame.data, data, len);
   frame.len = NearestCanfdLength(len);
   frame.is_fd = true;
@@ -323,6 +329,8 @@ bool CANFDComm::WaitInputResult(uint16_t slave, int addr, int baseline) {
 // Connection management
 
 bool CANFDComm::DetectNode(uint8_t slave_id, int timeout_ms) {
+  const bool lite1_reply_is_presence =
+      config_.product_type != ProductType::GHand5;
   const uint8_t candidates[] = {slave_id ? slave_id : static_cast<uint8_t>(0x31), 0x32};
   const int count = slave_id ? 1 : 2;
   auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
@@ -346,10 +354,12 @@ bool CANFDComm::DetectNode(uint8_t slave_id, int timeout_ms) {
       int src, dst, ack, fc;
       UnpackArbitration(id, &src, &dst, &ack, &fc, nullptr, nullptr, nullptr, nullptr);
       if (ack != 1 || dst != src_id_ || src != target) continue;
-      if (fc == 0xC4) break;
+      if (fc == 0xC4) {
+        if (lite1_reply_is_presence) return true;
+        break;
+      }
       if (fc == 0x44) {
         return true;
-        break;
       }
     }
   }
@@ -357,14 +367,96 @@ bool CANFDComm::DetectNode(uint8_t slave_id, int timeout_ms) {
 }
 
 bool CANFDComm::EstablishConnection(uint8_t slave, int timeout_ms) {
-  if (!WriteSingleRegister(slave, 0x0000, 1, timeout_ms)) return false;
+  if (!WriteSingleRegister(slave, 0x0000, 1, timeout_ms)) {
+    GHAND_LOG_WARNING("CANFD connect write failed for slave 0x" << std::hex
+                      << static_cast<int>(slave) << std::dec);
+    return false;
+  }
   if (!WaitConnectionState([this, slave](uint16_t* value) {
     std::vector<uint8_t> bytes;
     if (!ReadInputBytes(slave, 0x1047, 1, &bytes) || bytes.size() < 2) return false;
     *value = static_cast<uint16_t>((bytes[0] << 8) | bytes[1]);
     return true;
-  })) return false;
-  return WaitInputResult(slave, 0x1026);
+  })) {
+    GHAND_LOG_WARNING("CANFD connection state not reached for slave 0x"
+                      << std::hex << static_cast<int>(slave) << std::dec);
+    return false;
+  }
+  if (!WaitInputResult(slave, 0x1026)) {
+    GHAND_LOG_WARNING("CANFD connect result not successful for slave 0x"
+                      << std::hex << static_cast<int>(slave) << std::dec);
+    return false;
+  }
+  return true;
+}
+
+bool CANFDComm::EstablishConnectionLite1(uint8_t slave, int timeout_ms) {
+  const uint8_t connect_pdu[8] = {0x00, 0x01, 0x00, 0x02,
+                                  0x00, 0x00, 0x00, 0x00};
+  bool accepted = false;
+  for (int attempt = 0; attempt < 2 && !accepted; ++attempt) {
+    if (!SendFrame(PackArbitration(src_id_, slave, 0, 0x02), connect_pdu,
+                   sizeof(connect_pdu))) {
+      return false;
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() +
+                          std::chrono::milliseconds(timeout_ms);
+    while (std::chrono::steady_clock::now() < deadline) {
+      uint32_t resp_id = 0;
+      uint8_t resp_data[64] = {};
+      uint8_t resp_len = 0;
+      const int remaining = static_cast<int>(
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              deadline - std::chrono::steady_clock::now())
+              .count());
+      if (!RecvFrame(&resp_id, resp_data, &resp_len, std::max(remaining, 10)))
+        continue;
+
+      int r_src = 0, r_dst = 0, r_ack = 0, r_fc = 0;
+      UnpackArbitration(resp_id, &r_src, &r_dst, &r_ack, &r_fc,
+                        nullptr, nullptr, nullptr, nullptr);
+      if (r_ack != 1 || r_dst != src_id_ || r_src != slave) continue;
+      if (r_fc == 0x02) {
+        accepted = true;
+        break;
+      }
+      if (r_fc == 0x82) {
+        if (resp_len >= 1 && resp_data[0] == 0x03) accepted = true;
+        break;
+      }
+    }
+
+    if (!accepted && attempt == 0) {
+      // After an aborted handshake the hand can stop answering FC 0x02 until
+      // its broadcast reset (FC 0x08) restarts node detection. Reset it and
+      // retry once.
+      GHAND_LOG_WARNING("CANFD Lite 1 connect unanswered; resetting slave 0x"
+                        << std::hex << static_cast<int>(slave) << std::dec);
+      const uint8_t reset_pdu[2] = {0x00, 0x01};
+      SendFrame(PackArbitration(src_id_, 0x3F, 1, 0x08), reset_pdu,
+                sizeof(reset_pdu));
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    }
+  }
+
+  if (!accepted) {
+    GHAND_LOG_WARNING("CANFD Lite 1 connect rejected for slave 0x"
+                      << std::hex << static_cast<int>(slave) << std::dec);
+    return false;
+  }
+  if (!WaitConnectionState([this, slave](uint16_t* value) {
+        std::vector<uint8_t> bytes;
+        if (!ReadInputBytes(slave, 0x1047, 1, &bytes) || bytes.size() < 2)
+          return false;
+        *value = static_cast<uint16_t>((bytes[0] << 8) | bytes[1]);
+        return true;
+      })) {
+    GHAND_LOG_WARNING("CANFD Lite 1 connection state not reached for slave 0x"
+                      << std::hex << static_cast<int>(slave) << std::dec);
+    return false;
+  }
+  return true;
 }
 
 void CANFDComm::DeleteConnection(uint16_t slave) {
@@ -399,16 +491,29 @@ int CANFDComm::Connect(const std::string& device_name, uint8_t slave_id,
     GHAND_LOG_ERROR("Failed to open CANFD channel: " << device_name);
     return -2;
   }
+  GHAND_LOG_INFO("CANFD channel opened: " << device_name << " gear=0x"
+                 << std::hex << static_cast<int>(baudrate_gear) << std::dec
+                 << " bitrate=" << baudrate_config.bitrate << "/"
+                 << baudrate_config.dbitrate);
 
   connected_.store(true);
 
+  const ProductType product_type = config_.product_type;
   std::vector<uint8_t> detected;
   for (uint8_t id : (slave_id ? std::vector<uint8_t>{slave_id} : std::vector<uint8_t>{0x31, 0x32})) {
     if (DetectNode(id, 500)) detected.push_back(id);
   }
   joint_modes_.clear(); hand_modes_.clear();
   for (uint8_t id : detected) {
-    if (!EstablishConnection(id)) continue;
+    bool established = false;
+    if (product_type == ProductType::GHandLite1) {
+      established = EstablishConnectionLite1(id);
+    } else if (product_type == ProductType::AUTO) {
+      established = EstablishConnection(id) || EstablishConnectionLite1(id);
+    } else {
+      established = EstablishConnection(id);
+    }
+    if (!established) continue;
     ConnectedHand hand; hand.slave_index = id;
     hand.device_info = GetDeviceInfo(id); hand.hand_type = GetHandType(id);
     { std::lock_guard<std::mutex> lock(hands_mutex_); hands_[id] = hand; }
@@ -489,8 +594,14 @@ bool CANFDComm::SetSlaveId(uint16_t slave, uint8_t new_slave_id) {
 bool CANFDComm::SetBaudrateConfig(uint16_t slave, uint8_t baudrate_gear) {
   if (slave == 0 || TargetSlaves(slave).empty()) return false;
 
-  if (!IsConnected() || baudrate_gear > 5) return false;
-  if (!WriteSingleRegister(slave, kBaudrateConfigRegister, (baudrate_gear << 8) | 1)) return false;
+  if (!IsConnected()) return false;
+  if (baudrate_gear > static_cast<uint8_t>(CANFDBitTiming::TIMING_1M_5M)) {
+    return false;
+  }
+  if (!WriteSingleRegister(slave, kBaudrateConfigRegister,
+                           (baudrate_gear << 8) | 1)) {
+    return false;
+  }
   return WaitInputResult(slave, 0x102A);
 }
 
@@ -532,11 +643,21 @@ DeviceInfo CANFDComm::GetDeviceInfo(uint16_t slave) {
     if (!ReadInputBytes(slave, addr, 1, &bytes) || bytes.size() < 2) return "N/A";
     return ParsePackedFirmwareVersion(static_cast<uint16_t>((bytes[0] << 8) | bytes[1]));
   };
-  info.software_version = version(0x1019);
-  info.position_sensor_version = version(0x101A);
-  info.tactile_sensor_version = version(0x101B);
-  info.motor_driver_version = version(0x101C);
-  info.firmware_package_version = version(0x101D);
+  const bool lite1 = config_.product_type == ProductType::GHandLite1 ||
+                     (config_.product_type == ProductType::AUTO &&
+                      info.device_name == "GHand Lite 1");
+  if (lite1) {
+    info.software_version = version(0x1019);
+    info.tactile_sensor_version = version(0x101A);
+    info.motor_driver_version = version(0x101B);
+    info.firmware_package_version = version(0x101C);
+  } else {
+    info.software_version = version(0x1019);
+    info.position_sensor_version = version(0x101A);
+    info.tactile_sensor_version = version(0x101B);
+    info.motor_driver_version = version(0x101C);
+    info.firmware_package_version = version(0x101D);
+  }
   return info;
 }
 
@@ -681,8 +802,10 @@ HandState CANFDComm::GetHandInfo(uint16_t slave, bool* ok) {
   if (ok) *ok = false;
   if (!IsConnected()) return HandState{};
 
+  const bool lite1 = config_.product_type == ProductType::GHandLite1;
+  const int register_count = lite1 ? 11 : 14;
   std::vector<uint8_t> bytes;
-  if (!ReadInputBytes(slave, 0x1051, 14, &bytes)) {
+  if (!ReadInputBytes(slave, 0x1051, register_count, &bytes)) {
     GHAND_LOG_ERROR("Failed to read hand info over CANFD");
     return HandState{};
   }
@@ -691,7 +814,8 @@ HandState CANFDComm::GetHandInfo(uint16_t slave, bool* ok) {
     regs.push_back(static_cast<uint16_t>((bytes[i] << 8) | bytes[i + 1]));
   }
   if (ok) *ok = true;
-  return ParseHandInfo(regs.data(), regs.size());
+  return lite1 ? ParseHandInfoLite1(regs.data(), regs.size())
+               : ParseHandInfo(regs.data(), regs.size());
 }
 
 TactileData CANFDComm::GetTactileData(uint16_t slave) {

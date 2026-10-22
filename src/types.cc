@@ -265,9 +265,10 @@ const char* ToString(SdkError error) {
       return "CONFIG_ERROR";
     case SdkError::DEVICE_REJECTED:
       return "DEVICE_REJECTED";
-    case SdkError::PRODUCT_MISMATCH: return "PRODUCT_MISMATCH";
     case SdkError::INTERNAL_ERROR:
       return "INTERNAL_ERROR";
+    case SdkError::PRODUCT_MISMATCH:
+      return "PRODUCT_MISMATCH";
     default:
       return "UNKNOWN";
   }
@@ -299,7 +300,7 @@ const char* ToString(JointId id) {
     case JointId::MF_PIP:
       return "MF_PIP";
     case JointId::MF_MCP:
-      return "MIDDLE_MCP";
+      return "MF_MCP";
     case JointId::RF_DIP:
       return "RF_DIP";
     case JointId::RF_PIP:

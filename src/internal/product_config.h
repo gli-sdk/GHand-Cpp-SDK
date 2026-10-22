@@ -40,6 +40,7 @@ struct ProductConfig {
 
   std::map<JointId, uint16_t> joint_input_registers;
   std::map<JointId, uint16_t> joint_control_registers;
+  int joint_control_register_count = 6;
   int mode_register = 0x0260;
   int stop_register = 0x0260;
   int tactile_control_register = 0x0020;

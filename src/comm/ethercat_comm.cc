@@ -57,8 +57,13 @@ constexpr uint16_t kSdoSerialNumber = 0x2009;
 
 // SDO subindices
 
-// RPDO joint: mode, stop and five signed 16-bit values.
-constexpr size_t kEthercatJointDataSize = 12;
+constexpr size_t kGHand5HeaderSize = 2 + 6 + 12 + 6 + 2;      // 28
+constexpr size_t kGHandLite1HeaderSize = 2 + 6 + 6 + 6 + 2;   // 22
+
+constexpr size_t kEthercatJointTpdoSize = 10;
+
+constexpr size_t kGHand5JointDataSize = 12;
+constexpr size_t kGHandLite1JointDataSize = 8;
 
 const std::array<JointId, 13> kStallToleranceJoints = {{
     JointId::THUMB_MCP, JointId::THUMB_TMC_FE, JointId::THUMB_TMC_AA,
@@ -86,6 +91,15 @@ std::string ByteArrayString(const std::uint8_t* data, size_t size) {
   return result;
 }
 
+bool UsesLite1Layout(const ProductConfig& config) {
+  return config.product_type == ProductType::GHandLite1;
+}
+
+size_t HandHeaderSize(const ProductConfig& config) {
+  return UsesLite1Layout(config) ? kGHandLite1HeaderSize
+                                 : kGHand5HeaderSize;
+}
+
 std::vector<JointId> ControlledJoints(const ProductConfig& config) {
   std::vector<JointId> joints;
   for (JointId joint_id : config.valid_joints) {
@@ -97,16 +111,23 @@ std::vector<JointId> ControlledJoints(const ProductConfig& config) {
 }
 
 size_t EthercatRxpdoSize(const ProductConfig& config) {
-  return config.joint_limits.size() * kEthercatJointDataSize + 2;
+  size_t joint_size = UsesLite1Layout(config) ? kGHandLite1JointDataSize
+                                              : kGHand5JointDataSize;
+  return config.joint_limits.size() * joint_size + 2;
 }
 
 size_t EthercatTxpdoSize(const ProductConfig& config, bool compat_thumb = false) {
-  size_t size = 28 + config.valid_joints.size() * 10;
+  size_t size = HandHeaderSize(config) +
+                config.valid_joints.size() * kEthercatJointTpdoSize;
   if (config.has_tactile) {
     size += 2;
     for (size_t i = 0; i < config.tactile_regions.size(); ++i) {
       int count = config.tactile_regions[i].sensor_count;
-      if (compat_thumb && i == 0 && count > 28) count = 28;
+      // The shortened thumb layout is a G5 firmware variant only; Lite1
+      // follows the L1 V2.1 tactile mapping exactly.
+      if (compat_thumb && !UsesLite1Layout(config) && i == 0 && count > 28) {
+        count = 28;
+      }
       size += 6 + count * 3;
     }
   }
@@ -865,13 +886,24 @@ DeviceInfo EtherCATComm::GetDeviceInfo(uint16_t slave) {
     info.device_name = ByteArrayString(bytes, size);
   }
   size = 19;
-  if (SDORead(slave, kSdoSerialNumber, 1, &size, bytes, EC_TIMEOUTRXM) > 0) {
+  uint8_t serial_subindex = UsesLite1Layout(config_) ? 0 : 1;
+  if (SDORead(slave, kSdoSerialNumber, serial_subindex, &size, bytes,
+              EC_TIMEOUTRXM) > 0) {
     info.serial_number = ParseAsciiSerialNumber(bytes, size);
   }
   info.software_version = ReadFirmwareVersion(slave, 1);
-  info.position_sensor_version = ReadFirmwareVersion(slave, 2);
+  if (UsesLite1Layout(config_)) {
+    info.position_sensor_version = "N/A";
+  } else {
+    info.position_sensor_version = ReadFirmwareVersion(slave, 2);
+  }
   info.tactile_sensor_version = ReadFirmwareVersion(slave, 3);
   info.motor_driver_version = ReadFirmwareVersion(slave, 4);
+  if (!UsesLite1Layout(config_)) {
+    info.firmware_package_version = ReadFirmwareVersion(slave, 5);
+    info.thumb_tactile_sensor_version = ReadFirmwareVersion(slave, 6);
+    info.finger_tactile_sensor_version = ReadFirmwareVersion(slave, 7);
+  }
   return info;
 }
 
@@ -1041,7 +1073,7 @@ void EtherCATComm::ParseHandAndJoints(
     std::vector<Joint>* parsed_joints,
   HandState* parsed_temperature) const {
   *parsed_temperature = HandState{};
-  if (*offset + 28 > size) return;
+  if (*offset + HandHeaderSize(config_) > size) return;
 
   uint16_t hand_state;
   int16_t temperature;
@@ -1053,9 +1085,11 @@ void EtherCATComm::ParseHandAndJoints(
          parsed_temperature->error_warn.size());
   *offset += parsed_temperature->error_warn.size();
 
-  memcpy(parsed_temperature->error_fault.data(), data + *offset,
-         parsed_temperature->error_fault.size());
-  *offset += parsed_temperature->error_fault.size();
+  size_t fault_size = UsesLite1Layout(config_)
+                          ? 6
+                          : parsed_temperature->error_fault.size();
+  memcpy(parsed_temperature->error_fault.data(), data + *offset, fault_size);
+  *offset += fault_size;
 
   memcpy(parsed_temperature->error_critical.data(), data + *offset,
          parsed_temperature->error_critical.size());
@@ -1320,7 +1354,11 @@ bool EtherCATComm::GetHandStateMachine(uint16_t slave, HandStateMachine* state) 
   if (!IsConnected() || !state) return false;
   uint8_t value = 0;
   int size = 1;
-  if (SDORead(slave, 0x200A, 1, &size, &value, EC_TIMEOUTRXM) <= 0 || size != 1) return false;
+  uint8_t subindex = UsesLite1Layout(config_) ? 0 : 1;
+  if (SDORead(slave, 0x200A, subindex, &size, &value, EC_TIMEOUTRXM) <= 0 ||
+      size != 1) {
+    return false;
+  }
   *state = static_cast<HandStateMachine>(value);
   return true;
 }

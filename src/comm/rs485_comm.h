@@ -83,6 +83,7 @@ class RS485Comm : public IComm {
  private:
   friend struct ProtocolTestAccess;
   bool ProbeSlave(int sid, int attempt, const std::string& device_name);
+  bool ProbeLite1Slave(int sid);
   void CloseContext();
   int ReadInputRegistersCounted(uint16_t slave, int addr, int count, uint16_t* dest);
   int ReadHoldingRegistersCounted(uint16_t slave, int addr, int count, uint16_t* dest);

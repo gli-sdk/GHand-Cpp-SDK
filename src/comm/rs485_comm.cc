@@ -314,14 +314,30 @@ bool RS485Comm::SetSlaveId(uint16_t slave, uint8_t new_slave_id) {
   return true;
 }
 
+bool RS485Comm::ProbeLite1Slave(int sid) {
+  uint16_t hand_type = 0;
+  if (ReadInputRegistersCounted(sid, 0x1012, 1, &hand_type) != 1) return false;
+  const uint8_t type = static_cast<uint8_t>(hand_type & 0xFF);
+  return type == 1 || type == 2;
+}
+
 bool RS485Comm::ProbeSlave(int sid, int attempt, const std::string& device_name) {
+  if (config_.product_type == ProductType::GHandLite1) {
+    return ProbeLite1Slave(sid);
+  }
+
   uint16_t value = 0;
   if (ReadHoldingRegistersCounted(sid, kSlaveIdRegister, 1, &value) != 1) return false;
-  if (WriteRegisterCounted(sid, 0x0000, 1) != 1 ||
-      !WaitConnectionState([this, sid](uint16_t* value) {
+  if (WriteRegisterCounted(sid, 0x0000, 1) == 1 &&
+      WaitConnectionState([this, sid](uint16_t* value) {
         return ReadInputRegistersCounted(sid, 0x1047, 1, value) == 1;
-      }) || !WaitInputResult(sid, 0x1026)) return false;
-  return true;
+      }) && WaitInputResult(sid, 0x1026)) {
+    return true;
+  }
+  // Without a product profile the GHand 5 handshake has to be tried first,
+  // because a GHand 5 may not answer register reads before it is connected. If
+  // the handshake does not complete, the bus may still carry a Lite 1 hand.
+  return config_.product_type == ProductType::AUTO && ProbeLite1Slave(sid);
 }
 
 void RS485Comm::CloseContext() {
@@ -432,7 +448,8 @@ int RS485Comm::Disconnect() {
 
   {
     std::lock_guard<std::mutex> io_lock(io_mutex_);
-    if (ctx_ && IsConnected()) {
+    if (ctx_ && IsConnected() &&
+        config_.product_type != ProductType::GHandLite1) {
       for (uint16_t slave : TargetSlaves(0)) WriteRegisterCounted(slave, 0x0000, 2);
     }
     CloseContext();
@@ -457,11 +474,21 @@ DeviceInfo RS485Comm::GetDeviceInfo(uint16_t slave) {
     if (!ReadInputRegistersBytes(slave, addr, 1, &bytes) || bytes.size() < 2) return "N/A";
     return ParsePackedFirmwareVersion(static_cast<uint16_t>((bytes[0] << 8) | bytes[1]));
   };
-  info.software_version = version(0x1019);
-  info.position_sensor_version = version(0x101A);
-  info.tactile_sensor_version = version(0x101B);
-  info.motor_driver_version = version(0x101C);
-  info.firmware_package_version = version(0x101D);
+  const bool lite1 = config_.product_type == ProductType::GHandLite1 ||
+                     (config_.product_type == ProductType::AUTO &&
+                      info.device_name == "GHand Lite 1");
+  if (lite1) {
+    info.software_version = version(0x1019);
+    info.tactile_sensor_version = version(0x101A);
+    info.motor_driver_version = version(0x101B);
+    info.firmware_package_version = version(0x101C);
+  } else {
+    info.software_version = version(0x1019);
+    info.position_sensor_version = version(0x101A);
+    info.tactile_sensor_version = version(0x101B);
+    info.motor_driver_version = version(0x101C);
+    info.firmware_package_version = version(0x101D);
+  }
   return info;
 }
 
@@ -668,15 +695,20 @@ HandState RS485Comm::GetHandInfo(uint16_t slave, bool* ok) {
   if (ok) *ok = false;
   if (!IsConnected()) return HandState{};
 
+  const bool lite1 = config_.product_type == ProductType::GHandLite1;
+  const int register_count = lite1 ? 11 : 14;
+
   std::lock_guard<std::mutex> io_lock(io_mutex_);
   modbus_set_slave(ctx_, slave);
   uint16_t regs[14] = {0};
-  if (ReadInputRegistersCounted(slave, 0x1051, 14, regs) != 14) {
+  if (ReadInputRegistersCounted(slave, 0x1051, register_count, regs) !=
+      register_count) {
     GHAND_LOG_ERROR("Failed to read hand info registers");
     return HandState{};
   }
   if (ok) *ok = true;
-  return ParseHandInfo(regs, 14);
+  return lite1 ? ParseHandInfoLite1(regs, register_count)
+               : ParseHandInfo(regs, 14);
 }
 
 TactileData RS485Comm::GetTactileData(uint16_t slave) {

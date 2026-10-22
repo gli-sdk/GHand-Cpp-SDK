@@ -55,6 +55,9 @@ uint8_t ParseHandType(const uint8_t* raw_bytes, size_t len = 2);
 // Parse 14 input registers (0x1051~0x105E) into HandState.
 HandState ParseHandInfo(const uint16_t* raw, size_t count = 14);
 
+// Parse 11 input registers (Lite 1 0x1051~0x105B) into HandState.
+HandState ParseHandInfoLite1(const uint16_t* raw, size_t count = 11);
+
 // Parse 5 input registers into Joint.
 Joint ParseJointData(const uint16_t* raw, JointId joint_id);
 

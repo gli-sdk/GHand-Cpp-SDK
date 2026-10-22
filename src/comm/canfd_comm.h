@@ -100,6 +100,7 @@ class CANFDComm : public IComm {
 
   bool DetectNode(uint8_t slave_id, int timeout_ms = 500);
   bool EstablishConnection(uint8_t slave_id, int timeout_ms = 100);
+  bool EstablishConnectionLite1(uint8_t slave_id, int timeout_ms = 200);
   void DeleteConnection(uint16_t slave);
 
   bool ReadInputBytes(uint16_t slave, int addr, int count, std::vector<uint8_t>* bytes);

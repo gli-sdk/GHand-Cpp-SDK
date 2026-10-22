@@ -258,6 +258,15 @@ ResultOf<std::vector<ConnectedHand>> GHandImpl::AutoConnect(
 }
 
 ResultOf<std::vector<ConnectedHand>> GHandImpl::Connect(
+    const std::string& device_name, uint8_t slave_id) {
+  const uint8_t baudrate_gear =
+      comm_type_ == CommType::CANFD
+          ? static_cast<uint8_t>(CANFDBitTiming::TIMING_1M_5M)
+          : static_cast<uint8_t>(RS485BaudRate::RATE_1000000);
+  return Connect(device_name, slave_id, baudrate_gear);
+}
+
+ResultOf<std::vector<ConnectedHand>> GHandImpl::Connect(
     const std::string& device_name, uint8_t slave_id, uint8_t baudrate_gear) {
   if (device_name == "auto") {
     return AutoConnect(slave_id, baudrate_gear);
@@ -329,8 +338,15 @@ Result GHandImpl::PrepareCANFDBaudrateListener(const std::string& device_name,
 Result GHandImpl::Disconnect() {
   GHAND_LOG_INFO("op=disconnect comm=" << ToString(comm_type_));
 
+  // A master can exist without a backend: the constructor returns early when
+  // the product config is missing, and an unknown CommType builds none. Master
+  // calls Disconnect() from its destructor even for such an object, which is
+  // exactly the object Master::Create() reports as unusable, so both members
+  // have to be optional here.
+  if (!comm_) return {};
+
   int result = comm_->Disconnect();
-  callback_manager_->Clear();
+  if (callback_manager_) callback_manager_->Clear();
 
   if (result == 0) {
     GHAND_LOG_INFO("op=disconnect comm=" << ToString(comm_type_)

@@ -43,8 +43,10 @@ class GHandImpl {
 
   // Connection management
   ResultOf<std::vector<ConnectedHand>> Connect(const std::string& device_name,
-                                               uint8_t slave_id = 0,
-                                               uint8_t baudrate_gear = 0x05);
+                                               uint8_t slave_id = 0);
+  ResultOf<std::vector<ConnectedHand>> Connect(const std::string& device_name,
+                                               uint8_t slave_id,
+                                               uint8_t baudrate_gear);
   ResultOf<std::vector<ConnectedHand>> Connect(const std::string& device_name,
                                                uint8_t slave_id,
                                                RS485BaudRate baud_rate);

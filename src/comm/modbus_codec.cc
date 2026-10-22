@@ -151,6 +151,19 @@ HandState ParseHandInfo(const uint16_t* raw, size_t count) {
   return hs;
 }
 
+HandState ParseHandInfoLite1(const uint16_t* raw, size_t count) {
+  HandState hs;
+  if (count < 11) return hs;
+  hs.state = (raw[0] & 0xFF) == 0 ? State::DISABLED : State::ENABLED;
+  for (size_t i = 0; i < 6; ++i) {
+    hs.error_warn[i] = static_cast<uint8_t>(raw[1 + i / 2] >> ((i % 2) * 8));
+    hs.error_fault[i] = static_cast<uint8_t>(raw[4 + i / 2] >> ((i % 2) * 8));
+    hs.error_critical[i] = static_cast<uint8_t>(raw[7 + i / 2] >> ((i % 2) * 8));
+  }
+  hs.temperature = static_cast<int16_t>(raw[10]);
+  return hs;
+}
+
 Joint ParseJointData(const uint16_t* raw, JointId joint_id) {
   Joint joint;
   joint.id = joint_id;
@@ -277,6 +290,11 @@ std::vector<uint16_t> EncodeHandCommand(
     auto command = commands.find(entry.second);
     if (command != commands.end()) joint = command->second;
     auto encoded = EncodeJointCommand(joint, mode, default_mode);
+    const size_t register_count = static_cast<size_t>(
+        config.joint_control_register_count > 0
+            ? config.joint_control_register_count
+            : static_cast<int>(encoded.size()));
+    if (encoded.size() > register_count) encoded.resize(register_count);
     size_t offset = entry.first - config.mode_register;
     registers.resize(offset);
     registers.insert(registers.end(), encoded.begin(), encoded.end());
@@ -287,6 +305,7 @@ std::vector<uint16_t> EncodeHandCommand(
 std::vector<uint8_t> EncodeEthercatCommand(
     const ProductConfig& config, ControlMode mode, bool enabled,
     const std::map<JointId, JointCommand>& commands) {
+  const bool lite1 = config.product_type == ProductType::GHandLite1;
   std::vector<uint8_t> bytes = {static_cast<uint8_t>(mode), static_cast<uint8_t>(enabled)};
   for (JointId id : config.valid_joints) {
     if (!config.joint_limits.count(id)) continue;
@@ -297,9 +316,16 @@ std::vector<uint8_t> EncodeEthercatCommand(
     auto encoded = EncodeJointCommand(joint, ControlMode::POSITION);
     bytes.push_back(static_cast<uint8_t>(encoded[0]));
     bytes.push_back(static_cast<uint8_t>(encoded[0] >> 8));
-    for (size_t i = 1; i < encoded.size(); ++i) {
-      bytes.push_back(static_cast<uint8_t>(encoded[i]));
-      bytes.push_back(static_cast<uint8_t>(encoded[i] >> 8));
+    if (lite1) {
+      for (size_t i = 1; i <= 3; ++i) {
+        bytes.push_back(static_cast<uint8_t>(encoded[i]));
+        bytes.push_back(static_cast<uint8_t>(encoded[i] >> 8));
+      }
+    } else {
+      for (size_t i = 1; i < encoded.size(); ++i) {
+        bytes.push_back(static_cast<uint8_t>(encoded[i]));
+        bytes.push_back(static_cast<uint8_t>(encoded[i] >> 8));
+      }
     }
   }
   return bytes;

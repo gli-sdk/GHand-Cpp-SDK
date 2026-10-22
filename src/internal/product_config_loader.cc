@@ -293,6 +293,7 @@ void ApplyGHand5ModbusProfile(ProductConfig* config) {
   // Dynamically generate control registers based on joint_limits
   config->joint_control_registers = BuildControllableJointAddresses(
       config->valid_joints, config->joint_limits, 0x0261, 6);
+  config->joint_control_register_count = 6;
 
   config->mode_register = 0x0260;
   config->stop_register = 0x0260;
@@ -301,14 +302,21 @@ void ApplyGHand5ModbusProfile(ProductConfig* config) {
 
 void ApplyGHandLite1ModbusProfile(ProductConfig* config) {
   config->joint_input_registers.clear();
-  for (int id = 0; id < static_cast<int>(JointId::NUM_JOINTS); ++id) {
-    config->joint_input_registers[static_cast<JointId>(id)] =
-        static_cast<uint16_t>(0x105F + id * 5);
-  }
+  config->joint_input_registers[JointId::THUMB_MCP] = 0x105C;
+  config->joint_input_registers[JointId::THUMB_TMC_FE] = 0x1061;
+  config->joint_input_registers[JointId::THUMB_TMC_AA] = 0x1066;
+  config->joint_input_registers[JointId::FF_PIP] = 0x106B;
+  config->joint_input_registers[JointId::FF_MCP] = 0x1070;
+  config->joint_input_registers[JointId::MF_PIP] = 0x1075;
+  config->joint_input_registers[JointId::MF_MCP] = 0x107A;
+  config->joint_input_registers[JointId::RF_PIP] = 0x107F;
+  config->joint_input_registers[JointId::RF_MCP] = 0x1084;
+  config->joint_input_registers[JointId::LF_PIP] = 0x1089;
+  config->joint_input_registers[JointId::LF_MCP] = 0x108E;
 
-  // Dynamically generate control registers based on joint_limits
   config->joint_control_registers = BuildControllableJointAddresses(
-      config->valid_joints, config->joint_limits, 0x0261, 6);
+      config->valid_joints, config->joint_limits, 0x0261, 4);
+  config->joint_control_register_count = 4;
 
   config->mode_register = 0x0260;
   config->stop_register = 0x0260;

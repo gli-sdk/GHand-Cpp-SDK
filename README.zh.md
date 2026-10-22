@@ -1,7 +1,6 @@
 # GHand SDK C++
 
 [![Version](https://img.shields.io/badge/version-v3.0.0-blue.svg)](include/ghand/version.h)
-
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 [![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
@@ -34,6 +33,7 @@ GHand C++ SDK 用于控制 GHand 灵巧手，支持 EtherCAT、CANFD 和 RS485 �
 - [依赖](#-依赖)
 - [安装](#-安装)
 - [快速开始](#-快速开始)
+- [示例程序](#-示例程序)
 - [源码构建](#-源码构建)
 - [项目结构](#-项目结构)
 - [开源与生态资源](#-开源与生态资源)
@@ -164,6 +164,40 @@ if (connected) {
 }
 ```
 
+## 🧪 示例程序
+
+教程源码位于 `examples/tutorial/`，按学习顺序编号。
+可执行文件名不含数字前缀，由 `examples/CMakeLists.txt` 定义。
+
+| 源码 | 可执行文件 | 内容 |
+| --- | --- | --- |
+| [01_basic_connection.cc](examples/tutorial/01_basic_connection.cc) | `basic_connection` | 连接与设备信息查询 |
+| [02_move_joints.cc](examples/tutorial/02_move_joints.cc) | `move_joints` | 位置指令、参数单位、控制模式与关节反馈 |
+| [03_speed_control.cc](examples/tutorial/03_speed_control.cc) | `speed_control` | 速度控制 |
+| [04_current_control.cc](examples/tutorial/04_current_control.cc) | `current_control` | 电流控制 |
+| [05_tactile_callback.cc](examples/tutorial/05_tactile_callback.cc) | `tactile_callback` | 触觉反馈回调 |
+| [06_multi_hand.cc](examples/tutorial/06_multi_hand.cc) | `multi_hand` | 多手控制 |
+| [07_glove_control.cc](examples/tutorial/07_glove_control.cc) | `glove_control` | 手套控制 |
+| [08_interactive_joint_control.cc](examples/tutorial/08_interactive_joint_control.cc) | `interactive_joint_control` | 交互式关节指令与反馈 |
+| [09_hand_state.cc](examples/tutorial/09_hand_state.cc) | `hand_state` | 手状态与关节反馈 |
+| [10_switch_baud_rate.cc](examples/tutorial/10_switch_baud_rate.cc) | `switch_baud_rate` | CANFD 位时序配置 |
+| [11_connect_hands.cc](examples/tutorial/11_connect_hands.cc) | `connect_hands` | 共总线发现、总线级与单手指令 |
+
+`preset_gesture`、`gesture_dance`、`clap_pose` 等动作示例位于
+[`examples/demo/`](examples/demo/)。
+
+构建后，可向 `connect_hands` 传入通信类型和可选设备名：
+
+```bash
+./build/examples/connect_hands ethcat auto
+./build/examples/connect_hands canfd /dev/ttyACM0:0
+./build/examples/connect_hands rs485 /dev/ttyUSB0
+```
+
+Windows 下使用 `build\examples\Release\connect_hands.exe`，设备名可使用
+`COM17:0`（CANFD）或 `COM7`（RS485）。该示例会驱动已连接的手运动；
+使用 `--help` 查看参数和支持的拓扑。
+
 ## 🔨 源码构建
 
 在包含 `deps/` 的仓库或发布包根目录下构建。
@@ -280,9 +314,9 @@ ghand-sdk-cpp/
 │   ├── comm/         # 通信层（EtherCAT、CANFD、RS485）
 │   └── internal/     # 内部状态机与配置
 ├── config/           # 产品配置（JSON）
+├── cmake/            # CMake 包配置模板
 ├── examples/         # 教程与示例程序
-├── deps/             # 发布包预构建依赖
-└── lib/              # 预编译库
+└── deps/             # 发布包预构建依赖
 ```
 
 ## 🌐 开源与生态资源
