@@ -123,8 +123,6 @@ size_t EthercatTxpdoSize(const ProductConfig& config, bool compat_thumb = false)
     size += 2;
     for (size_t i = 0; i < config.tactile_regions.size(); ++i) {
       int count = config.tactile_regions[i].sensor_count;
-      // The shortened thumb layout is a G5 firmware variant only; Lite1
-      // follows the L1 V2.1 tactile mapping exactly.
       if (compat_thumb && !UsesLite1Layout(config) && i == 0 && count > 28) {
         count = 28;
       }
