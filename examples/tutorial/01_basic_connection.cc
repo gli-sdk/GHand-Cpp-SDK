@@ -34,7 +34,6 @@ int main() {
   const ghand::DeviceInfo device_info = hand->device_info();
 
   std::cout << "Device name: " << device_info.device_name << '\n';
-  std::cout << "Hardware version: " << device_info.hardware_version << '\n';
   std::cout << "Software version: " << device_info.software_version << '\n';
   std::cout << "Motor driver version: " << device_info.motor_driver_version
             << '\n';

@@ -63,6 +63,8 @@ class RS485Comm : public IComm {
   bool Stop(uint16_t slave) override;
   bool DisableHand(uint16_t slave) override;
   bool GetHandStateMachine(uint16_t slave, HandStateMachine* state) override;
+  bool GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) override;
+  bool SetPidParameters(uint16_t slave, const std::vector<uint16_t>& values) override;
 
   bool ClearFault(uint16_t slave) override;
 
@@ -91,6 +93,8 @@ class RS485Comm : public IComm {
   int WriteRegistersCounted(uint16_t slave, int addr, int count, const uint16_t* data);
   bool WriteTactileControl(uint16_t slave, uint16_t command);
   bool WaitInputResult(uint16_t slave, int addr, int baseline = -1);
+  bool AccessParameters(uint16_t slave, int command_addr, int parameter_addr,
+                        std::vector<uint16_t>* values, bool write);
   bool HasCallbacks();
   void EnsurePollStarted();
   void StopPoll();

@@ -884,7 +884,7 @@ DeviceInfo EtherCATComm::GetDeviceInfo(uint16_t slave) {
     info.device_name = ByteArrayString(bytes, size);
   }
   size = 19;
-  uint8_t serial_subindex = UsesLite1Layout(config_) ? 0 : 1;
+  uint8_t serial_subindex = 0;
   if (SDORead(slave, kSdoSerialNumber, serial_subindex, &size, bytes,
               EC_TIMEOUTRXM) > 0) {
     info.serial_number = ParseAsciiSerialNumber(bytes, size);
@@ -1131,7 +1131,7 @@ void EtherCATComm::ParseHandAndJoints(
     joint.state = static_cast<JointStateCode>(joint_state);
     joint.error = static_cast<JointErrorCode>(joint_error);
     joint.mode = joint_mode;
-    joint.stop = joint_stop;
+    joint.stop = UsesLite1Layout(config_) ? joint_stop : 0;
     joint.angle = static_cast<float>(joint_angle) / 10.0f;
     joint.velocity = joint_velocity;
     joint.current = joint_current;
@@ -1150,15 +1150,19 @@ TactileData EtherCATComm::ParseTactileData(const uint8_t* data, size_t size,
   }
 
   tactile_data.regions.reserve(config_.tactile_regions.size());
+  const bool lite1 = UsesLite1Layout(config_);
+  const size_t resultant_offset = *offset;
+  if (!lite1) *offset += config_.tactile_regions.size() * 6;
   for (size_t i = 0; i < config_.tactile_regions.size(); ++i) {
     const auto& rc = config_.tactile_regions[i];
     RegionTactile region;
     region.region_name = rc.id.c_str();
     region.state = (tactile_data.sensor_state & (1 << i)) != 0;
 
-    if (*offset + 6 <= size) {
-      region.resultant_force = ParseResultantForce(data + *offset);
-      *offset += 6;
+    const size_t force_offset = lite1 ? *offset : resultant_offset + i * 6;
+    if (force_offset + 6 <= size) {
+      region.resultant_force = ParseResultantForce(data + force_offset);
+      if (lite1) *offset += 6;
     }
 
     int count = compat_thumb && i == 0 ? 28 : rc.sensor_count;
@@ -1352,7 +1356,7 @@ bool EtherCATComm::GetHandStateMachine(uint16_t slave, HandStateMachine* state) 
   if (!IsConnected() || !state) return false;
   uint8_t value = 0;
   int size = 1;
-  uint8_t subindex = UsesLite1Layout(config_) ? 0 : 1;
+  uint8_t subindex = 0;
   if (SDORead(slave, 0x200A, subindex, &size, &value, EC_TIMEOUTRXM) <= 0 ||
       size != 1) {
     return false;
@@ -1375,6 +1379,7 @@ bool EtherCATComm::GetStallTolerances(uint16_t slave, std::map<JointId, uint8_t>
   if (slave == 0 || TargetSlaves(slave).empty()) return false;
 
   if (!IsConnected() || !values) return false;
+  if (!ExecuteSdoCommand(slave, 0x2003, 0xA2, 2, 3, 4)) return false;
   uint8_t bytes[13] = {};
   int size = 13;
   if (SDORead(slave, 0x2003, 1, &size, bytes, EC_TIMEOUTRXM) <= 0 || size != 13) return false;
@@ -1401,6 +1406,7 @@ bool EtherCATComm::GetPidParameters(uint16_t slave, std::vector<uint16_t>* value
   if (slave == 0 || TargetSlaves(slave).empty()) return false;
 
   if (!IsConnected() || !values) return false;
+  if (!ExecuteSdoCommand(slave, 0x2008, 0xA2, 2, 3, 4)) return false;
   uint8_t bytes[78] = {};
   int size = 78;
   if (SDORead(slave, 0x2008, 1, &size, bytes, EC_TIMEOUTRXM) <= 0 || size != 78) return false;

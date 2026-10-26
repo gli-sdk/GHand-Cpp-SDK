@@ -85,7 +85,6 @@ int main() {
     const ghand::DeviceInfo info = hands[i]->device_info();
     std::cout << "  Hand " << i << ":\n"
               << "    Device Name: " << info.device_name << '\n'
-              << "    Hardware Version: " << info.hardware_version << '\n'
               << "    Software Version: " << info.software_version << '\n'
               << "    Serial Number: " << info.serial_number << '\n';
   }

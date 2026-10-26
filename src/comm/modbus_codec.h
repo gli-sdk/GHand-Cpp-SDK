@@ -33,9 +33,6 @@ bool GetJointInputSpan(const ProductConfig& config, uint16_t* start_addr,
 // Parse device name from 16 bytes (8 registers).
 std::string ParseDeviceName(const uint8_t* raw_bytes, size_t len = 16);
 
-// Parse hardware version from 16 bytes (8 registers).
-std::string ParseHardwareVersion(const uint8_t* raw_bytes, size_t len = 16);
-
 // Parse firmware version from 16 bytes (8 registers).
 std::string ParseFirmwareVersion(const uint8_t* raw_bytes, size_t len = 16);
 
@@ -59,7 +56,8 @@ HandState ParseHandInfo(const uint16_t* raw, size_t count = 14);
 HandState ParseHandInfoLite1(const uint16_t* raw, size_t count = 11);
 
 // Parse 5 input registers into Joint.
-Joint ParseJointData(const uint16_t* raw, JointId joint_id);
+Joint ParseJointData(const uint16_t* raw, JointId joint_id,
+                     bool legacy_stop = false);
 
 // Parse joint data for all valid joints from a contiguous register block.
 // The block is assumed to start at register 0x105F and contain

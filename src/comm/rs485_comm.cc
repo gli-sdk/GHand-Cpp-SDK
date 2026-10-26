@@ -596,6 +596,46 @@ bool RS485Comm::DisableHand(uint16_t slave) {
   return WriteRegisterCounted(slave, config_.mode_register, static_cast<uint8_t>(hand_modes_[slave])) == 1;
 }
 
+bool RS485Comm::AccessParameters(uint16_t slave, int command_addr,
+    int parameter_addr, std::vector<uint16_t>* values, bool write) {
+  if (!IsConnected() || slave == 0 || TargetSlaves(slave).empty() ||
+      config_.product_type != ProductType::GHand5 || !values || values->empty()) return false;
+  std::lock_guard<std::mutex> command_lock(command_mutex_);
+  std::lock_guard<std::mutex> io_lock(io_mutex_);
+  const int count = static_cast<int>(values->size());
+  // PID command 0x0021 uses input mailbox 0x102B.
+  const int mailbox_addr = command_addr + 0x100A;
+  uint16_t baseline = 0;
+  if (ReadInputRegistersCounted(slave, mailbox_addr, 1, &baseline) != 1) return false;
+  if (write) {
+    if (WriteRegistersCounted(slave, parameter_addr, count, values->data()) != count) return false;
+    std::vector<uint16_t> readback(count);
+    if (ReadHoldingRegistersCounted(slave, parameter_addr, count, readback.data()) != count ||
+        readback != *values) return false;
+  }
+  if (WriteRegisterCounted(slave, command_addr, write ? 1 : 2) != 1 ||
+      !WaitInputResult(slave, mailbox_addr, baseline)) return false;
+  if (write) return true;
+  std::vector<uint16_t> readback(count);
+  if (ReadHoldingRegistersCounted(slave, parameter_addr, count, readback.data()) != count) return false;
+  *values = std::move(readback);
+  return true;
+}
+
+bool RS485Comm::GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) {
+  if (!values) return false;
+  std::vector<uint16_t> parameters(39);
+  if (!AccessParameters(slave, 0x0021, 0x0315, &parameters, false)) return false;
+  *values = std::move(parameters);
+  return true;
+}
+
+bool RS485Comm::SetPidParameters(uint16_t slave, const std::vector<uint16_t>& values) {
+  if (values.size() != 39) return false;
+  auto parameters = values;
+  return AccessParameters(slave, 0x0021, 0x0315, &parameters, true);
+}
+
 // System operations
 
 bool RS485Comm::ClearFault(uint16_t slave) {

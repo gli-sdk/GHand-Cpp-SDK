@@ -67,6 +67,7 @@ enum class State : uint16_t {
  */
 GHAND_API const char* ToString(State state);  // NOLINT(runtime/string)
 
+// Legacy compatibility codes. V2.4 feedback uses JointErrorCode and HandState bitmaps.
 enum class ErrorCode : uint8_t {
   NORMAL = 0,
   // Motor errors
@@ -126,7 +127,9 @@ enum class JointErrorCode : uint8_t {
   COMMUNICATION_LOST = 9,
   MOTOR_SOFTWARE_OVERVOLTAGE = 10,
   MOTOR_SOFTWARE_UNDERVOLTAGE = 11,
-  MOTOR_OVERTEMPERATURE = 12,
+  MOTOR_SOFTWARE_OVERTEMPERATURE = 12,
+  MOTOR_WINDING_OVERTEMPERATURE = 13,
+  MOTOR_OVERTEMPERATURE = MOTOR_SOFTWARE_OVERTEMPERATURE,  // Compatibility alias.
   UNKNOWN_ERROR = 255
 };
 
@@ -329,7 +332,6 @@ enum class FirmwareUpdateError : int {
 // Device info structure
 struct DeviceInfo {
   std::string device_name = "N/A";
-  std::string hardware_version = "N/A";
   std::string software_version = "N/A";       // Main controller firmware version
   std::string position_sensor_version = "N/A";
   std::string tactile_sensor_version = "N/A";
@@ -401,7 +403,7 @@ struct Joint {
   JointStateCode state;
   JointErrorCode error;
   uint8_t mode = 0;
-  uint8_t stop = 0;
+  uint8_t stop = 0;  // Legacy feedback. Reserved and always 0 for V2.4 GHand5.
   float angle;
   int16_t velocity;
   int16_t current = 0;

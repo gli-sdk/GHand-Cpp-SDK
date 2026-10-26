@@ -28,7 +28,10 @@ const char* DescribeHandWarn(size_t byte_index, size_t bit_index) {
   if (byte_index == 0 && bit_index == 1) return "Temperature sensor 2 abnormal";
   if (byte_index == 0 && bit_index == 2) return "Fan abnormal";
   if (byte_index == 0 && bit_index == 3) return "Tactile board communication abnormal";
-  if (byte_index == 0 && bit_index >= 4) return "Finger tactile sensor disconnected";
+  if (byte_index == 0 && bit_index == 4) return "Thumb tactile sensor disconnected";
+  if (byte_index == 0 && bit_index == 5) return "Index finger tactile sensor disconnected";
+  if (byte_index == 0 && bit_index == 6) return "Middle finger tactile sensor disconnected";
+  if (byte_index == 0 && bit_index == 7) return "Ring finger tactile sensor disconnected";
   if (byte_index == 1 && bit_index == 0) return "Little finger tactile sensor disconnected";
   if (byte_index == 1 && bit_index == 1) return "Self-test error";
   return "Reserved";
@@ -225,8 +228,18 @@ const char* ToString(JointErrorCode error) {
       return "MOTOR_SOFTWARE_OVERVOLTAGE";
     case JointErrorCode::MOTOR_SOFTWARE_UNDERVOLTAGE:
       return "MOTOR_SOFTWARE_UNDERVOLTAGE";
-    case JointErrorCode::MOTOR_OVERTEMPERATURE:
-      return "MOTOR_OVERTEMPERATURE";
+    case JointErrorCode::MOTOR_SOFTWARE_OVERTEMPERATURE:
+      return "MOTOR_SOFTWARE_OVERTEMPERATURE";
+    case JointErrorCode::MOTOR_WINDING_OVERTEMPERATURE:
+      return "MOTOR_WINDING_OVERTEMPERATURE";
+    case static_cast<JointErrorCode>(14):
+    case static_cast<JointErrorCode>(15):
+    case static_cast<JointErrorCode>(16):
+    case static_cast<JointErrorCode>(17):
+    case static_cast<JointErrorCode>(18):
+    case static_cast<JointErrorCode>(19):
+    case static_cast<JointErrorCode>(20):
+      return "RESERVED";
     default:
       return "UNKNOWN_ERROR";
   }

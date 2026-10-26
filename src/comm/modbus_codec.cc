@@ -101,10 +101,6 @@ std::string ParseDeviceName(const uint8_t* raw_bytes, size_t len) {
   return ParseUtf8String(raw_bytes, len);
 }
 
-std::string ParseHardwareVersion(const uint8_t* raw_bytes, size_t len) {
-  return ParseUtf8String(raw_bytes, len);
-}
-
 std::string ParseFirmwareVersion(const uint8_t* raw_bytes, size_t len) {
   return ParseUtf8String(raw_bytes, len);
 }
@@ -164,7 +160,7 @@ HandState ParseHandInfoLite1(const uint16_t* raw, size_t count) {
   return hs;
 }
 
-Joint ParseJointData(const uint16_t* raw, JointId joint_id) {
+Joint ParseJointData(const uint16_t* raw, JointId joint_id, bool legacy_stop) {
   Joint joint;
   joint.id = joint_id;
 
@@ -173,7 +169,7 @@ Joint ParseJointData(const uint16_t* raw, JointId joint_id) {
   joint.state = static_cast<JointStateCode>(status_byte);
   joint.error = static_cast<JointErrorCode>(error_byte);
   joint.mode = static_cast<uint8_t>(raw[1] & 0xFF);
-  joint.stop = static_cast<uint8_t>((raw[1] >> 8) & 0xFF);
+  joint.stop = legacy_stop ? static_cast<uint8_t>((raw[1] >> 8) & 0xFF) : 0;
 
   int16_t angle_raw = static_cast<int16_t>(raw[2]);
   joint.angle = angle_raw / 10.0f;
@@ -211,7 +207,8 @@ std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
     if (it->second < start_addr) continue;
     size_t offset = static_cast<size_t>(it->second - start_addr);
     if (offset + 4 >= count) continue;
-    joints.push_back(ParseJointData(raw + offset, joint_id));
+    joints.push_back(ParseJointData(raw + offset, joint_id,
+                                   config.product_type == ProductType::GHandLite1));
   }
   return joints;
 }

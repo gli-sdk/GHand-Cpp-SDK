@@ -678,7 +678,7 @@ ResultOf<HandStateMachine> GHandImpl::GetHandStateMachine(uint16_t slave_index) 
 ResultOf<std::map<JointId, uint8_t>> GHandImpl::GetStallTolerances(uint16_t slave_index) {
   if (!IsConnected()) return {SdkError::NOT_CONNECTED, "device is not connected"};
   if (slave_index == 0) return {SdkError::INVALID_ARGUMENT, "one hand must be selected"};
-  if (comm_type_ != CommType::ETHERCAT) return {SdkError::NOT_SUPPORTED, "parameter access requires EtherCAT"};
+  if (comm_type_ != CommType::ETHERCAT) return {SdkError::NOT_SUPPORTED, "stall tolerance access requires EtherCAT"};
   std::map<JointId, uint8_t> value{};
   if (!comm_->GetStallTolerances(slave_index, &value)) return {SdkError::DEVICE_REJECTED, "GetStallTolerances failed"};
   return value;
@@ -687,7 +687,7 @@ ResultOf<std::map<JointId, uint8_t>> GHandImpl::GetStallTolerances(uint16_t slav
 Result GHandImpl::SetStallTolerances(uint16_t slave_index, const std::map<JointId, uint8_t>& values) {
   if (!IsConnected()) return {SdkError::NOT_CONNECTED, "device is not connected"};
   if (slave_index == 0) return {SdkError::INVALID_ARGUMENT, "one hand must be selected"};
-  if (comm_type_ != CommType::ETHERCAT) return {SdkError::NOT_SUPPORTED, "parameter access requires EtherCAT"};
+  if (comm_type_ != CommType::ETHERCAT) return {SdkError::NOT_SUPPORTED, "stall tolerance access requires EtherCAT"};
   if (!comm_->SetStallTolerances(slave_index, values)) return {SdkError::DEVICE_REJECTED, "SetStallTolerances failed"};
   return {};
 }
@@ -695,7 +695,8 @@ Result GHandImpl::SetStallTolerances(uint16_t slave_index, const std::map<JointI
 ResultOf<std::vector<uint16_t>> GHandImpl::GetPidParameters(uint16_t slave_index) {
   if (!IsConnected()) return {SdkError::NOT_CONNECTED, "device is not connected"};
   if (slave_index == 0) return {SdkError::INVALID_ARGUMENT, "one hand must be selected"};
-  if (comm_type_ != CommType::ETHERCAT) return {SdkError::NOT_SUPPORTED, "parameter access requires EtherCAT"};
+  if (comm_type_ != CommType::ETHERCAT && config_.product_type != ProductType::GHand5)
+    return {SdkError::NOT_SUPPORTED, "parameter access requires GHand5 or EtherCAT"};
   std::vector<uint16_t> value{};
   if (!comm_->GetPidParameters(slave_index, &value)) return {SdkError::DEVICE_REJECTED, "GetPidParameters failed"};
   return value;
@@ -704,7 +705,8 @@ ResultOf<std::vector<uint16_t>> GHandImpl::GetPidParameters(uint16_t slave_index
 Result GHandImpl::SetPidParameters(uint16_t slave_index, const std::vector<uint16_t>& values) {
   if (!IsConnected()) return {SdkError::NOT_CONNECTED, "device is not connected"};
   if (slave_index == 0) return {SdkError::INVALID_ARGUMENT, "one hand must be selected"};
-  if (comm_type_ != CommType::ETHERCAT) return {SdkError::NOT_SUPPORTED, "parameter access requires EtherCAT"};
+  if (comm_type_ != CommType::ETHERCAT && config_.product_type != ProductType::GHand5)
+    return {SdkError::NOT_SUPPORTED, "parameter access requires GHand5 or EtherCAT"};
   if (!comm_->SetPidParameters(slave_index, values)) return {SdkError::DEVICE_REJECTED, "SetPidParameters failed"};
   return {};
 }

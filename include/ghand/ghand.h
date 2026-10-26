@@ -91,8 +91,11 @@ class GHAND_API GHand {
    */
   Result DisableHand();
   ResultOf<HandStateMachine> GetHandStateMachine();
+  // All 13 active joints, in protocol joint order; EtherCAT only.
   ResultOf<std::map<JointId, uint8_t>> GetStallTolerances();
   Result SetStallTolerances(const std::map<JointId, uint8_t>& values);
+  // 39 uint16 values (13 active joints x Kp/Ki/Kd), in protocol joint order.
+  // Supported on GHand5 over EtherCAT, RS485 and CANFD.
   ResultOf<std::vector<uint16_t>> GetPidParameters();
   Result SetPidParameters(const std::vector<uint16_t>& values);
   Result ClearFault();

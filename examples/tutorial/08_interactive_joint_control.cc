@@ -278,7 +278,6 @@ int main() {
   } else {
     std::cout << "\nDevice Information:\n"
               << "  Device Name: " << info.value.device_name << '\n'
-              << "  Hardware Version: " << info.value.hardware_version << '\n'
               << "  Software Version: " << info.value.software_version << '\n'
               << "  Serial Number: " << info.value.serial_number << '\n'
               << "  Hand Type: " << ghand::ToString(hand->hand_type()) << '\n';

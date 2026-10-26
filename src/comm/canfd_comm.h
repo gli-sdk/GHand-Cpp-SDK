@@ -58,6 +58,8 @@ class CANFDComm : public IComm {
   bool Stop(uint16_t slave) override;
   bool DisableHand(uint16_t slave) override;
   bool GetHandStateMachine(uint16_t slave, HandStateMachine* state) override;
+  bool GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) override;
+  bool SetPidParameters(uint16_t slave, const std::vector<uint16_t>& values) override;
 
   bool ClearFault(uint16_t slave) override;
 
@@ -97,6 +99,8 @@ class CANFDComm : public IComm {
 
   bool WriteSingleRegister(uint16_t slave, int addr, uint16_t value, int timeout_ms = 100);
   bool WaitInputResult(uint16_t slave, int addr, int baseline = -1);
+  bool AccessParameters(uint16_t slave, int command_addr, int parameter_addr,
+                        std::vector<uint16_t>* values, bool write);
 
   bool DetectNode(uint8_t slave_id, int timeout_ms = 500);
   bool EstablishConnection(uint8_t slave_id, int timeout_ms = 100);

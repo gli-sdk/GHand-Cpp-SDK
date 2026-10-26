@@ -728,6 +728,48 @@ bool CANFDComm::DisableHand(uint16_t slave) {
   return WriteSingleRegister(slave, config_.mode_register, static_cast<uint8_t>(hand_modes_[slave]));
 }
 
+bool CANFDComm::AccessParameters(uint16_t slave, int command_addr,
+    int parameter_addr, std::vector<uint16_t>* values, bool write) {
+  if (!IsConnected() || slave == 0 || TargetSlaves(slave).empty() ||
+      config_.product_type != ProductType::GHand5 || !values || values->empty()) return false;
+  std::lock_guard<std::mutex> command_lock(command_mutex_);
+  const int count = static_cast<int>(values->size());
+  // PID command 0x0021 uses input mailbox 0x102B.
+  const int mailbox_addr = command_addr + 0x100A;
+  std::vector<uint8_t> bytes;
+  if (!ReadInputBytes(slave, mailbox_addr, 1, &bytes) || bytes.size() != 2) return false;
+  const uint16_t baseline = static_cast<uint16_t>((bytes[0] << 8) | bytes[1]);
+  if (write) {
+    const auto encoded = RegistersToBytes(*values);
+    if (!WriteRegisters(slave, parameter_addr, encoded) ||
+        !ReadRegisters(slave, parameter_addr, count, &bytes, 0x03) || bytes != encoded) return false;
+  }
+  if (!WriteSingleRegister(slave, command_addr, write ? 1 : 2) ||
+      !WaitInputResult(slave, mailbox_addr, baseline)) return false;
+  if (write) return true;
+  if (!ReadRegisters(slave, parameter_addr, count, &bytes, 0x03) ||
+      bytes.size() != static_cast<size_t>(count * 2)) return false;
+  std::vector<uint16_t> readback;
+  for (size_t i = 0; i < bytes.size(); i += 2)
+    readback.push_back(static_cast<uint16_t>((bytes[i] << 8) | bytes[i + 1]));
+  *values = std::move(readback);
+  return true;
+}
+
+bool CANFDComm::GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) {
+  if (!values) return false;
+  std::vector<uint16_t> parameters(39);
+  if (!AccessParameters(slave, 0x0021, 0x0315, &parameters, false)) return false;
+  *values = std::move(parameters);
+  return true;
+}
+
+bool CANFDComm::SetPidParameters(uint16_t slave, const std::vector<uint16_t>& values) {
+  if (values.size() != 39) return false;
+  auto parameters = values;
+  return AccessParameters(slave, 0x0021, 0x0315, &parameters, true);
+}
+
 // System operations
 
 bool CANFDComm::ClearFault(uint16_t slave) {
