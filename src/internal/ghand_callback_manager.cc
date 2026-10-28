@@ -121,29 +121,38 @@ void GHandCallbackManager::UpdateTactileData(uint16_t slave,
 
 // Polling access
 
-HandState GHandCallbackManager::GetHandData(uint16_t slave) const {
+ResultOf<HandState> GHandCallbackManager::GetHandData(uint16_t slave) const {
   std::lock_guard<std::mutex> lock(data_mutex_);
   const auto it = caches_.find(slave);
   if (it == caches_.end()) {
     return HandState{};
   }
+  if (it->second.state.state_machine == HandStateMachine::POWER_ON_SELF_TEST) {
+    return {SdkError::DEVICE_REJECTED, "device is performing power-on self-test"};
+  }
   return it->second.state;
 }
 
-std::vector<Joint> GHandCallbackManager::GetJointsData(uint16_t slave) const {
+ResultOf<std::vector<Joint>> GHandCallbackManager::GetJointsData(uint16_t slave) const {
   std::lock_guard<std::mutex> lock(data_mutex_);
   const auto it = caches_.find(slave);
   if (it == caches_.end()) {
     return std::vector<Joint>{};
   }
+  if (it->second.state.state_machine == HandStateMachine::POWER_ON_SELF_TEST) {
+    return {SdkError::DEVICE_REJECTED, "device is performing power-on self-test"};
+  }
   return it->second.joints;
 }
 
-TactileData GHandCallbackManager::GetTactileData(uint16_t slave) const {
+ResultOf<TactileData> GHandCallbackManager::GetTactileData(uint16_t slave) const {
   std::lock_guard<std::mutex> lock(data_mutex_);
   const auto it = caches_.find(slave);
   if (it == caches_.end()) {
     return TactileData{};
+  }
+  if (it->second.state.state_machine == HandStateMachine::POWER_ON_SELF_TEST) {
+    return {SdkError::DEVICE_REJECTED, "device is performing power-on self-test"};
   }
   return it->second.tactile;
 }
@@ -188,7 +197,8 @@ bool GHandCallbackManager::HasJointDataChanged(
 bool GHandCallbackManager::HasTemperatureChanged(
     const SlaveCache& cache, const HandState& temperature) {
   // 1. State or error changes trigger immediately
-  if (temperature.state != cache.state.state ||
+  if (temperature.state_machine != cache.state.state_machine ||
+      temperature.state != cache.state.state ||
       temperature.error_warn != cache.state.error_warn ||
       temperature.error_fault != cache.state.error_fault ||
       temperature.error_critical != cache.state.error_critical) {

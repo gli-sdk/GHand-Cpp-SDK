@@ -984,12 +984,24 @@ void CANFDComm::PollLoop() {
     { std::lock_guard<std::mutex> lock(cb_mutex_); joints = joints_cb_; state = hand_state_cb_; tactile = tactile_cb_; }
     if (IsConnected()) for (const auto& hand : GetConnectedHands()) {
       uint16_t slave = hand.slave_index;
+      HandStateMachine machine = HandStateMachine::UNKNOWN_STATE;
+      if (!GetHandStateMachine(slave, &machine)) continue;
+      if (machine == HandStateMachine::POWER_ON_SELF_TEST) {
+        if (state) {
+          HandState data;
+          data.state = State::UNKNOWN_STATE;
+          data.state_machine = machine;
+          try { state(slave, data); } catch (...) { callback_errors_++; }
+        }
+        continue;
+      }
       if (joints && !config_.valid_joints.empty()) {
         auto data = GetJoints(slave);
         if (!data.empty()) try { joints(slave, data); } catch (...) { callback_errors_++; }
       }
       if (state) {
         bool valid = false; auto data = GetHandInfo(slave, &valid);
+        data.state_machine = machine;
         if (valid) try { state(slave, data); } catch (...) { callback_errors_++; }
       }
       bool enabled = false;

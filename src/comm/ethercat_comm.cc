@@ -37,9 +37,11 @@
 
 constexpr int kEcTimeoutMon = 500;
 constexpr int kSdoWriteSettleMs = 20;
+constexpr int kFirmwarePrepareTimeoutMs = 60 * 1000;
 constexpr int kFirmwareResetReadyPollMs = 500;
 constexpr int kFirmwareResetReadyTimeoutMs = 5 * 60 * 1000;
-constexpr int kFirmwareResetDelayMs = 1000;
+constexpr int kFirmwareMailboxPollMs = 10;
+constexpr int kFirmwareResetDelayMs = 200;
 constexpr int kFirmwareQueryPollMs = 500;
 constexpr int kFirmwareQueryTimeoutMs = 10 * 1000;
 
@@ -57,8 +59,8 @@ constexpr uint16_t kSdoSerialNumber = 0x2009;
 
 // SDO subindices
 
-constexpr size_t kGHand5HeaderSize = 2 + 6 + 12 + 6 + 2;      // 28
-constexpr size_t kGHandLite1HeaderSize = 2 + 6 + 6 + 6 + 2;   // 22
+constexpr size_t kGHand5HandHeaderSize = 2 + 6 + 12 + 6 + 2;      // 28
+constexpr size_t kGHandLite1HandHeaderSize = 2 + 6 + 6 + 6 + 2;   // 22
 
 constexpr size_t kEthercatJointTpdoSize = 10;
 
@@ -96,8 +98,8 @@ bool UsesLite1Layout(const ProductConfig& config) {
 }
 
 size_t HandHeaderSize(const ProductConfig& config) {
-  return UsesLite1Layout(config) ? kGHandLite1HeaderSize
-                                 : kGHand5HeaderSize;
+  return UsesLite1Layout(config) ? kGHandLite1HandHeaderSize
+                                 : kGHand5HandHeaderSize;
 }
 
 std::vector<JointId> ControlledJoints(const ProductConfig& config) {
@@ -123,6 +125,8 @@ size_t EthercatTxpdoSize(const ProductConfig& config, bool compat_thumb = false)
     size += 2;
     for (size_t i = 0; i < config.tactile_regions.size(); ++i) {
       int count = config.tactile_regions[i].sensor_count;
+      // The shortened thumb layout is a G5 firmware variant only; Lite1
+      // follows the L1 V2.1 tactile mapping exactly.
       if (compat_thumb && !UsesLite1Layout(config) && i == 0 && count > 28) {
         count = 28;
       }
@@ -598,6 +602,8 @@ void EtherCATComm::Ecatcheck() {
         continue;
       }
 
+      if (firmware_reset_pending_) continue;
+
       soem_->ctx.grouplist[currentgroup_].docheckstate = FALSE;
       ecx_readstate(&soem_->ctx);
       for (slaveix = 1; slaveix <= soem_->ctx.slavecount; slaveix++) {
@@ -707,34 +713,78 @@ FirmwareUpdateError EtherCATComm::CompleteFirmwareResetHandshake(uint16_t slave)
   const auto reset_ready_deadline =
       std::chrono::steady_clock::now() +
       std::chrono::milliseconds(kFirmwareResetReadyTimeoutMs);
+  bool reset_ready = false;
   while (std::chrono::steady_clock::now() < reset_ready_deadline) {
     std::uint8_t command = 0x5B;
-    int size = sizeof(std::uint8_t);
-    if (SDOWrite(slave, kSdoFirmwareUpdate, 0x01, size, &command, EC_TIMEOUTRXM) <= 0) {
-      // GHAND_LOG_ERROR("Failed to write firmware reset check command 0x5B");
+    int size = sizeof(command);
+    if (SDOWrite(slave, kSdoFirmwareUpdate, 0x01, size, &command,
+                 EC_TIMEOUTRXM) <= 0) {
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(kFirmwareMailboxPollMs));
       continue;
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
 
-    std::uint8_t state = 0xFF;
-    size = sizeof(std::uint8_t);
-    if (SDORead(slave, kSdoFirmwareUpdate, 0x02, &size, &state, EC_TIMEOUTRXM) > 0 &&
-        state == 1) {
-      command = 0x5C;
-      size = sizeof(std::uint8_t);
-      if (SDOWrite(slave, kSdoFirmwareUpdate, 0x01, size, &command, EC_TIMEOUTRXM) <= 0) {
-        GHAND_LOG_ERROR("Firmware reset command 0x5C failed");
-        return FirmwareUpdateError::FIRMWARE_RESET_FAILED;
+    bool reset_check_busy = false;
+    while (std::chrono::steady_clock::now() < reset_ready_deadline) {
+      std::uint8_t state = 0xFF;
+      size = sizeof(state);
+      const int state_read = SDORead(slave, kSdoFirmwareUpdate, 0x02, &size,
+                                     &state, EC_TIMEOUTRXM);
+      if (state_read > 0 && size == sizeof(state)) {
+        std::uint8_t result = 0;
+        size = sizeof(result);
+        const int result_read = SDORead(slave, kSdoFirmwareUpdate, 0x03, &size,
+                                        &result, EC_TIMEOUTRXM);
+        if (result_read > 0 && size == sizeof(result) && state == 0 &&
+            result != 0) {
+          if (result == 1) {
+            GHAND_LOG_INFO("Firmware reset readiness confirmed (0x5B: State=0, Result=1)");
+            reset_ready = true;
+            break;
+          }
+          if (result == 2) {
+            reset_check_busy = true;
+            break;
+          }
+          GHAND_LOG_ERROR("Firmware reset readiness check returned invalid "
+                          "result " << static_cast<int>(result));
+          return FirmwareUpdateError::FIRMWARE_RESET_FAILED;
+        }
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(kFirmwareResetDelayMs));
-      return FirmwareUpdateError::SUCCESS;
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(kFirmwareMailboxPollMs));
     }
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(kFirmwareResetReadyPollMs));
+
+    if (reset_ready) break;
+    if (reset_check_busy) {
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(kFirmwareResetReadyPollMs));
+    }
   }
 
-  GHAND_LOG_ERROR("Device firmware reset is unavailable");
-  return FirmwareUpdateError::NOT_RESETTABLE;
+  if (!reset_ready) {
+    GHAND_LOG_ERROR("Timed out waiting for firmware distribution to finish");
+    return FirmwareUpdateError::NOT_RESETTABLE;
+  }
+
+  firmware_reset_pending_ = true;
+  struct ResetGuard {
+    std::atomic<bool>& pending;
+    ~ResetGuard() { pending = false; }
+  } reset_guard{firmware_reset_pending_};
+
+  std::uint8_t command = 0x5C;
+  int size = sizeof(command);
+  const int reset_write = SDOWrite(slave, kSdoFirmwareUpdate, 0x01, size,
+                                    &command, EC_TIMEOUTRXM);
+  if (reset_write <= 0) {
+    GHAND_LOG_ERROR("Firmware reset command 0x5C write failed (WKC="
+                    << reset_write << ")");
+    return FirmwareUpdateError::FIRMWARE_RESET_FAILED;
+  }
+  GHAND_LOG_INFO("Firmware reset command 0x5C acknowledged; waiting 200 ms for MCU reset");
+  std::this_thread::sleep_for(std::chrono::milliseconds(kFirmwareResetDelayMs));
+  return FirmwareUpdateError::SUCCESS;
 }
 
 FirmwareUpdateError EtherCATComm::BootUpdate(
@@ -750,14 +800,26 @@ FirmwareUpdateError EtherCATComm::BootUpdate(
   int size = sizeof(std::uint8_t);
   std::uint8_t result = 0xFF;
   int ret = SDOWrite(1, kSdoFirmwareUpdate, 0x01, size, &command, EC_TIMEOUTRXM);
-  if (ret > 0) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-    ret = SDORead(1, kSdoFirmwareUpdate, 0x02, &size, &state, EC_TIMEOUTRXM);
-    if (ret > 0 && state == 0) {
-      ret = SDORead(1, kSdoFirmwareUpdate, 0x03, &size, &result, EC_TIMEOUTRXM);
+  const auto prepare_deadline = std::chrono::steady_clock::now() +
+                                std::chrono::milliseconds(kFirmwarePrepareTimeoutMs);
+  bool authorized = false;
+  while (ret > 0 && std::chrono::steady_clock::now() < prepare_deadline) {
+    size = sizeof(state);
+    const int state_read = SDORead(1, kSdoFirmwareUpdate, 0x02, &size, &state,
+                                   EC_TIMEOUTRXM);
+    size = sizeof(result);
+    const int result_read = SDORead(1, kSdoFirmwareUpdate, 0x03, &size, &result,
+                                    EC_TIMEOUTRXM);
+    if (state_read > 0 && result_read > 0 && state == 0 && result != 0) {
+      authorized = result == 1;
+      break;
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(kFirmwareMailboxPollMs));
   }
-  if (result != 1) {
+  if (!authorized) {
+    GHAND_LOG_ERROR("Firmware FoE authorization failed or timed out (State="
+                    << static_cast<int>(state) << ", Result="
+                    << static_cast<int>(result) << ")");
     return FirmwareUpdateError::PREPARE_COMMAND_FAILED;
   }
 
@@ -884,7 +946,7 @@ DeviceInfo EtherCATComm::GetDeviceInfo(uint16_t slave) {
     info.device_name = ByteArrayString(bytes, size);
   }
   size = 19;
-  uint8_t serial_subindex = 0;
+  uint8_t serial_subindex = UsesLite1Layout(config_) ? 0 : 1;
   if (SDORead(slave, kSdoSerialNumber, serial_subindex, &size, bytes,
               EC_TIMEOUTRXM) > 0) {
     info.serial_number = ParseAsciiSerialNumber(bytes, size);
@@ -1131,7 +1193,7 @@ void EtherCATComm::ParseHandAndJoints(
     joint.state = static_cast<JointStateCode>(joint_state);
     joint.error = static_cast<JointErrorCode>(joint_error);
     joint.mode = joint_mode;
-    joint.stop = UsesLite1Layout(config_) ? joint_stop : 0;
+    joint.stop = joint_stop;
     joint.angle = static_cast<float>(joint_angle) / 10.0f;
     joint.velocity = joint_velocity;
     joint.current = joint_current;
@@ -1150,19 +1212,15 @@ TactileData EtherCATComm::ParseTactileData(const uint8_t* data, size_t size,
   }
 
   tactile_data.regions.reserve(config_.tactile_regions.size());
-  const bool lite1 = UsesLite1Layout(config_);
-  const size_t resultant_offset = *offset;
-  if (!lite1) *offset += config_.tactile_regions.size() * 6;
   for (size_t i = 0; i < config_.tactile_regions.size(); ++i) {
     const auto& rc = config_.tactile_regions[i];
     RegionTactile region;
     region.region_name = rc.id.c_str();
     region.state = (tactile_data.sensor_state & (1 << i)) != 0;
 
-    const size_t force_offset = lite1 ? *offset : resultant_offset + i * 6;
-    if (force_offset + 6 <= size) {
-      region.resultant_force = ParseResultantForce(data + force_offset);
-      if (lite1) *offset += 6;
+    if (*offset + 6 <= size) {
+      region.resultant_force = ParseResultantForce(data + *offset);
+      *offset += 6;
     }
 
     int count = compat_thumb && i == 0 ? 28 : rc.sensor_count;
@@ -1261,63 +1319,53 @@ std::string EtherCATComm::ReadFirmwareVersion(uint16_t slave, uint8_t subindex) 
 }
 
 bool EtherCATComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
+  if (results == nullptr) return false;
   auto read_result = [this](uint8_t cmd, uint8_t* out,
-                            bool settle_on_zero) -> bool {
+                            bool allow_no_result) -> bool {
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::milliseconds(kFirmwareQueryTimeoutMs);
+    int size = sizeof(cmd);
+    if (SDOWrite(1, kSdoFirmwareUpdate, 0x01, size, &cmd,
+                 EC_TIMEOUTRXM) <= 0) {
+      GHAND_LOG_ERROR("Failed to issue firmware result query command 0x"
+                      << std::hex << static_cast<int>(cmd));
+      return false;
+    }
+
     while (std::chrono::steady_clock::now() < deadline) {
-      int size = sizeof(std::uint8_t);
-      if (SDOWrite(1, kSdoFirmwareUpdate, 0x01, size, &cmd, EC_TIMEOUTRXM) <= 0) {
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(kFirmwareQueryPollMs));
-        continue;
-      }
-      std::this_thread::sleep_for(std::chrono::milliseconds(kSdoWriteSettleMs));
-
-      std::uint8_t ack = 0;
-      size = sizeof(std::uint8_t);
-      if (SDORead(1, kSdoFirmwareUpdate, 0x03, &size, &ack, EC_TIMEOUTRXM) <= 0) {
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(kFirmwareQueryPollMs));
-        continue;
-      }
-      if (ack == 2) {
-        GHAND_LOG_ERROR("Firmware result query rejected (command 0x"
-                        << std::hex << static_cast<int>(cmd) << std::dec
-                        << ", result=2)");
-        return false;
-      }
-      if (ack != 1) {
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(kFirmwareQueryPollMs));
-        continue;
-      }
-
       std::uint8_t state = 0xFF;
-      size = sizeof(std::uint8_t);
-      if (SDORead(1, kSdoFirmwareUpdate, 0x02, &size, &state, EC_TIMEOUTRXM) <= 0) {
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(kFirmwareQueryPollMs));
-        continue;
+      size = sizeof(state);
+      const int state_read = SDORead(1, kSdoFirmwareUpdate, 0x02, &size,
+                                     &state, EC_TIMEOUTRXM);
+      std::uint8_t result = 0;
+      size = sizeof(result);
+      const int result_read = SDORead(1, kSdoFirmwareUpdate, 0x03, &size,
+                                      &result, EC_TIMEOUTRXM);
+      if (state_read > 0 && result_read > 0 && state == 0) {
+        if (result == 1 || result == 2) {
+          *out = result == 1 ? 1 : 0;
+          return true;
+        }
+        if (result != 0) {
+          GHAND_LOG_ERROR("Firmware result query returned invalid result "
+                          << static_cast<int>(result) << " for command 0x"
+                          << std::hex << static_cast<int>(cmd));
+          return false;
+        }
       }
-      if (state != 0 || !settle_on_zero) {
-        *out = state;
-        return true;
-      }
-
       std::this_thread::sleep_for(
           std::chrono::milliseconds(kFirmwareQueryPollMs));
     }
-    if (settle_on_zero) {
+
+    if (allow_no_result) {
       GHAND_LOG_WARNING("Firmware main result still 0 after "
                         << kFirmwareQueryTimeoutMs
                         << " ms, reporting as failed/no result");
       *out = 0;
       return true;
     }
-    GHAND_LOG_ERROR("Timed out waiting for firmware update result query "
-                    "(command 0x" << std::hex << static_cast<int>(cmd)
-                    << std::dec << ")");
+    GHAND_LOG_ERROR("Timed out waiting for firmware update result query (command 0x"
+                    << std::hex << static_cast<int>(cmd) << ")");
     return false;
   };
 
@@ -1356,7 +1404,7 @@ bool EtherCATComm::GetHandStateMachine(uint16_t slave, HandStateMachine* state) 
   if (!IsConnected() || !state) return false;
   uint8_t value = 0;
   int size = 1;
-  uint8_t subindex = 0;
+  uint8_t subindex = UsesLite1Layout(config_) ? 0 : 1;
   if (SDORead(slave, 0x200A, subindex, &size, &value, EC_TIMEOUTRXM) <= 0 ||
       size != 1) {
     return false;
@@ -1379,7 +1427,6 @@ bool EtherCATComm::GetStallTolerances(uint16_t slave, std::map<JointId, uint8_t>
   if (slave == 0 || TargetSlaves(slave).empty()) return false;
 
   if (!IsConnected() || !values) return false;
-  if (!ExecuteSdoCommand(slave, 0x2003, 0xA2, 2, 3, 4)) return false;
   uint8_t bytes[13] = {};
   int size = 13;
   if (SDORead(slave, 0x2003, 1, &size, bytes, EC_TIMEOUTRXM) <= 0 || size != 13) return false;
@@ -1406,7 +1453,6 @@ bool EtherCATComm::GetPidParameters(uint16_t slave, std::vector<uint16_t>* value
   if (slave == 0 || TargetSlaves(slave).empty()) return false;
 
   if (!IsConnected() || !values) return false;
-  if (!ExecuteSdoCommand(slave, 0x2008, 0xA2, 2, 3, 4)) return false;
   uint8_t bytes[78] = {};
   int size = 78;
   if (SDORead(slave, 0x2008, 1, &size, bytes, EC_TIMEOUTRXM) <= 0 || size != 78) return false;

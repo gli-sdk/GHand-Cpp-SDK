@@ -94,6 +94,7 @@ class EtherCATComm : public IComm {
   // Instance state
   std::unique_ptr<SoemState> soem_;
   bool threads_started_ = false;
+  std::atomic<bool> firmware_reset_pending_{false};
 
   int expectedWKC_ = 0;
   int wkc_ = 0;

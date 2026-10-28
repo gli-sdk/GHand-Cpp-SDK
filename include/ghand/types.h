@@ -351,6 +351,8 @@ struct HandState {
   std::array<uint8_t, 12> error_fault{};
   std::array<uint8_t, 6> error_critical{};
   int16_t temperature = 0;  // Back-of-hand temperature in degrees Celsius.
+  // During POWER_ON_SELF_TEST only the state callback is delivered.
+  HandStateMachine state_machine = HandStateMachine::UNKNOWN_STATE;
 };
 
 /**

@@ -11,6 +11,7 @@
 #include <mutex>
 #include <vector>
 
+#include "ghand/result.h"
 #include "ghand/types.h"
 
 namespace ghand {
@@ -56,9 +57,9 @@ class GHandCallbackManager {
   void UpdateTactileData(uint16_t slave, const TactileData& data);
 
   // Polled access methods (thread-safe)
-  HandState GetHandData(uint16_t slave) const;
-  std::vector<Joint> GetJointsData(uint16_t slave) const;
-  TactileData GetTactileData(uint16_t slave) const;
+  ResultOf<HandState> GetHandData(uint16_t slave) const;
+  ResultOf<std::vector<Joint>> GetJointsData(uint16_t slave) const;
+  ResultOf<TactileData> GetTactileData(uint16_t slave) const;
 
  private:
   // Per-slave cache: latest data + change detection state.

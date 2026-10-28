@@ -126,10 +126,13 @@ class GHAND_API GHand {
 
   // Data (push): the callback fires only for this hand.
   void SetJointsCallback(JointsCallback cb);
+  // Reports state_machine during self-test; joints/tactile callbacks resume
+  // automatically afterward. Other HandState fields are unavailable in self-test.
   void SetHandStateCallback(HandStateCallback cb);
   void SetTactileDataCallback(TactileDataCallback cb);
 
   // Data (pull): latest cached data, no hardware read triggered.
+  // All three return DEVICE_REJECTED while the cached state is POWER_ON_SELF_TEST.
   ResultOf<HandState> GetHandData();
   ResultOf<std::vector<Joint>> GetJointsData();
   ResultOf<TactileData> GetTactileData();
