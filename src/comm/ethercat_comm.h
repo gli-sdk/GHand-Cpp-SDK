@@ -43,17 +43,16 @@ class EtherCATComm : public IComm {
   void UpdateConfig(const ProductConfig& config) override;
   bool SetSlaveId(uint16_t slave, uint8_t slave_id) override;
   bool SetBaudrateConfig(uint16_t slave, uint8_t baudrate_gear) override;
-  Diagnostics GetDiagnostics() const override;
   std::vector<ConnectedHand> GetConnectedHands() override;
 
   DeviceInfo GetDeviceInfo(uint16_t slave) override;
   HandType GetHandType(uint16_t slave) override;
 
   bool MoveJoints(uint16_t slave, const std::vector<JointCommand>& joints,
-                  ControlMode mode) override;
+                  HandControlMode mode) override;
   bool Stop(uint16_t slave) override;
   bool DisableHand(uint16_t slave) override;
-  bool GetHandStateMachine(uint16_t slave, HandStateMachine* state) override;
+  bool GetHandStateMachine(uint16_t slave, HandRuntimeState* state) override;
   bool GetStallTolerances(uint16_t slave, std::map<JointId, uint8_t>* values) override;
   bool SetStallTolerances(uint16_t slave, const std::map<JointId, uint8_t>& values) override;
   bool GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) override;
@@ -106,14 +105,6 @@ class EtherCATComm : public IComm {
   int currentgroup_ = 0;
   int cycle_ = 0;
   int64_t cycletime_ = 10000000;
-  std::atomic<uint64_t> tx_packets_{0};
-  std::atomic<uint64_t> rx_packets_{0};
-  std::atomic<uint64_t> tx_errors_{0};
-  std::atomic<uint64_t> rx_errors_{0};
-  std::atomic<uint64_t> reconnects_{0};
-  std::atomic<uint64_t> received_frames_{0};
-  std::atomic<uint64_t> dispatched_frames_{0};
-  std::atomic<uint64_t> callback_errors_{0};
 
   uint8_t rxpdo_buffer_[2 + 12 * static_cast<size_t>(JointId::NUM_JOINTS)] = {0};
   size_t rxpdo_size_ = 0;
@@ -136,7 +127,7 @@ class EtherCATComm : public IComm {
 
   ProductConfig config_;
   std::map<uint16_t, std::map<JointId, JointCommand>> joint_commands_;
-  std::map<uint16_t, ControlMode> hand_modes_;
+  std::map<uint16_t, HandControlMode> hand_modes_;
   std::vector<ConnectedHand> hands_;
   std::vector<uint16_t> TargetSlaves(uint16_t slave);
   std::vector<std::vector<uint8_t>> rxpdo_buffers_;
@@ -176,9 +167,9 @@ class EtherCATComm : public IComm {
 
   // Parse PDO raw data and trigger structured callbacks
   void ParseHandAndJoints(const uint8_t* data, size_t size, size_t* offset,
-                          std::vector<Joint>* parsed_joints,
-                          HandState* parsed_temperature) const;
-  TactileData ParseTactileData(const uint8_t* data, size_t size,
+                          std::vector<JointData>* parsed_joints,
+                          HandData* parsed_temperature) const;
+  std::map<TactileSensorId, TactileData> ParseTactileData(const uint8_t* data, size_t size,
                                size_t* offset, bool compat_thumb = false) const;
   void ParseAndNotify(const uint8_t* data, size_t size, uint16_t slave);
 

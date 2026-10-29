@@ -137,15 +137,17 @@ int main() {
     auto connected = master->Connect("auto");
     if (!connected) { std::cerr << connected.message; return 1; }
     for (ghand::GHand* hand : connected.value) {
-        auto id = hand->slave_index();
-        hand->SetJointsCallback([id](const std::vector<ghand::Joint>& joints) {
+        auto id = hand->GetSlaveIndex();
+        hand->SetJointsCallback([id](const std::vector<ghand::JointData>& joints) {
             std::cout << "Slave " << id << ": " << joints.size() << " joints\n";
         });
         auto state = hand->GetHandStateMachine();
         if (!state) std::cerr << state.message << '\n';
     }
-    auto stopped = master->Stop();
-    if (!stopped) std::cerr << stopped.message << '\n';
+    for (auto* hand : connected.value) {
+        auto stopped = hand->Stop();
+        if (!stopped) std::cerr << stopped.message << '\n';
+    }
     return master->Disconnect() ? 0 : 1;
 }
 ```
@@ -157,12 +159,24 @@ auto master = ghand::Master::Create(ghand::ProductType::GHand5, ghand::CommType:
 auto connected = master->Connect("COM7", 0);
 if (connected) {
     if (auto left = master->hand(ghand::HandType::LEFT)) {
-        auto info = left->QueryDeviceInfo();
+        auto info = left->GetDeviceInfo();
         if (info) std::cout << info.value.device_name << '\n';
     }
     master->Disconnect();
 }
 ```
+
+### 公共类型迁移
+
+公共类型参考 Python SDK：`HandData`、`JointData`、`HandControlMode`、
+`JointControlMode`、`JointLoopType`、`HandRuntimeState` 和 `JointState`。
+左右手使用 `HandType::LEFT_HAND` / `RIGHT_HAND`，速度模式使用 `HandControlMode::VELOCITY`。
+`JointCommand` 使用 `control_mode`、`loop_type`、`control_state`，默认分别为
+POSITION、CLOSED_LOOP、DISABLED；运动时需显式指定 RUNNING。
+`HandData::joints_state` 替代 `state`。触觉回调接收按 `TactileSensorId` 索引的
+`std::map<TactileSensorId, TactileData>`，每指 `TactileData` 的力数据为牛顿单位的展平三元组，空向量表示数据不可用。
+手部错误标志支持 `|` 和 `&`，完整保留高于第 63 位的故障标志。
+RS485 保留 `RATE_*` 命名，避免与 Windows 的 `BAUD_*` 宏冲突。
 
 ## 🧪 示例程序
 

@@ -52,17 +52,16 @@ class RS485Comm : public IComm {
   void UpdateConfig(const ProductConfig& config) override;
   bool SetSlaveId(uint16_t slave, uint8_t new_slave_id) override;
   bool SetBaudrateConfig(uint16_t slave, uint8_t baudrate_gear) override;
-  Diagnostics GetDiagnostics() const override;
   std::vector<ConnectedHand> GetConnectedHands() override;
 
   DeviceInfo GetDeviceInfo(uint16_t slave) override;
   HandType GetHandType(uint16_t slave) override;
 
   bool MoveJoints(uint16_t slave, const std::vector<JointCommand>& joints,
-                  ControlMode mode) override;
+                  HandControlMode mode) override;
   bool Stop(uint16_t slave) override;
   bool DisableHand(uint16_t slave) override;
-  bool GetHandStateMachine(uint16_t slave, HandStateMachine* state) override;
+  bool GetHandStateMachine(uint16_t slave, HandRuntimeState* state) override;
   bool GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) override;
   bool SetPidParameters(uint16_t slave, const std::vector<uint16_t>& values) override;
 
@@ -87,10 +86,10 @@ class RS485Comm : public IComm {
   bool ProbeSlave(int sid, int attempt, const std::string& device_name);
   bool ProbeLite1Slave(int sid);
   void CloseContext();
-  int ReadInputRegistersCounted(uint16_t slave, int addr, int count, uint16_t* dest);
-  int ReadHoldingRegistersCounted(uint16_t slave, int addr, int count, uint16_t* dest);
-  int WriteRegisterCounted(uint16_t slave, int addr, uint16_t value);
-  int WriteRegistersCounted(uint16_t slave, int addr, int count, const uint16_t* data);
+  int ReadInputRegisters(uint16_t slave, int addr, int count, uint16_t* dest);
+  int ReadHoldingRegisters(uint16_t slave, int addr, int count, uint16_t* dest);
+  int WriteRegister(uint16_t slave, int addr, uint16_t value);
+  int WriteRegisters(uint16_t slave, int addr, int count, const uint16_t* data);
   bool WriteTactileControl(uint16_t slave, uint16_t command);
   bool WaitInputResult(uint16_t slave, int addr, int baseline = -1);
   bool AccessParameters(uint16_t slave, int command_addr, int parameter_addr,
@@ -102,9 +101,9 @@ class RS485Comm : public IComm {
 
   bool ReadInputRegistersBytes(uint16_t slave, int addr, int count,
                                std::vector<uint8_t>* bytes);
-  std::vector<Joint> GetJoints(uint16_t slave);
-  HandState GetHandInfo(uint16_t slave, bool* ok = nullptr);
-  TactileData GetTactileData(uint16_t slave);
+  std::vector<JointData> GetJoints(uint16_t slave);
+  HandData GetHandInfo(uint16_t slave, bool* ok = nullptr);
+  std::map<TactileSensorId, TactileData> GetTactileData(uint16_t slave);
 
   modbus_t* ctx_ = nullptr;
   std::atomic<bool> connected_{false};
@@ -112,16 +111,10 @@ class RS485Comm : public IComm {
   std::thread poll_thread_;
   std::atomic<bool> poll_running_{false};
   std::atomic<bool> poll_stop_{false};
-  std::atomic<uint64_t> tx_packets_{0};
-  std::atomic<uint64_t> rx_packets_{0};
-  std::atomic<uint64_t> tx_errors_{0};
-  std::atomic<uint64_t> rx_errors_{0};
-  std::atomic<uint64_t> timeouts_{0};
-  std::atomic<uint64_t> callback_errors_{0};
 
   ProductConfig config_;
-  std::map<uint16_t, ControlMode> hand_modes_;
-  std::map<uint16_t, std::map<JointId, ControlMode>> joint_modes_;
+  std::map<uint16_t, HandControlMode> hand_modes_;
+  std::map<uint16_t, std::map<JointId, HandControlMode>> joint_modes_;
   std::map<uint16_t, ConnectedHand> hands_;
   std::map<uint16_t, bool> tactile_open_hands_;
   mutable std::mutex hands_mutex_;

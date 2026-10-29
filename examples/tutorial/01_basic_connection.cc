@@ -7,7 +7,7 @@
 
 int main() {
   auto master = ghand::Master::Create(ghand::ProductType::GHand5,
-                                      ghand::CommType::ETHERCAT);
+                                      ghand::CommType::CANFD);
   if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return -1;
@@ -27,11 +27,14 @@ int main() {
   // The hand carries what Connect() found, so no extra bus round-trip is
   // needed. The pointer stays valid until the next Connect()/Disconnect().
   ghand::GHand* hand = connected.value.front();
-  std::cout << "Hand type: " << ghand::ToString(hand->hand_type()) << '\n';
+  std::cout << "Hand type: " << ghand::ToString(hand->GetHandType()) << '\n';
 
-  // device_info() returns the snapshot taken during Connect(). Call
-  // QueryDeviceInfo() if you need a fresh read from the device.
-  const ghand::DeviceInfo device_info = hand->device_info();
+  const auto result = hand->GetDeviceInfo();
+  if (!result) {
+    std::cerr << "Failed to read device info: " << result.message << '\n';
+    return 1;
+  }
+  const ghand::DeviceInfo& device_info = result.value;
 
   std::cout << "Device name: " << device_info.device_name << '\n';
   std::cout << "Software version: " << device_info.software_version << '\n';

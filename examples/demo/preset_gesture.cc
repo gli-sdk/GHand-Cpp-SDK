@@ -130,31 +130,46 @@ const std::unordered_map<GestureType,
 
 // Global state for error handling.
 
-ghand::HandState g_hand_state;
-std::vector<ghand::Joint> g_joints;
+ghand::HandData g_hand_state;
+std::vector<ghand::JointData> g_joints;
 std::mutex g_state_mutex;
 
-void OnHandStateUpdate(const ghand::HandState& state) {
+void OnHandStateUpdate(const ghand::HandData& state) {
   std::lock_guard<std::mutex> lock(g_state_mutex);
   g_hand_state = state;
 }
 
-void OnJointsUpdate(const std::vector<ghand::Joint>& joints) {
+void OnJointsUpdate(const std::vector<ghand::JointData>& joints) {
   std::lock_guard<std::mutex> lock(g_state_mutex);
   g_joints = joints;
+}
+
+bool HandHasError(const ghand::HandData& hand) {
+  for (uint8_t code : hand.error_warn) if (code) return true;
+  for (uint8_t code : hand.error_fault) if (code) return true;
+  for (uint8_t code : hand.error_critical) if (code) return true;
+  return hand.joints_state != ghand::HandControlState::DISABLED &&
+         hand.joints_state != ghand::HandControlState::ENABLED;
+}
+
+bool JointHasError(const ghand::JointData& joint) {
+  return joint.error != ghand::JointErrorCode::NORMAL ||
+         (joint.state != ghand::JointState::DISABLED &&
+          joint.state != ghand::JointState::RUNNING &&
+          joint.state != ghand::JointState::STOPPED);
 }
 
 bool HasError() {
   std::lock_guard<std::mutex> lock(g_state_mutex);
 
   // Check hand state first (priority 1)
-  if (ghand::HasError(g_hand_state)) {
+  if (HandHasError(g_hand_state)) {
     return true;
   }
 
   // Check joints (priority 2)
   for (const auto& joint : g_joints) {
-    if (ghand::HasError(joint)) {
+    if (JointHasError(joint)) {
       return true;
     }
   }
@@ -166,10 +181,9 @@ void PrintError() {
   std::lock_guard<std::mutex> lock(g_state_mutex);
 
   // Print hand state errors
-  if (ghand::HasError(g_hand_state)) {
+  if (HandHasError(g_hand_state)) {
     std::cerr << "\n[ERROR] Hand state error detected!" << '\n';
-    std::cerr << ghand::ToString(g_hand_state) << '\n';
-    std::cerr << "State: " << ghand::ToString(g_hand_state.state) << '\n';
+    std::cerr << "HandControlState: " << ghand::ToString(g_hand_state.joints_state) << '\n';
     std::cerr << "Temperature: " << g_hand_state.temperature << " degC"
               << '\n';
   }
@@ -177,7 +191,7 @@ void PrintError() {
   // Print joint errors
   std::vector<std::string> faulty_joints;
   for (const auto& joint : g_joints) {
-    if (ghand::HasError(joint)) {
+    if (JointHasError(joint)) {
       std::stringstream ss;
       ss << "  - " << ghand::ToString(joint.id)
          << ": state=" << ghand::ToString(joint.state)
@@ -187,7 +201,7 @@ void PrintError() {
   }
 
   if (!faulty_joints.empty()) {
-    if (ghand::HasError(g_hand_state)) {
+    if (HandHasError(g_hand_state)) {
       std::cerr << '\n';
     }
     std::cerr << "[ERROR] Detected " << faulty_joints.size()
@@ -205,7 +219,7 @@ std::vector<ghand::JointCommand> CreateJointsFromGesture(
     const std::unordered_map<ghand::JointId, float>& gesture_def) {
   std::vector<ghand::JointCommand> joints;
   for (const auto& pair : gesture_def) {
-    joints.push_back({pair.first, pair.second, 100, 100});
+    joints.push_back({pair.first, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, pair.second, 100, 100});
   }
   return joints;
 }
@@ -244,7 +258,7 @@ bool WaitWithErrorCheck(int wait_ms, int check_interval_ms) {
   return false;
 }
 
-bool ExecuteGesture(ghand::Master& master, GestureType gesture,
+bool ExecuteGesture(ghand::GHand& hand, GestureType gesture,
                     int gesture_wait_ms, int check_interval_ms) {
   if (HasError()) return true;
 
@@ -252,12 +266,12 @@ bool ExecuteGesture(ghand::Master& master, GestureType gesture,
   auto it = GESTURE_DEFINITIONS.find(gesture);
   if (it != GESTURE_DEFINITIONS.end()) {
     auto joints = CreateJointsFromGesture(it->second);
-    master.MoveJoints(joints);
+    hand.MoveJoints(joints);
   }
   return WaitWithErrorCheck(gesture_wait_ms, check_interval_ms);
 }
 
-bool RunGestureCycle(ghand::Master& master,
+bool RunGestureCycle(ghand::GHand& hand,
                      const std::vector<GestureType>& gestures,
                      int cycle,
                      int gesture_wait_ms,
@@ -266,7 +280,7 @@ bool RunGestureCycle(ghand::Master& master,
   std::cout << "\n========== Cycle " << cycle << " ==========" << '\n';
 
   for (auto gesture : gestures) {
-    if (ExecuteGesture(master, gesture, gesture_wait_ms, check_interval_ms)) {
+    if (ExecuteGesture(hand, gesture, gesture_wait_ms, check_interval_ms)) {
       return true;
     }
   }
@@ -278,7 +292,7 @@ bool RunGestureCycle(ghand::Master& master,
   return WaitWithErrorCheck(cycle_delay_ms, check_interval_ms);
 }
 
-bool RunGestureDemo(ghand::Master& master) {
+bool RunGestureDemo(ghand::GHand& hand) {
   const std::vector<GestureType> gestures = {
       GestureType::OPEN_HAND, GestureType::FIST,     GestureType::OK,
       GestureType::THUMBS_UP, GestureType::SIX_SIGN,
@@ -293,18 +307,18 @@ bool RunGestureDemo(ghand::Master& master) {
   int cycle = 0;
   while (true) {
     cycle++;
-    if (RunGestureCycle(master, gestures, cycle, kGestureWaitMs,
+    if (RunGestureCycle(hand, gestures, cycle, kGestureWaitMs,
                         kCycleDelayMs, kErrorCheckIntervalMs)) {
       return true;
     }
   }
 }
 
-void HandleDetectedError(ghand::Master& master) {
+void HandleDetectedError(ghand::GHand& hand) {
   PrintError();
   std::cerr << "\nStopping all motion and clearing fault..." << '\n';
-  master.Stop();
-  master.ClearFault();
+  hand.Stop();
+  hand.ClearFault();
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 }
 
@@ -315,10 +329,11 @@ int main() {
 
   auto master = CreateConnectedHand();
   if (!master) return 1;
+  auto* hand = master->hands().front();
 
-  bool has_error = RunGestureDemo(*master);
+  bool has_error = RunGestureDemo(*hand);
   if (has_error) {
-    HandleDetectedError(*master);
+    HandleDetectedError(*hand);
   }
 
   std::cout << "\nDisconnecting..." << '\n';

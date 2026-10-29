@@ -75,7 +75,7 @@ void DisplaySetJoints(
   }
 
   std::cout << "\nSet Joints:\n";
-  std::cout << std::left << std::setw(20) << "Joint Name" << std::setw(10)
+  std::cout << std::left << std::setw(20) << "JointData Name" << std::setw(10)
             << "Angle(deg)" << std::setw(10) << "Speed(%)" << std::setw(10)
             << "Current(%)" << '\n';
   std::cout << std::string(50, '-') << '\n';
@@ -184,17 +184,18 @@ std::vector<ghand::JointCommand> BuildJointCommands(
   joints.reserve(joint_params.size());
   for (const auto& pair : joint_params) {
     const JointParams& params = pair.second;
-    joints.push_back({static_cast<ghand::JointId>(pair.first), params.angle,
+    joints.push_back({static_cast<ghand::JointId>(pair.first), ghand::JointControlMode::POSITION,
+                      ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, params.angle,
                       static_cast<int16_t>(params.speed),
                       static_cast<int16_t>(params.current)});
   }
   return joints;
 }
 
-void DisplayJointFeedback(const std::vector<ghand::Joint>& joints) {
+void DisplayJointFeedback(const std::vector<ghand::JointData>& joints) {
   std::cout << "\nCurrent Joint Status:\n";
   std::cout << std::left << std::setw(20) << "Joint" << std::setw(12)
-            << "Angle(deg)" << "State" << '\n';
+            << "Angle(deg)" << "HandControlState" << '\n';
   std::cout << std::string(48, '-') << '\n';
 
   for (const auto& joint : joints) {
@@ -252,7 +253,7 @@ void RunControlLoop(ghand::GHand& hand) {
 
 int main() {
   std::cout << "========================================\n"
-            << "  GHand Dexterous Hand SDK - Interactive Joint Control\n"
+            << "  GHand Dexterous Hand SDK - Interactive JointData Control\n"
             << "========================================\n";
 
   auto master = ghand::Master::Create(ghand::ProductType::GHand5,
@@ -272,7 +273,7 @@ int main() {
   std::cout << "OK Successfully connected to dexterous hand!\n";
 
   ghand::GHand* hand = connected.value.front();
-  const auto info = hand->QueryDeviceInfo();
+  const auto info = hand->GetDeviceInfo();
   if (!info) {
     std::cerr << "Failed to query device info: " << info.message << '\n';
   } else {
@@ -280,7 +281,7 @@ int main() {
               << "  Device Name: " << info.value.device_name << '\n'
               << "  Software Version: " << info.value.software_version << '\n'
               << "  Serial Number: " << info.value.serial_number << '\n'
-              << "  Hand Type: " << ghand::ToString(hand->hand_type()) << '\n';
+              << "  Hand Type: " << ghand::ToString(hand->GetHandType()) << '\n';
   }
 
   std::cout << "\nInteractive control mode started\n"

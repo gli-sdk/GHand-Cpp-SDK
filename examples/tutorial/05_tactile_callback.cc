@@ -41,30 +41,19 @@ void PrintTactileHeader() {
   std::cout << "+--------------------------------------------------+" << '\n';
 }
 
-void PrintTactileRegion(const ghand::RegionTactile& region) {
-  std::cout << "| " << std::setw(6) << region.region_name << ": "
+void PrintTactileRegion(ghand::TactileSensorId id, const ghand::TactileData& region) {
+  std::cout << "| " << std::setw(6) << static_cast<int>(id) << ": "
             << "state=" << std::setw(6) << (region.state ? "OK" : "FAIL")
             << ", "
             << "x=" << std::setw(6) << std::fixed << std::setprecision(1)
-            << region.resultant_force.x << ", y=" << std::setw(6)
+            << region.resultant_force.at(0) << ", y=" << std::setw(6)
             << std::fixed << std::setprecision(1)
-            << region.resultant_force.y << ", z=" << std::setw(6)
+            << region.resultant_force.at(1) << ", z=" << std::setw(6)
             << std::fixed << std::setprecision(1)
-            << region.resultant_force.z << " N |" << '\n';
+            << region.resultant_force.at(2) << " N |" << '\n';
 }
 
-void PrintTactileStatus(const ghand::TactileData& data) {
-  std::ostringstream status;
-  status << "sensor_state=0x" << std::hex << std::uppercase
-         << std::setw(2) << std::setfill('0')
-         << static_cast<int>(data.sensor_state)
-         << ", sensor_error=0x" << std::setw(2)
-         << static_cast<int>(data.sensor_error);
-  std::cout << "| " << std::left << std::setw(48) << std::setfill(' ')
-            << status.str() << std::right << " |" << '\n';
-}
-
-void PrintTactileData(const ghand::TactileData& data, bool* first_print) {
+void PrintTactileData(const std::map<ghand::TactileSensorId, ghand::TactileData>& data, bool* first_print) {
   if (*first_print) {
     PrintTactileHeader();
     *first_print = false;
@@ -73,9 +62,8 @@ void PrintTactileData(const ghand::TactileData& data, bool* first_print) {
     std::cout << "\033[4H";
   }
 
-  PrintTactileStatus(data);
-  for (const auto& region : data.regions) {
-    PrintTactileRegion(region);
+  for (const auto& region : data) {
+    PrintTactileRegion(region.first, region.second);
   }
 
   std::cout << "+==================================================+" << '\n';
@@ -122,7 +110,7 @@ int main() {
   // The callback is registered on one hand, so it only ever receives that
   // hand's data.
   bool first_print = true;
-  hand->SetTactileDataCallback([&first_print](const ghand::TactileData& data) {
+  hand->SetTactileDataCallback([&first_print](const std::map<ghand::TactileSensorId, ghand::TactileData>& data) {
     PrintTactileData(data, &first_print);
   });
 

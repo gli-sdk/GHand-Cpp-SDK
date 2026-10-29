@@ -28,9 +28,9 @@ class Master;
 
 // Callback type definitions. A callback is registered on one hand (see
 // GHand::SetJointsCallback) and only receives that hand's data.
-using JointsCallback = std::function<void(const std::vector<Joint>& joints)>;
-using HandStateCallback = std::function<void(const HandState& state)>;
-using TactileDataCallback = std::function<void(const TactileData& data)>;
+using JointsCallback = std::function<void(const std::vector<JointData>& joints)>;
+using HandStateCallback = std::function<void(const HandData& state)>;
+using TactileDataCallback = std::function<void(const std::map<TactileSensorId, TactileData>& data)>;
 
 #ifdef _WIN32
 #pragma warning(push)
@@ -58,14 +58,13 @@ class GHAND_API GHand {
   GHand& operator=(GHand&&) = delete;
 
   // Identity, as reported when the hand was discovered.
-  uint16_t slave_index() const { return slave_index_; }
-  HandType hand_type() const { return hand_type_; }
-  DeviceInfo device_info() const { return device_info_; }
+  uint16_t GetSlaveIndex() const { return slave_index_; }
+  HandType GetHandType() const { return hand_type_; }
 
   /**
    * @brief Re-read this hand's device info from the device (bus round-trip).
    */
-  ResultOf<DeviceInfo> QueryDeviceInfo();
+  ResultOf<DeviceInfo> GetDeviceInfo();
 
   // Motion control
   /**
@@ -75,11 +74,11 @@ class GHAND_API GHand {
    * gains. Modbus fills omitted joints with stopped entries; EtherCAT retains
    * their previous commands. CUSTOM inherits each hand's previous joint modes.
    *
-   * @param joints Joint command list
+   * @param joints JointData command list
    * @param mode How the command is interpreted. Defaults to POSITION.
    */
   Result MoveJoints(const std::vector<JointCommand>& joints,
-                    ControlMode mode = ControlMode::POSITION);
+                    HandControlMode mode = HandControlMode::POSITION);
 
   /**
    * @brief Stop this hand's motion immediately
@@ -90,7 +89,7 @@ class GHAND_API GHand {
    * @brief Clear this hand's fault state
    */
   Result DisableHand();
-  ResultOf<HandStateMachine> GetHandStateMachine();
+  ResultOf<HandRuntimeState> GetHandStateMachine();
   // All 13 active joints, in protocol joint order; EtherCAT only.
   ResultOf<std::map<JointId, uint8_t>> GetStallTolerances();
   Result SetStallTolerances(const std::map<JointId, uint8_t>& values);
@@ -126,35 +125,40 @@ class GHAND_API GHand {
 
   // Data (push): the callback fires only for this hand.
   void SetJointsCallback(JointsCallback cb);
-  // Reports state_machine during self-test; joints/tactile callbacks resume
-  // automatically afterward. Other HandState fields are unavailable in self-test.
+  // Data callbacks pause during power-on self-test and resume automatically.
   void SetHandStateCallback(HandStateCallback cb);
   void SetTactileDataCallback(TactileDataCallback cb);
 
   // Data (pull): latest cached data, no hardware read triggered.
-  // All three return DEVICE_REJECTED while the cached state is POWER_ON_SELF_TEST.
-  ResultOf<HandState> GetHandData();
-  ResultOf<std::vector<Joint>> GetJointsData();
-  ResultOf<TactileData> GetTactileData();
+  // All three return DEVICE_REJECTED while the internally cached runtime state is POWER_ON_SELF_TEST.
+  ResultOf<HandData> GetHandData();
+  ResultOf<std::vector<JointData>> GetJointsData();
+  ResultOf<std::map<TactileSensorId, TactileData>> GetTactileData();
+
+  /**
+   * @brief Update this hand's firmware.
+   * Currently requires EtherCAT with this hand as the only device at index 1.
+   */
+  FirmwareUpdateError BootUpdate(
+      const std::string& filename,
+      std::function<void(int)> progress_callback);
 
  private:
   friend class Master;
   friend struct internal::HandFactory;
-  GHand(internal::GHandImpl* impl, uint16_t slave_index, HandType hand_type,
-        const DeviceInfo& device_info);
+  GHand(internal::GHandImpl* impl, uint16_t slave_index, HandType hand_type);
 
   internal::GHandImpl* impl_;
   uint16_t slave_index_;
   HandType hand_type_;
-  DeviceInfo device_info_;
 };
 
 /**
  * @brief Session with one GHand bus.
  *
- * Owns the connection, the hands found on it, and the actions that apply to
- * the whole bus. Connection-level calls (connect, disconnect, discovery,
- * diagnostics) live here; everything a single hand does lives on GHand.
+ * Owns the connection and the hands found on it.
+ * Connection-level calls (connect, disconnect, discovery)
+ * live here; everything a single hand does lives on GHand.
  */
 class GHAND_API Master {
  public:
@@ -195,58 +199,17 @@ class GHAND_API Master {
                                         uint8_t slave_id,
                                         CANFDBitTiming timing);
 
-  /**
-   * @brief Open a CAN-FD adapter at the new timing without handshaking.
-   * Keep the listener open while power-cycling the device, then reconnect.
-   */
-  Result PrepareCANFDBaudrateListener(
-      const std::string& device_name = "auto",
-      CANFDBitTiming timing = CANFDBitTiming::TIMING_1M_5M);
-
-  /**
-   * @brief Device information from the last connection attempt, including
-   * after PRODUCT_MISMATCH. Cleared before a new connection attempt.
-   */
-  DeviceInfo GetDeviceInfo() const;
-
   Result Disconnect();
   bool IsConnected() const;
 
-  // Discovery and diagnostics
+  // Discovery
   std::map<std::string, std::string> SearchAdapters();
-  Diagnostics GetDiagnostics() const;
 
   // Hands of the current connection; the list is the snapshot taken by the
   // Connect() that found them.
   std::vector<GHand*> hands() const;
   GHand* hand(HandType type) const;
   GHand* hand(uint16_t slave_index) const;
-
-  // Whole-bus actions: every hand on the bus.
-  /**
-   * @brief Control joint movement on every hand.
-   *
-   * Sends an acknowledged command to each enumerated hand. All hands are
-   * attempted even when one fails; the result reports failure if any fails.
-   */
-  Result MoveJoints(const std::vector<JointCommand>& joints,
-                    ControlMode mode = ControlMode::POSITION);
-
-  /**
-   * @brief Stop every hand's motion immediately
-   */
-  Result Stop();
-
-  /**
-   * @brief Clear the fault state of every hand
-   */
-  Result DisableHand();
-  Result ClearFault();
-
-  // Firmware update
-  FirmwareUpdateError BootUpdate(
-      const std::string& filename,
-      std::function<void(int)> progress_callback);
 
  private:
   Master(ProductType product_type, CommType comm_type);

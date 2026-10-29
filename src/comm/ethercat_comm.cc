@@ -234,27 +234,6 @@ bool EtherCATComm::SetBaudrateConfig(uint16_t slave, uint8_t baudrate_gear) {
   return false;
 }
 
-Diagnostics EtherCATComm::GetDiagnostics() const {
-  Diagnostics diagnostics;
-  diagnostics.connection.connected = IsConnected();
-  diagnostics.connection.comm_type = CommType::ETHERCAT;
-  diagnostics.transport.tx_packets = tx_packets_.load();
-  diagnostics.transport.rx_packets = rx_packets_.load();
-  diagnostics.transport.tx_errors = tx_errors_.load();
-  diagnostics.transport.rx_errors = rx_errors_.load();
-  diagnostics.transport.reconnects = reconnects_.load();
-  diagnostics.subscription.received_frames = received_frames_.load();
-  diagnostics.subscription.dispatched_frames = dispatched_frames_.load();
-  diagnostics.subscription.callback_errors = callback_errors_.load();
-  {
-    std::lock_guard<std::mutex> lock(callback_mutex_);
-    diagnostics.subscription.active_subscriptions =
-        (joints_callback_ ? 1 : 0) + (hand_state_callback_ ? 1 : 0) +
-        (tactile_callback_ ? 1 : 0);
-  }
-  return diagnostics;
-}
-
 int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
                           uint8_t baudrate_gear) {
   (void)baudrate_gear;
@@ -306,7 +285,7 @@ int EtherCATComm::Connect(const std::string& device_name, uint8_t slave_id,
   // The hand firmware serves SDO reads only from SAFE_OP onwards.
   for (uint16_t si = 1; si <= soem_->ctx.slavecount; ++si) {
     HandType type = GetHandType(si);
-    if (type != HandType::LEFT && type != HandType::RIGHT) continue;
+    if (type != HandType::LEFT_HAND && type != HandType::RIGHT_HAND) continue;
     ConnectedHand hand; hand.slave_index = si; hand.hand_type = type; hand.device_info = GetDeviceInfo(si);
     hands_.push_back(hand);
   }
@@ -530,7 +509,6 @@ void EtherCATComm::Ecatthread() {
         wkc_ = ecx_receive_processdata(&soem_->ctx, EC_TIMEOUTRET);
 
         if (wkc_ >= expectedWKC_ && inOP_) {
-          rx_packets_++;
           // Every slave that produces a TxPDO carries its own feedback frame.
           // With a junction/splitter the hands sit at slaves 2..N while slave
           // 1 is the splitter itself, so collect one frame per slave instead
@@ -546,14 +524,11 @@ void EtherCATComm::Ecatthread() {
             pdo_copies.emplace_back(static_cast<uint16_t>(si),
                                     std::move(copy));
           }
-        } else {
-          rx_errors_++;
         }
       }
 
       // Call callbacks outside the lock
       for (const auto& entry : pdo_copies) {
-        received_frames_++;
         ParseAndNotify(entry.second.data(), entry.second.size(), entry.first);
       }
 
@@ -578,11 +553,7 @@ void EtherCATComm::Ecatthread() {
           memcpy(soem_->ctx.slavelist[si].outputs, rxpdo_buffers_[si].data(),
                  copy_size);
         }
-        if (ecx_send_processdata(&soem_->ctx) > 0) {
-          tx_packets_++;
-        } else {
-          tx_errors_++;
-        }
+        ecx_send_processdata(&soem_->ctx);
       }
     }
   }
@@ -645,13 +616,11 @@ void EtherCATComm::Ecatcheck() {
               slave->islost = FALSE;
               threads_started_ = true;
               is_connected_ = true;
-              reconnects_++;
             }
           } else {
             slave->islost = FALSE;
             threads_started_ = true;
             is_connected_ = true;
-            reconnects_++;
           }
         }
       }
@@ -975,9 +944,9 @@ HandType EtherCATComm::GetHandType(uint16_t slave) {
   if (result == 1) {
     switch (value) {
       case 1:
-        return HandType::LEFT;
+        return HandType::LEFT_HAND;
       case 2:
-        return HandType::RIGHT;
+        return HandType::RIGHT_HAND;
       default:
         return HandType::NONE;
     }
@@ -985,7 +954,7 @@ HandType EtherCATComm::GetHandType(uint16_t slave) {
   return HandType::NONE;
 }
 
-bool EtherCATComm::MoveJoints(uint16_t slave, const std::vector<JointCommand>& joints, ControlMode mode) {
+bool EtherCATComm::MoveJoints(uint16_t slave, const std::vector<JointCommand>& joints, HandControlMode mode) {
   if (slave == 0) {
     auto ids = TargetSlaves(0); bool ok = !ids.empty();
     for (uint16_t id : ids) ok = MoveJoints(id, joints, mode) && ok;
@@ -998,11 +967,6 @@ bool EtherCATComm::MoveJoints(uint16_t slave, const std::vector<JointCommand>& j
   auto commands = joint_commands_[slave];
   for (auto joint : joints) {
     if (!config_.joint_limits.count(joint.id)) return false;
-    if (joint.mode == ControlMode::INHERIT) {
-      auto previous = commands.find(joint.id);
-      joint.mode = mode == ControlMode::CUSTOM
-          ? (previous == commands.end() ? ControlMode::POSITION : previous->second.mode) : mode;
-    }
     commands[joint.id] = joint;
   }
   auto bytes = EncodeEthercatCommand(config_, mode, true, commands);
@@ -1024,8 +988,7 @@ bool EtherCATComm::Stop(uint16_t slave) {
   std::lock_guard<std::mutex> lock(command_mutex_);
   for (JointId id : ControlledJoints(config_)) {
     auto& joint = joint_commands_[slave][id];
-    if (joint.mode == ControlMode::INHERIT) joint.mode = ControlMode::POSITION;
-    joint.stop = static_cast<uint8_t>(JointControlState::STOPPED);
+    joint.control_state = JointControlState::STOPPED;
   }
   auto bytes = EncodeEthercatCommand(config_, hand_modes_[slave], true, joint_commands_[slave]);
   return SendRxPDO(slave, ECT_SDO_RXPDOASSIGN, static_cast<uint32_t>(bytes.size()), bytes.data()) > 0;
@@ -1098,28 +1061,21 @@ bool EtherCATComm::ZeroTactile(uint16_t slave) {
 // PDO parsing helper functions
 namespace {
 
-Force ParseResultantForce(const uint8_t* data) {
-  Force force;
-  force.x = static_cast<int16_t>(data[0] | (data[1] << 8)) / 10.0f;
-  force.y = static_cast<int16_t>(data[2] | (data[3] << 8)) / 10.0f;
-  force.z = static_cast<int16_t>(data[4] | (data[5] << 8)) / 10.0f;
-  return force;
+std::vector<float> ParseResultantForce(const uint8_t* data) {
+  return {static_cast<int16_t>(data[0] | (data[1] << 8)) / 10.0f,
+          static_cast<int16_t>(data[2] | (data[3] << 8)) / 10.0f,
+          static_cast<int16_t>(data[4] | (data[5] << 8)) / 10.0f};
 }
 
-std::vector<Force> ParseSampleForces(const uint8_t* data, int sensor_count) {
-  std::vector<Force> forces;
-  forces.reserve(sensor_count);
+std::vector<float> ParseSampleForces(const uint8_t* data, int sensor_count) {
+  std::vector<float> forces;
+  forces.reserve(sensor_count * 3);
 
   if (data != nullptr && sensor_count > 0) {
     for (int i = 0; i < sensor_count; i++) {
-      Force sample_force;
-      sample_force.x =
-          static_cast<float>(static_cast<int8_t>(data[i * 3])) * 0.1f;
-      sample_force.y =
-          static_cast<float>(static_cast<int8_t>(data[i * 3 + 1])) * 0.1f;
-      sample_force.z =
-          static_cast<float>(static_cast<uint8_t>(data[i * 3 + 2])) * 0.1f;
-      forces.push_back(sample_force);
+      forces.push_back(static_cast<float>(static_cast<int8_t>(data[i * 3])) * 0.1f);
+      forces.push_back(static_cast<float>(static_cast<int8_t>(data[i * 3 + 1])) * 0.1f);
+      forces.push_back(static_cast<float>(static_cast<uint8_t>(data[i * 3 + 2])) * 0.1f);
     }
   }
 
@@ -1130,9 +1086,9 @@ std::vector<Force> ParseSampleForces(const uint8_t* data, int sensor_count) {
 
 void EtherCATComm::ParseHandAndJoints(
     const uint8_t* data, size_t size, size_t* offset,
-    std::vector<Joint>* parsed_joints,
-  HandState* parsed_temperature) const {
-  *parsed_temperature = HandState{};
+    std::vector<JointData>* parsed_joints,
+  HandData* parsed_temperature) const {
+  *parsed_temperature = HandData{};
   if (*offset + HandHeaderSize(config_) > size) return;
 
   uint16_t hand_state;
@@ -1158,13 +1114,13 @@ void EtherCATComm::ParseHandAndJoints(
   memcpy(&temperature, data + *offset, sizeof(temperature));
   *offset += sizeof(temperature);
 
-  parsed_temperature->state = static_cast<State>(hand_state);
+  parsed_temperature->joints_state = static_cast<HandControlState>(hand_state);
   parsed_temperature->temperature = temperature;
 
   parsed_joints->reserve(config_.valid_joints.size());
   for (const auto& joint_id : config_.valid_joints) {
     if (*offset + 10 > size) break;
-    uint8_t joint_state, joint_error, joint_mode, joint_stop;
+    uint8_t joint_state, joint_error, joint_mode;
     int16_t joint_angle, joint_velocity, joint_current;
 
     memcpy(&joint_state, data + *offset, sizeof(joint_state));
@@ -1176,8 +1132,7 @@ void EtherCATComm::ParseHandAndJoints(
     memcpy(&joint_mode, data + *offset, sizeof(joint_mode));
     *offset += sizeof(joint_mode);
 
-    memcpy(&joint_stop, data + *offset, sizeof(joint_stop));
-    *offset += sizeof(joint_stop);
+    *offset += sizeof(uint8_t);  // Reserved feedback byte.
 
     memcpy(&joint_angle, data + *offset, sizeof(joint_angle));
     *offset += sizeof(joint_angle);
@@ -1188,12 +1143,12 @@ void EtherCATComm::ParseHandAndJoints(
     memcpy(&joint_current, data + *offset, sizeof(joint_current));
     *offset += sizeof(joint_current);
 
-    Joint joint;
+    JointData joint;
     joint.id = joint_id;
-    joint.state = static_cast<JointStateCode>(joint_state);
+    joint.state = static_cast<JointState>(joint_state);
     joint.error = static_cast<JointErrorCode>(joint_error);
-    joint.mode = joint_mode;
-    joint.stop = joint_stop;
+    joint.control_mode = static_cast<JointControlMode>(joint_mode & 0x0F);
+    joint.loop_type = static_cast<JointLoopType>(joint_mode >> 4);
     joint.angle = static_cast<float>(joint_angle) / 10.0f;
     joint.velocity = joint_velocity;
     joint.current = joint_current;
@@ -1201,22 +1156,20 @@ void EtherCATComm::ParseHandAndJoints(
   }
 }
 
-TactileData EtherCATComm::ParseTactileData(const uint8_t* data, size_t size,
+std::map<TactileSensorId, TactileData> EtherCATComm::ParseTactileData(const uint8_t* data, size_t size,
                                            size_t* offset, bool compat_thumb) const {
-  TactileData tactile_data;
+  std::map<TactileSensorId, TactileData> tactile_data;
+  uint8_t sensor_state = 0;
 
   if (*offset + 2 <= size) {
-    tactile_data.sensor_state = data[*offset];
-    tactile_data.sensor_error = data[*offset + 1];
+    sensor_state = data[*offset];
     *offset += 2;
   }
 
-  tactile_data.regions.reserve(config_.tactile_regions.size());
   for (size_t i = 0; i < config_.tactile_regions.size(); ++i) {
     const auto& rc = config_.tactile_regions[i];
-    RegionTactile region;
-    region.region_name = rc.id.c_str();
-    region.state = (tactile_data.sensor_state & (1 << i)) != 0;
+    TactileData region;
+    region.state = (sensor_state & (1 << i)) != 0;
 
     if (*offset + 6 <= size) {
       region.resultant_force = ParseResultantForce(data + *offset);
@@ -1226,12 +1179,12 @@ TactileData EtherCATComm::ParseTactileData(const uint8_t* data, size_t size,
     int count = compat_thumb && i == 0 ? 28 : rc.sensor_count;
     int sample_size = count * 3;
     if (count > 0 && *offset + sample_size <= size) {
-      region.distributed_forces =
+      region.distributed_force =
           ParseSampleForces(data + *offset, count);
       *offset += sample_size;
     }
 
-    tactile_data.regions.push_back(std::move(region));
+    tactile_data.emplace(static_cast<TactileSensorId>(i), std::move(region));
   }
 
   return tactile_data;
@@ -1245,10 +1198,10 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size, uint16_t sla
 
   size_t full = EthercatTxpdoSize(config_);
   size_t compat = EthercatTxpdoSize(config_, true);
-  if (size != full && size != compat) { rx_errors_++; return; }
+  if (size != full && size != compat) { return; }
   size_t offset = 0;
-  std::vector<Joint> parsed_joints;
-  HandState parsed_temperature;
+  std::vector<JointData> parsed_joints;
+  HandData parsed_temperature;
   ParseHandAndJoints(data, size, &offset, &parsed_joints,
                      &parsed_temperature);
 
@@ -1262,51 +1215,37 @@ void EtherCATComm::ParseAndNotify(const uint8_t* data, size_t size, uint16_t sla
     tactile_cb = tactile_callback_;
   }
 
-  bool dispatched = false;
   try {
     if (joints_cb) {
       joints_cb(slave, parsed_joints);
-      dispatched = true;
     }
   } catch (const std::exception& e) {
-    callback_errors_++;
     GHAND_LOG_ERROR("EtherCAT joints callback failed: " << e.what());
   } catch (...) {
-    callback_errors_++;
     GHAND_LOG_ERROR("EtherCAT joints callback failed with unknown exception");
   }
 
   try {
     if (hand_state_cb) {
-      hand_state_cb(slave, parsed_temperature);
-      dispatched = true;
+      hand_state_cb(slave, parsed_temperature, HandRuntimeState::INITIALIZED);
     }
   } catch (const std::exception& e) {
-    callback_errors_++;
     GHAND_LOG_ERROR("EtherCAT hand-state callback failed: " << e.what());
   } catch (...) {
-    callback_errors_++;
     GHAND_LOG_ERROR("EtherCAT hand-state callback failed with unknown exception");
   }
 
   if (config_.has_tactile && offset < size) {
-    TactileData tactile_data = ParseTactileData(data, size, &offset, size == compat && compat != full);
+    std::map<TactileSensorId, TactileData> tactile_data = ParseTactileData(data, size, &offset, size == compat && compat != full);
     try {
       if (tactile_cb) {
         tactile_cb(slave, tactile_data);
-        dispatched = true;
       }
     } catch (const std::exception& e) {
-      callback_errors_++;
       GHAND_LOG_ERROR("EtherCAT tactile callback failed: " << e.what());
     } catch (...) {
-      callback_errors_++;
       GHAND_LOG_ERROR("EtherCAT tactile callback failed with unknown exception");
     }
-  }
-
-  if (dispatched) {
-    dispatched_frames_++;
   }
 }
 
@@ -1398,7 +1337,7 @@ bool EtherCATComm::ExecuteSdoCommand(uint16_t slave, uint16_t index, uint8_t com
   return false;
 }
 
-bool EtherCATComm::GetHandStateMachine(uint16_t slave, HandStateMachine* state) {
+bool EtherCATComm::GetHandStateMachine(uint16_t slave, HandRuntimeState* state) {
   if (slave == 0 || TargetSlaves(slave).empty()) return false;
 
   if (!IsConnected() || !state) return false;
@@ -1409,7 +1348,7 @@ bool EtherCATComm::GetHandStateMachine(uint16_t slave, HandStateMachine* state) 
       size != 1) {
     return false;
   }
-  *state = static_cast<HandStateMachine>(value);
+  *state = static_cast<HandRuntimeState>(value);
   return true;
 }
 

@@ -19,10 +19,9 @@ namespace internal {
 // reachable for Master's helper without widening GHand's public surface.
 struct HandFactory {
   static std::unique_ptr<GHand> Make(GHandImpl* impl, uint16_t slave_index,
-                                     HandType hand_type,
-                                     const DeviceInfo& device_info) {
+                                     HandType hand_type) {
     return std::unique_ptr<GHand>(
-        new GHand(impl, slave_index, hand_type, device_info));
+        new GHand(impl, slave_index, hand_type));
   }
 };
 
@@ -41,7 +40,7 @@ ResultOf<std::vector<GHand*>> AdoptHands(
   hands.reserve(connected.value.size());
   for (const auto& hand : connected.value) {
     storage->push_back(internal::HandFactory::Make(
-        impl, hand.slave_index, hand.hand_type, hand.device_info));
+        impl, hand.slave_index, hand.hand_type));
     hands.push_back(storage->back().get());
   }
   return hands;
@@ -54,20 +53,19 @@ ResultOf<std::vector<GHand*>> AdoptHands(
 // ---------------------------------------------------------------------------
 
 GHand::GHand(internal::GHandImpl* impl, uint16_t slave_index,
-             HandType hand_type, const DeviceInfo& device_info)
+             HandType hand_type)
     : impl_(impl),
       slave_index_(slave_index),
-      hand_type_(hand_type),
-      device_info_(device_info) {}
+      hand_type_(hand_type) {}
 
 GHand::~GHand() {}
 
-ResultOf<DeviceInfo> GHand::QueryDeviceInfo() {
+ResultOf<DeviceInfo> GHand::GetDeviceInfo() {
   return impl_->GetDeviceInfo(slave_index_);
 }
 
 Result GHand::MoveJoints(const std::vector<JointCommand>& joints,
-                         ControlMode mode) {
+                         HandControlMode mode) {
   return impl_->MoveJoints(slave_index_, joints, mode);
 }
 
@@ -107,21 +105,21 @@ void GHand::SetTactileDataCallback(TactileDataCallback cb) {
   impl_->SetTactileDataCallback(slave_index_, cb);
 }
 
-ResultOf<HandState> GHand::GetHandData() {
+ResultOf<HandData> GHand::GetHandData() {
   return impl_->GetHandData(slave_index_);
 }
 
-ResultOf<std::vector<Joint>> GHand::GetJointsData() {
+ResultOf<std::vector<JointData>> GHand::GetJointsData() {
   return impl_->GetJointsData(slave_index_);
 }
 
-ResultOf<TactileData> GHand::GetTactileData() {
+ResultOf<std::map<TactileSensorId, TactileData>> GHand::GetTactileData() {
   return impl_->GetTactileData(slave_index_);
 }
 
 Result GHand::DisableHand() { return impl_->DisableHand(slave_index_); }
 
-ResultOf<HandStateMachine> GHand::GetHandStateMachine() { return impl_->GetHandStateMachine(slave_index_); }
+ResultOf<HandRuntimeState> GHand::GetHandStateMachine() { return impl_->GetHandStateMachine(slave_index_); }
 
 ResultOf<std::map<JointId, uint8_t>> GHand::GetStallTolerances() { return impl_->GetStallTolerances(slave_index_); }
 
@@ -130,6 +128,12 @@ Result GHand::SetStallTolerances(const std::map<JointId, uint8_t>& values) { ret
 ResultOf<std::vector<uint16_t>> GHand::GetPidParameters() { return impl_->GetPidParameters(slave_index_); }
 
 Result GHand::SetPidParameters(const std::vector<uint16_t>& values) { return impl_->SetPidParameters(slave_index_, values); }
+
+FirmwareUpdateError GHand::BootUpdate(
+    const std::string& filename,
+    std::function<void(int)> progress_callback) {
+  return impl_->BootUpdate(slave_index_, filename, progress_callback);
+}
 
 // ---------------------------------------------------------------------------
 // Master
@@ -173,15 +177,6 @@ ResultOf<std::vector<GHand*>> Master::Connect(const std::string& device_name,
                     impl_->Connect(device_name, slave_id, timing));
 }
 
-Result Master::PrepareCANFDBaudrateListener(const std::string& device_name,
-                                             CANFDBitTiming timing) {
-  impl_->Disconnect();
-  hands_.clear();
-  return impl_->PrepareCANFDBaudrateListener(device_name, timing);
-}
-
-DeviceInfo Master::GetDeviceInfo() const { return impl_->GetLastDeviceInfo(); }
-
 Result Master::Disconnect() { auto result = impl_->Disconnect(); hands_.clear(); return result; }
 
 bool Master::IsConnected() const { return impl_->IsConnected(); }
@@ -189,8 +184,6 @@ bool Master::IsConnected() const { return impl_->IsConnected(); }
 std::map<std::string, std::string> Master::SearchAdapters() {
   return impl_->SearchAdapters();
 }
-
-Diagnostics Master::GetDiagnostics() const { return impl_->GetDiagnostics(); }
 
 std::vector<GHand*> Master::hands() const {
   std::vector<GHand*> hands;
@@ -204,7 +197,7 @@ std::vector<GHand*> Master::hands() const {
 GHand* Master::hand(HandType type) const {
   if (type == HandType::NONE) return nullptr;
   for (const auto& hand : hands_) {
-    if (hand->hand_type() == type) return hand.get();
+    if (hand->GetHandType() == type) return hand.get();
   }
   return nullptr;
 }
@@ -212,27 +205,9 @@ GHand* Master::hand(HandType type) const {
 GHand* Master::hand(uint16_t slave_index) const {
   if (slave_index == 0) return nullptr;
   for (const auto& hand : hands_) {
-    if (hand->slave_index() == slave_index) return hand.get();
+    if (hand->GetSlaveIndex() == slave_index) return hand.get();
   }
   return nullptr;
-}
-
-Result Master::MoveJoints(const std::vector<JointCommand>& joints,
-                          ControlMode mode) {
-  // slave_index 0 = every hand on the bus.
-  return impl_->MoveJoints(0, joints, mode);
-}
-
-Result Master::DisableHand() { return impl_->DisableHand(0); }
-
-Result Master::Stop() { return impl_->Stop(0); }
-
-Result Master::ClearFault() { return impl_->ClearFault(0); }
-
-FirmwareUpdateError Master::BootUpdate(
-    const std::string& filename,
-    std::function<void(int)> progress_callback) {
-  return impl_->BootUpdate(filename, progress_callback);
 }
 
 }  // namespace ghand

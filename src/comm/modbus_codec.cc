@@ -132,10 +132,10 @@ uint8_t ParseHandType(const uint8_t* raw_bytes, size_t len) {
   return raw_bytes[1];
 }
 
-HandState ParseHandInfo(const uint16_t* raw, size_t count) {
-  HandState hs;
+HandData ParseHandInfo(const uint16_t* raw, size_t count) {
+  HandData hs;
   if (count < 14) return hs;
-  hs.state = static_cast<State>(raw[0]);
+  hs.joints_state = static_cast<HandControlState>(raw[0]);
   for (size_t i = 0; i < 6; ++i) {
     hs.error_warn[i] = static_cast<uint8_t>(raw[1 + i / 2] >> ((i % 2) * 8));
     hs.error_critical[i] = static_cast<uint8_t>(raw[10 + i / 2] >> ((i % 2) * 8));
@@ -147,10 +147,10 @@ HandState ParseHandInfo(const uint16_t* raw, size_t count) {
   return hs;
 }
 
-HandState ParseHandInfoLite1(const uint16_t* raw, size_t count) {
-  HandState hs;
+HandData ParseHandInfoLite1(const uint16_t* raw, size_t count) {
+  HandData hs;
   if (count < 11) return hs;
-  hs.state = (raw[0] & 0xFF) == 0 ? State::DISABLED : State::ENABLED;
+  hs.joints_state = (raw[0] & 0xFF) == 0 ? HandControlState::DISABLED : HandControlState::ENABLED;
   for (size_t i = 0; i < 6; ++i) {
     hs.error_warn[i] = static_cast<uint8_t>(raw[1 + i / 2] >> ((i % 2) * 8));
     hs.error_fault[i] = static_cast<uint8_t>(raw[4 + i / 2] >> ((i % 2) * 8));
@@ -160,16 +160,16 @@ HandState ParseHandInfoLite1(const uint16_t* raw, size_t count) {
   return hs;
 }
 
-Joint ParseJointData(const uint16_t* raw, JointId joint_id, bool legacy_stop) {
-  Joint joint;
+JointData ParseJointData(const uint16_t* raw, JointId joint_id) {
+  JointData joint;
   joint.id = joint_id;
 
   uint8_t status_byte = raw[0] & 0xFF;
   uint8_t error_byte = (raw[0] >> 8) & 0xFF;
-  joint.state = static_cast<JointStateCode>(status_byte);
+  joint.state = static_cast<JointState>(status_byte);
   joint.error = static_cast<JointErrorCode>(error_byte);
-  joint.mode = static_cast<uint8_t>(raw[1] & 0xFF);
-  joint.stop = legacy_stop ? static_cast<uint8_t>((raw[1] >> 8) & 0xFF) : 0;
+  joint.control_mode = static_cast<JointControlMode>(raw[1] & 0x0F);
+  joint.loop_type = static_cast<JointLoopType>((raw[1] >> 4) & 0x0F);
 
   int16_t angle_raw = static_cast<int16_t>(raw[2]);
   joint.angle = angle_raw / 10.0f;
@@ -182,9 +182,9 @@ Joint ParseJointData(const uint16_t* raw, JointId joint_id, bool legacy_stop) {
   return joint;
 }
 
-std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
+std::vector<JointData> ParseJoints(const uint16_t* raw, size_t count,
                                const std::vector<JointId>& valid_joints) {
-  std::vector<Joint> joints;
+  std::vector<JointData> joints;
   joints.reserve(valid_joints.size());
 
   for (JointId joint_id : valid_joints) {
@@ -195,10 +195,10 @@ std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
   return joints;
 }
 
-std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
+std::vector<JointData> ParseJoints(const uint16_t* raw, size_t count,
                                const ProductConfig& config,
                                uint16_t start_addr) {
-  std::vector<Joint> joints;
+  std::vector<JointData> joints;
   joints.reserve(config.valid_joints.size());
 
   for (JointId joint_id : config.valid_joints) {
@@ -207,8 +207,7 @@ std::vector<Joint> ParseJoints(const uint16_t* raw, size_t count,
     if (it->second < start_addr) continue;
     size_t offset = static_cast<size_t>(it->second - start_addr);
     if (offset + 4 >= count) continue;
-    joints.push_back(ParseJointData(raw + offset, joint_id,
-                                   config.product_type == ProductType::GHandLite1));
+    joints.push_back(ParseJointData(raw + offset, joint_id));
   }
   return joints;
 }
@@ -218,19 +217,17 @@ std::pair<uint8_t, uint8_t> ParseTactileStateError(uint16_t first_reg) {
           static_cast<uint8_t>(first_reg >> 8)};
 }
 
-Force ParseTactileResultant(const uint16_t* raw, int region_index) {
+std::vector<float> ParseTactileResultant(const uint16_t* raw, int region_index) {
   int base = 1 + region_index * 3;
-  Force force;
-  force.x = static_cast<int16_t>(raw[base]) / 10.0f;
-  force.y = static_cast<int16_t>(raw[base + 1]) / 10.0f;
-  force.z = static_cast<int16_t>(raw[base + 2]) / 10.0f;
-  return force;
+  return {static_cast<int16_t>(raw[base]) / 10.0f,
+          static_cast<int16_t>(raw[base + 1]) / 10.0f,
+          static_cast<int16_t>(raw[base + 2]) / 10.0f};
 }
 
-std::vector<Force> ParseTactileDistributed(const uint8_t* data_bytes,
+std::vector<float> ParseTactileDistributed(const uint8_t* data_bytes,
                                            size_t byte_len, int count) {
-  std::vector<Force> forces;
-  forces.reserve(count);
+  std::vector<float> forces;
+  forces.reserve(count * 3);
 
   int expected_bytes = count * 3;
   size_t parse_len = (byte_len < static_cast<size_t>(expected_bytes))
@@ -241,24 +238,18 @@ std::vector<Force> ParseTactileDistributed(const uint8_t* data_bytes,
     int8_t fx_d = static_cast<int8_t>(data_bytes[i]);
     int8_t fy_d = static_cast<int8_t>(data_bytes[i + 1]);
     uint8_t fz_d = data_bytes[i + 2];
-    Force f;
-    f.x = static_cast<float>(fx_d);
-    f.y = static_cast<float>(fy_d);
-    f.z = static_cast<float>(fz_d);
-    forces.push_back(f);
+    forces.push_back(static_cast<float>(fx_d) / 10.0f);
+    forces.push_back(static_cast<float>(fy_d) / 10.0f);
+    forces.push_back(static_cast<float>(fz_d) / 10.0f);
   }
   return forces;
 }
 
-std::vector<uint16_t> EncodeJointCommand(const JointCommand& joint,
-                                         ControlMode mode, ControlMode default_mode) {
+std::vector<uint16_t> EncodeJointCommand(const JointCommand& joint) {
   int16_t angle_raw = EncodeJointAngle(joint);
-  ControlMode joint_mode =
-      joint.mode == ControlMode::INHERIT
-          ? (mode == ControlMode::CUSTOM ? default_mode : mode) : joint.mode;
-  uint16_t mode_stop =
-      static_cast<uint16_t>(((joint.stop & 0xFFu) << 8) |
-                            static_cast<uint8_t>(joint_mode));
+  const uint8_t joint_mode = static_cast<uint8_t>(joint.control_mode) |
+      (static_cast<uint8_t>(joint.loop_type) << 4);
+  const uint16_t mode_stop = (static_cast<uint16_t>(joint.control_state) << 8) | joint_mode;
   return {
       mode_stop,
       static_cast<uint16_t>(angle_raw),
@@ -270,8 +261,8 @@ std::vector<uint16_t> EncodeJointCommand(const JointCommand& joint,
 }
 
 std::vector<uint16_t> EncodeHandCommand(
-    const std::vector<JointCommand>& joints, ControlMode mode,
-    const ProductConfig& config, const std::map<JointId, ControlMode>& modes) {
+    const std::vector<JointCommand>& joints, HandControlMode mode,
+    const ProductConfig& config, const std::map<JointId, HandControlMode>& modes) {
   std::map<JointId, JointCommand> commands;
   for (const auto& joint : joints) commands[joint.id] = joint;
   std::vector<uint16_t> registers(1, 0x0100 | static_cast<uint8_t>(mode));
@@ -279,14 +270,14 @@ std::vector<uint16_t> EncodeHandCommand(
   for (const auto& entry : config.joint_control_registers) addresses[entry.second] = entry.first;
   for (const auto& entry : addresses) {
     auto previous = modes.find(entry.second);
-    ControlMode default_mode = previous == modes.end() ? ControlMode::POSITION : previous->second;
+    HandControlMode default_mode = previous == modes.end() ? HandControlMode::POSITION : previous->second;
     JointCommand joint;
     joint.id = entry.second;
-    joint.mode = default_mode;
-    joint.stop = static_cast<uint8_t>(JointControlState::STOPPED);
+    joint.control_mode = static_cast<JointControlMode>(default_mode);
+    joint.control_state = JointControlState::STOPPED;
     auto command = commands.find(entry.second);
     if (command != commands.end()) joint = command->second;
-    auto encoded = EncodeJointCommand(joint, mode, default_mode);
+    auto encoded = EncodeJointCommand(joint);
     const size_t register_count = static_cast<size_t>(
         config.joint_control_register_count > 0
             ? config.joint_control_register_count
@@ -300,17 +291,17 @@ std::vector<uint16_t> EncodeHandCommand(
 }
 
 std::vector<uint8_t> EncodeEthercatCommand(
-    const ProductConfig& config, ControlMode mode, bool enabled,
+    const ProductConfig& config, HandControlMode mode, bool enabled,
     const std::map<JointId, JointCommand>& commands) {
   const bool lite1 = config.product_type == ProductType::GHandLite1;
   std::vector<uint8_t> bytes = {static_cast<uint8_t>(mode), static_cast<uint8_t>(enabled)};
   for (JointId id : config.valid_joints) {
     if (!config.joint_limits.count(id)) continue;
     JointCommand joint;
-    joint.stop = 0;
+    joint.control_state = JointControlState::DISABLED;
     auto it = commands.find(id);
     if (it != commands.end()) joint = it->second;
-    auto encoded = EncodeJointCommand(joint, ControlMode::POSITION);
+    auto encoded = EncodeJointCommand(joint);
     bytes.push_back(static_cast<uint8_t>(encoded[0]));
     bytes.push_back(static_cast<uint8_t>(encoded[0] >> 8));
     if (lite1) {

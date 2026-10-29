@@ -15,7 +15,7 @@ namespace ghand {
 namespace internal {
 
 namespace {
-const Joint* FindJointById(const std::vector<Joint>& joints, JointId id) {
+const JointData* FindJointById(const std::vector<JointData>& joints, JointId id) {
   for (const auto& j : joints) {
     if (j.id == id) return &j;
   }
@@ -54,9 +54,9 @@ void GHandCallbackManager::SetTactileDataCallback(
 }
 
 void GHandCallbackManager::UpdateJoints(uint16_t slave,
-                                        const std::vector<Joint>& joints) {
+                                        const std::vector<JointData>& joints) {
   JointsCallback callback;
-  std::vector<Joint> payload;
+  std::vector<JointData> payload;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
     SlaveCache& cache = caches_[slave];
@@ -81,16 +81,20 @@ void GHandCallbackManager::UpdateJoints(uint16_t slave,
 }
 
 void GHandCallbackManager::UpdateTemperature(uint16_t slave,
-                                             const HandState& temperature) {
+                                             const HandData& temperature,
+                                             HandRuntimeState machine) {
   HandStateCallback callback;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
     SlaveCache& cache = caches_[slave];
+    const bool machine_changed = cache.machine != machine;
+    cache.machine = machine;
+    if (machine == HandRuntimeState::POWER_ON_SELF_TEST) return;
     const auto it = hand_state_callbacks_.find(slave);
     if (it != hand_state_callbacks_.end()) {
       // Change detection runs against the previous cached state, so check
       // before overwriting it.
-      if (HasTemperatureChanged(cache, temperature)) {
+      if (machine_changed || HasTemperatureChanged(cache, temperature)) {
         callback = it->second;
         cache.last_temp_callback_time = std::chrono::steady_clock::now();
       }
@@ -103,7 +107,7 @@ void GHandCallbackManager::UpdateTemperature(uint16_t slave,
 }
 
 void GHandCallbackManager::UpdateTactileData(uint16_t slave,
-                                             const TactileData& data) {
+                                             const std::map<TactileSensorId, TactileData>& data) {
   TactileDataCallback callback;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
@@ -121,55 +125,55 @@ void GHandCallbackManager::UpdateTactileData(uint16_t slave,
 
 // Polling access
 
-ResultOf<HandState> GHandCallbackManager::GetHandData(uint16_t slave) const {
+ResultOf<HandData> GHandCallbackManager::GetHandData(uint16_t slave) const {
   std::lock_guard<std::mutex> lock(data_mutex_);
   const auto it = caches_.find(slave);
   if (it == caches_.end()) {
-    return HandState{};
+    return HandData{};
   }
-  if (it->second.state.state_machine == HandStateMachine::POWER_ON_SELF_TEST) {
+  if (it->second.machine == HandRuntimeState::POWER_ON_SELF_TEST) {
     return {SdkError::DEVICE_REJECTED, "device is performing power-on self-test"};
   }
   return it->second.state;
 }
 
-ResultOf<std::vector<Joint>> GHandCallbackManager::GetJointsData(uint16_t slave) const {
+ResultOf<std::vector<JointData>> GHandCallbackManager::GetJointsData(uint16_t slave) const {
   std::lock_guard<std::mutex> lock(data_mutex_);
   const auto it = caches_.find(slave);
   if (it == caches_.end()) {
-    return std::vector<Joint>{};
+    return std::vector<JointData>{};
   }
-  if (it->second.state.state_machine == HandStateMachine::POWER_ON_SELF_TEST) {
+  if (it->second.machine == HandRuntimeState::POWER_ON_SELF_TEST) {
     return {SdkError::DEVICE_REJECTED, "device is performing power-on self-test"};
   }
   return it->second.joints;
 }
 
-ResultOf<TactileData> GHandCallbackManager::GetTactileData(uint16_t slave) const {
+ResultOf<std::map<TactileSensorId, TactileData>> GHandCallbackManager::GetTactileData(uint16_t slave) const {
   std::lock_guard<std::mutex> lock(data_mutex_);
   const auto it = caches_.find(slave);
   if (it == caches_.end()) {
-    return TactileData{};
+    return std::map<TactileSensorId, TactileData>{};
   }
-  if (it->second.state.state_machine == HandStateMachine::POWER_ON_SELF_TEST) {
+  if (it->second.machine == HandRuntimeState::POWER_ON_SELF_TEST) {
     return {SdkError::DEVICE_REJECTED, "device is performing power-on self-test"};
   }
   return it->second.tactile;
 }
 
 bool GHandCallbackManager::HasJointDataChanged(
-    const SlaveCache& cache, const std::vector<Joint>& joints) {
+    const SlaveCache& cache, const std::vector<JointData>& joints) {
   // First delivery
   if (cache.delivered_joints.empty()) {
     return true;
   }
   // 1. State/error changes -> deliver immediately
   for (const auto& joint : joints) {
-    const Joint* previous = FindJointById(cache.delivered_joints, joint.id);
+    const JointData* previous = FindJointById(cache.delivered_joints, joint.id);
     if (previous == nullptr) {
       return true;
     }
-    if (joint.state != previous->state || joint.error != previous->error || joint.mode != previous->mode || joint.stop != previous->stop) {
+    if (joint.state != previous->state || joint.error != previous->error || joint.control_mode != previous->control_mode || joint.loop_type != previous->loop_type) {
       return true;
     }
   }
@@ -177,7 +181,7 @@ bool GHandCallbackManager::HasJointDataChanged(
   // 2. Accumulated angle change relative to the "last delivered value"
   //    exceeds the threshold.
   for (const auto& joint : joints) {
-    const Joint* previous = FindJointById(cache.delivered_joints, joint.id);
+    const JointData* previous = FindJointById(cache.delivered_joints, joint.id);
     if (previous != nullptr &&
         std::abs(joint.angle - previous->angle) > kJointAngleThreshold) {
       return true;
@@ -195,15 +199,14 @@ bool GHandCallbackManager::HasJointDataChanged(
 }
 
 bool GHandCallbackManager::HasTemperatureChanged(
-    const SlaveCache& cache, const HandState& temperature) {
+    const SlaveCache& cache, const HandData& temperature) {
   // 1. State or error changes trigger immediately
-  if (temperature.state_machine != cache.state.state_machine ||
-      temperature.state != cache.state.state ||
+  if (temperature.joints_state != cache.state.joints_state ||
       temperature.error_warn != cache.state.error_warn ||
       temperature.error_fault != cache.state.error_fault ||
       temperature.error_critical != cache.state.error_critical) {
     GHAND_LOG_DEBUG(
-        "Hand state change detected: " << ghand::ToString(temperature.state));
+        "Hand state change detected: " << ghand::ToString(temperature.joints_state));
     return true;
   }
 

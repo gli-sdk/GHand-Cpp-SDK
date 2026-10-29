@@ -138,15 +138,17 @@ int main() {
     auto connected = master->Connect("auto");
     if (!connected) { std::cerr << connected.message; return 1; }
     for (ghand::GHand* hand : connected.value) {
-        auto id = hand->slave_index();
-        hand->SetJointsCallback([id](const std::vector<ghand::Joint>& joints) {
+        auto id = hand->GetSlaveIndex();
+        hand->SetJointsCallback([id](const std::vector<ghand::JointData>& joints) {
             std::cout << "Slave " << id << ": " << joints.size() << " joints\n";
         });
         auto state = hand->GetHandStateMachine();
         if (!state) std::cerr << state.message << '\n';
     }
-    auto stopped = master->Stop();
-    if (!stopped) std::cerr << stopped.message << '\n';
+    for (auto* hand : connected.value) {
+        auto stopped = hand->Stop();
+        if (!stopped) std::cerr << stopped.message << '\n';
+    }
     return master->Disconnect() ? 0 : 1;
 }
 ```
@@ -158,12 +160,25 @@ auto master = ghand::Master::Create(ghand::ProductType::GHand5, ghand::CommType:
 auto connected = master->Connect("COM7", 0);
 if (connected) {
     if (auto left = master->hand(ghand::HandType::LEFT)) {
-        auto info = left->QueryDeviceInfo();
+        auto info = left->GetDeviceInfo();
         if (info) std::cout << info.value.device_name << '\n';
     }
     master->Disconnect();
 }
 ```
+
+### Public type migration
+
+Public types follow the Python SDK: `HandData`, `JointData`, `HandControlMode`,
+`JointControlMode`, `JointLoopType`, `HandRuntimeState`, and `JointState`.
+Use `HandType::LEFT_HAND` / `RIGHT_HAND` and `HandControlMode::VELOCITY`.
+`JointCommand` uses `control_mode`, `loop_type`, and `control_state`; its defaults
+are POSITION, CLOSED_LOOP, and DISABLED. Explicitly select RUNNING to move.
+`HandData::joints_state` replaces `state`. Tactile callbacks receive a
+`std::map<TactileSensorId, TactileData>` map keyed by `TactileSensorId`; each `TactileData` contains flattened
+force triples in Newtons, with empty vectors indicating unavailable readings.
+Hand error flags support `|` and `&`, including fault bits above 63.
+RS485 retains `RATE_*` names because Windows defines conflicting `BAUD_*` macros.
 
 ## Examples
 

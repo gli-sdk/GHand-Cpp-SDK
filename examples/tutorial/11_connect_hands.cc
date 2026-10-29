@@ -24,9 +24,7 @@ void PrintUsage(const char* program) {
       << "  " << program << " rs485 /dev/ttyUSB0\n\n"
       << "Without a device every adapter is probed and the first bus that\n"
       << "carries a hand is used. Every hand found is driven through the poses\n"
-      << "below with MoveJoints(), whatever the transport: calling it on the\n"
-      << "session drives every hand, calling it on one hand drives only that\n"
-      << "hand.\n\n"
+      << "below by calling MoveJoints() on each hand, whatever the transport.\n\n"
       << "EtherCAT topologies all handled by the same code below:\n"
       << "  no junction,   single hand : PC -> hand\n"
       << "  no junction,   dual hand   : PC -> {handA, handB}\n"
@@ -39,10 +37,10 @@ void PrintUsage(const char* program) {
 
 std::vector<ghand::JointCommand> BuildPose(float mcp, float pip) {
   return {
-      {ghand::JointId::FF_MCP, mcp, 80, 80},
-      {ghand::JointId::FF_PIP, pip, 80, 80},
-      {ghand::JointId::MF_MCP, mcp, 80, 80},
-      {ghand::JointId::MF_PIP, pip, 80, 80},
+      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, mcp, 80, 80},
+      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, pip, 80, 80},
+      {ghand::JointId::MF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, mcp, 80, 80},
+      {ghand::JointId::MF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, pip, 80, 80},
   };
 }
 
@@ -100,9 +98,14 @@ int main(int argc, char* argv[]) {
   std::cout << "Connected on " << device << " - " << hands.size()
             << " hand(s):\n";
   for (ghand::GHand* hand : hands) {
-    const ghand::DeviceInfo info = hand->device_info();
-    std::cout << "  slave 0x" << std::hex << hand->slave_index() << std::dec
-              << ": " << ghand::ToString(hand->hand_type())
+    const auto result = hand->GetDeviceInfo();
+    if (!result) {
+      std::cerr << "Failed to read device info: " << result.message << '\n';
+      continue;
+    }
+    const ghand::DeviceInfo& info = result.value;
+    std::cout << "  slave 0x" << std::hex << hand->GetSlaveIndex() << std::dec
+              << ": " << ghand::ToString(hand->GetHandType())
               << " device=" << info.device_name
               << " serial=" << info.serial_number << '\n';
   }
@@ -111,26 +114,26 @@ int main(int argc, char* argv[]) {
   // data, so the latest joints are kept per hand instead of in one shared
   // variable.
   std::mutex state_mutex;
-  std::map<uint16_t, std::vector<ghand::Joint>> joints_by_hand;
+  std::map<uint16_t, std::vector<ghand::JointData>> joints_by_hand;
   for (ghand::GHand* hand : hands) {
     hand->SetJointsCallback(
         [&state_mutex, &joints_by_hand, hand](
-            const std::vector<ghand::Joint>& joints) {
+            const std::vector<ghand::JointData>& joints) {
           std::lock_guard<std::mutex> lock(state_mutex);
-          joints_by_hand[hand->slave_index()] = joints;
+          joints_by_hand[hand->GetSlaveIndex()] = joints;
         });
   }
 
   auto print_feedback = [&]() {
     std::lock_guard<std::mutex> lock(state_mutex);
     for (ghand::GHand* hand : hands) {
-      const auto it = joints_by_hand.find(hand->slave_index());
+      const auto it = joints_by_hand.find(hand->GetSlaveIndex());
       if (it == joints_by_hand.end() || it->second.empty()) {
-        std::cout << "  slave " << hand->slave_index() << ": no feedback yet\n";
+        std::cout << "  slave " << hand->GetSlaveIndex() << ": no feedback yet\n";
         continue;
       }
-      const ghand::Joint& first = it->second.front();
-      std::cout << "  slave " << hand->slave_index() << ": "
+      const ghand::JointData& first = it->second.front();
+      std::cout << "  slave " << hand->GetSlaveIndex() << ": "
                 << it->second.size() << " joints, "
                 << ghand::ToString(first.id) << " = " << first.angle
                 << " deg\n";
@@ -139,13 +142,14 @@ int main(int argc, char* argv[]) {
 
   bool failed = false;
 
-  // A session-level call drives every hand at once, so a shared pose needs no
-  // loop at all.
+  // Send the shared pose to each hand.
   std::cout << "\nMove the hands to a light grasp pose...\n";
-  const auto grasp_result = master->MoveJoints(BuildPose(25.0f, 35.0f));
-  if (!grasp_result) {
-    std::cerr << "Grasp command failed: " << grasp_result.message << '\n';
-    failed = true;
+  for (auto* hand : hands) {
+    const auto grasp_result = hand->MoveJoints(BuildPose(25.0f, 35.0f));
+    if (!grasp_result) {
+      std::cerr << "Grasp command failed: " << grasp_result.message << '\n';
+      failed = true;
+    }
   }
   std::this_thread::sleep_for(std::chrono::seconds(2));
   print_feedback();
@@ -153,12 +157,12 @@ int main(int argc, char* argv[]) {
   // A pose that differs per hand is sent hand by hand.
   std::cout << "Mirror the index/middle finger pose...\n";
   for (ghand::GHand* hand : hands) {
-    const bool is_left = hand->hand_type() == ghand::HandType::LEFT;
+    const bool is_left = hand->GetHandType() == ghand::HandType::LEFT_HAND;
     const auto result = hand->MoveJoints(
         is_left ? BuildPose(45.0f, 60.0f) : BuildPose(10.0f, 15.0f));
     if (!result) {
       std::cerr << "Mirror command failed on slave 0x" << std::hex
-                << hand->slave_index() << std::dec << ": " << result.message
+                << hand->GetSlaveIndex() << std::dec << ": " << result.message
                 << '\n';
       failed = true;
     }
@@ -167,18 +171,22 @@ int main(int argc, char* argv[]) {
   print_feedback();
 
   std::cout << "Reset the hands...\n";
-  const auto reset_result = master->MoveJoints(BuildPose(0.0f, 0.0f));
-  if (!reset_result) {
-    std::cerr << "Reset command failed: " << reset_result.message << '\n';
-    failed = true;
+  for (auto* hand : hands) {
+    const auto reset_result = hand->MoveJoints(BuildPose(0.0f, 0.0f));
+    if (!reset_result) {
+      std::cerr << "Reset command failed: " << reset_result.message << '\n';
+      failed = true;
+    }
   }
   std::this_thread::sleep_for(std::chrono::seconds(1));
   print_feedback();
 
-  const auto stop_result = master->Stop();
-  if (!stop_result) {
-    std::cerr << "Stop failed: " << stop_result.message << '\n';
-    failed = true;
+  for (auto* hand : hands) {
+    const auto stop_result = hand->Stop();
+    if (!stop_result) {
+      std::cerr << "Stop failed: " << stop_result.message << '\n';
+      failed = true;
+    }
   }
   const auto disconnected = master->Disconnect();
   if (!disconnected) {

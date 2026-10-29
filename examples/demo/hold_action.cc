@@ -11,49 +11,49 @@
 // Hold pose
 std::vector<ghand::JointCommand> MakeHoldPose() {
   return {
-      {ghand::JointId::THUMB_MCP, 10.0f, 100, 100},
-      {ghand::JointId::THUMB_TMC_FE, 25.0f, 100, 100},
-      {ghand::JointId::THUMB_TMC_AA, 30.0f, 100, 100},
-      {ghand::JointId::THUMB_TMC_PS, 0.0f, 100, 100},
-      {ghand::JointId::FF_PIP, 70.0f, 100, 100},
-      {ghand::JointId::FF_MCP, 65.0f, 100, 100},
-      {ghand::JointId::FF_MCP_AA, 0.0f, 100, 100},
-      {ghand::JointId::MF_PIP, 70.0f, 100, 100},
-      {ghand::JointId::MF_MCP, 65.0f, 100, 100},
-      {ghand::JointId::RF_PIP, 70.0f, 100, 100},
-      {ghand::JointId::RF_MCP, 60.0f, 100, 100},
-      {ghand::JointId::LF_PIP, 70.0f, 100, 100},
-      {ghand::JointId::LF_MCP, 65.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 10.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 25.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 30.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 70.0f, 100, 100},
+      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 65.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 70.0f, 100, 100},
+      {ghand::JointId::MF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 65.0f, 100, 100},
+      {ghand::JointId::RF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 70.0f, 100, 100},
+      {ghand::JointId::RF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 60.0f, 100, 100},
+      {ghand::JointId::LF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 70.0f, 100, 100},
+      {ghand::JointId::LF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 65.0f, 100, 100},
   };
 }
 
 // Open hand pose
 std::vector<ghand::JointCommand> MakeOpenHand() {
   return {
-      {ghand::JointId::THUMB_MCP, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_TMC_FE, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_TMC_AA, 20.0f, 100, 100},
-      {ghand::JointId::THUMB_TMC_PS, 0.0f, 100, 100},
-      {ghand::JointId::FF_PIP, 0.0f, 100, 100},
-      {ghand::JointId::FF_MCP, 0.0f, 100, 100},
-      {ghand::JointId::FF_MCP_AA, 0.0f, 100, 100},
-      {ghand::JointId::MF_PIP, 0.0f, 100, 100},
-      {ghand::JointId::MF_MCP, 0.0f, 100, 100},
-      {ghand::JointId::RF_PIP, 0.0f, 100, 100},
-      {ghand::JointId::RF_MCP, 0.0f, 100, 100},
-      {ghand::JointId::LF_PIP, 0.0f, 100, 100},
-      {ghand::JointId::LF_MCP, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 20.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::MF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::RF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::RF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::LF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::LF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
   };
 }
 
-bool Hold(ghand::Master& master) {
+bool Hold(ghand::GHand& hand) {
   auto joints = MakeHoldPose();
-  return master.MoveJoints(joints);
+  return hand.MoveJoints(joints);
 }
 
-bool ResetToOpenHand(ghand::Master& master) {
+bool ResetToOpenHand(ghand::GHand& hand) {
   auto joints = MakeOpenHand();
-  return master.MoveJoints(joints);
+  return hand.MoveJoints(joints);
 }
 
 int main() {
@@ -71,6 +71,7 @@ int main() {
               << '\n';
     return 1;
   }
+  auto* hand = connected.value.front();
   std::cout << "\n--- Device ready, starting hold demo ---\n";
   std::cout << "Press Ctrl+C to stop demo and exit\n\n";
 
@@ -80,14 +81,14 @@ int main() {
     ++round;
     std::cout << "\n--- Round " << round << " demo started ---\n";
 
-    if (!Hold(*master)) {
+    if (!Hold(*hand)) {
       std::cerr << "Round " << round << " hold action execution failed\n";
       failed = true;
       break;
     }
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
-    if (!ResetToOpenHand(*master)) {
+    if (!ResetToOpenHand(*hand)) {
       std::cerr << "Round " << round << " reset action execution failed\n";
       failed = true;
       break;
@@ -98,7 +99,7 @@ int main() {
   }
 
   if (failed) {
-    const auto stopped = master->Stop();
+    const auto stopped = hand->Stop();
     if (!stopped) {
       std::cerr << "Stop failed: " << stopped.message << '\n';
     }

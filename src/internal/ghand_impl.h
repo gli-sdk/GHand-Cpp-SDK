@@ -58,10 +58,6 @@ class GHandImpl {
   Result SetSlaveId(uint16_t slave_index, uint8_t new_slave_id);
   Result SetBaudrateConfig(uint16_t slave_index, RS485BaudRate baud_rate);
   Result SetBaudrateConfig(uint16_t slave_index, CANFDBitTiming timing);
-  Result PrepareCANFDBaudrateListener(const std::string& device_name,
-                                      CANFDBitTiming timing);
-  DeviceInfo GetLastDeviceInfo() const { return device_info_; }
-  Diagnostics GetDiagnostics() const;
 
   // Device info
   std::map<std::string, std::string> SearchAdapters() const;
@@ -70,10 +66,10 @@ class GHandImpl {
 
   // Control operations
   Result MoveJoints(uint16_t slave_index,
-                    const std::vector<JointCommand>& joints, ControlMode mode);
+                    const std::vector<JointCommand>& joints, HandControlMode mode);
   Result Stop(uint16_t slave_index);
   Result DisableHand(uint16_t slave_index);
-  ResultOf<HandStateMachine> GetHandStateMachine(uint16_t slave_index);
+  ResultOf<HandRuntimeState> GetHandStateMachine(uint16_t slave_index);
   ResultOf<std::map<JointId, uint8_t>> GetStallTolerances(uint16_t slave_index);
   Result SetStallTolerances(uint16_t slave_index, const std::map<JointId, uint8_t>& values);
   ResultOf<std::vector<uint16_t>> GetPidParameters(uint16_t slave_index);
@@ -88,22 +84,23 @@ class GHandImpl {
   // Callback registration (one slot per hand)
   void SetJointsCallback(
       uint16_t slave_index,
-      std::function<void(const std::vector<Joint>& joints)> cb);
+      std::function<void(const std::vector<JointData>& joints)> cb);
   void SetHandStateCallback(
       uint16_t slave_index,
-      std::function<void(const HandState& state)> cb);
+      std::function<void(const HandData& state)> cb);
   void SetTactileDataCallback(
       uint16_t slave_index,
-      std::function<void(const TactileData& data)> cb);
+      std::function<void(const std::map<TactileSensorId, TactileData>& data)> cb);
 
   // Data polling
-  ResultOf<HandState> GetHandData(uint16_t slave_index) const;
-  ResultOf<std::vector<Joint>> GetJointsData(uint16_t slave_index) const;
-  ResultOf<TactileData> GetTactileData(uint16_t slave_index) const;
+  ResultOf<HandData> GetHandData(uint16_t slave_index) const;
+  ResultOf<std::vector<JointData>> GetJointsData(uint16_t slave_index) const;
+  ResultOf<std::map<TactileSensorId, TactileData>> GetTactileData(uint16_t slave_index) const;
 
 
   // Firmware update
   FirmwareUpdateError BootUpdate(
+      uint16_t slave_index,
       const std::string& filename,
       std::function<void(int)> progress_callback);
 

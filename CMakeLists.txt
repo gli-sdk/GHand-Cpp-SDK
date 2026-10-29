@@ -175,6 +175,26 @@ if(MSVC)
     )
 endif()
 
+# Hardware-free protocol and public type regression checks.
+option(GHAND_BUILD_TESTS "Build hardware-free SDK regression tests" OFF)
+if(GHAND_BUILD_TESTS)
+    enable_testing()
+    set(TEST_SOURCES ${SOURCES})
+    list(REMOVE_ITEM TEST_SOURCES src/comm/ethercat_comm.cc src/comm/canfd_driver_zlg.cc)
+    add_executable(protocol_regression tests/protocol_regression_test.cc ${TEST_SOURCES})
+    target_compile_definitions(protocol_regression PRIVATE GHAND_BUILD)
+    target_include_directories(protocol_regression PRIVATE
+        include src/comm src/internal ${DEPS_INCLUDE_DIR} ${SOEM_PLATFORM_INCLUDE_DIR}
+        ${LIBMODBUS_INCLUDE_DIRS} $<$<BOOL:${WIN32}>:${WPCAP_INCLUDE_DIR}>)
+    target_link_libraries(protocol_regression PRIVATE
+        ${SOEM_LIBRARY} $<$<BOOL:${WIN32}>:${WPCAP_LIBRARY}>
+        $<$<BOOL:${WIN32}>:${PACKET_LIBRARY}> $<$<BOOL:${WIN32}>:winmm>
+        $<$<BOOL:${WIN32}>:ws2_32> $<$<BOOL:${WIN32}>:setupapi>
+        $<$<BOOL:${UNIX}>:Threads::Threads> $<$<BOOL:${UNIX}>:dl>)
+    add_test(NAME protocol_regression COMMAND protocol_regression)
+    set_tests_properties(protocol_regression PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+endif()
+
 # ========== Runtime DLLs ==========
 set(RUNTIME_DLLS)
 

@@ -10,7 +10,7 @@
 #include "ghand/ghand.h"
 
 // Print a short subset of the feedback so the sample output stays readable.
-void PrintJointStates(const std::vector<ghand::Joint>& joints) {
+void PrintJointStates(const std::vector<ghand::JointData>& joints) {
   for (const auto& joint : joints) {
     if (joint.id != ghand::JointId::THUMB_MCP &&
         joint.id != ghand::JointId::FF_PIP &&
@@ -50,20 +50,22 @@ int main() {
   // closes the fingers and negative opens them. This demo drives the thumb
   // and the PIP/MCP joints of the four fingers.
   std::vector<ghand::JointCommand> joints = {
-      {ghand::JointId::THUMB_MCP, 0.0f, 10, 10},
-      {ghand::JointId::THUMB_TMC_FE, 0.0f, 10, 10},
-      {ghand::JointId::FF_PIP, 0.0f, 10, 10},
-      {ghand::JointId::FF_MCP, 0.0f, 10, 10},
-      {ghand::JointId::MF_PIP, 0.0f, 10, 10},
-      {ghand::JointId::MF_MCP, 0.0f, 10, 10},
-      {ghand::JointId::RF_PIP, 0.0f, 10, 10},
-      {ghand::JointId::RF_MCP, 0.0f, 10, 10},
-      {ghand::JointId::LF_PIP, 0.0f, 10, 10},
-      {ghand::JointId::LF_MCP, 0.0f, 10, 10},
+      {ghand::JointId::THUMB_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 10, 10},
+      {ghand::JointId::THUMB_TMC_FE, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 10, 10},
+      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 10, 10},
+      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 10, 10},
+      {ghand::JointId::MF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 10, 10},
+      {ghand::JointId::MF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 10, 10},
+      {ghand::JointId::RF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 10, 10},
+      {ghand::JointId::RF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 10, 10},
+      {ghand::JointId::LF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 10, 10},
+      {ghand::JointId::LF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 10, 10},
   };
 
+  for (auto& joint : joints) joint.control_mode = ghand::JointControlMode::VELOCITY;
+
   std::cout << "Closing fingers (speed=10)..." << '\n';
-  const auto close_result = hand->MoveJoints(joints, ghand::ControlMode::SPEED);
+  const auto close_result = hand->MoveJoints(joints, ghand::HandControlMode::VELOCITY);
   if (!close_result) {
     std::cerr << "Failed to send speed command: " << close_result.message
               << '\n';
@@ -84,7 +86,7 @@ int main() {
   }
 
   std::cout << "Opening fingers (speed=-10)..." << '\n';
-  const auto open_result = hand->MoveJoints(joints, ghand::ControlMode::SPEED);
+  const auto open_result = hand->MoveJoints(joints, ghand::HandControlMode::VELOCITY);
   if (!open_result) {
     std::cerr << "Failed to send speed command: " << open_result.message
               << '\n';

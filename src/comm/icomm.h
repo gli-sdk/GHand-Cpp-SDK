@@ -17,11 +17,11 @@ namespace ghand {
 namespace internal {
 
 using JointsCallback =
-    std::function<void(std::uint16_t slave, const std::vector<Joint>&)>;
+    std::function<void(std::uint16_t slave, const std::vector<JointData>&)>;
 using HandStateCallback =
-    std::function<void(std::uint16_t slave, const HandState&)>;
+    std::function<void(std::uint16_t slave, const HandData&, HandRuntimeState)>;
 using TactileDataCallback =
-    std::function<void(std::uint16_t slave, const TactileData&)>;
+    std::function<void(std::uint16_t slave, const std::map<TactileSensorId, TactileData>&)>;
 
 // One hand found on the bus. Internal: the public API exposes hands as GHand
 // objects instead.
@@ -64,12 +64,6 @@ class IComm {
   virtual bool SetSlaveId(uint16_t slave_index, uint8_t new_slave_id) = 0;
   virtual bool SetBaudrateConfig(uint16_t slave_index,
                                  uint8_t baudrate_gear) = 0;
-  virtual bool PrepareBaudrateListener(const std::string& device_name,
-                                       uint8_t baudrate_gear) {
-    return false;
-  }
-  virtual Diagnostics GetDiagnostics() const { return Diagnostics(); }
-
   // Device info
   virtual DeviceInfo GetDeviceInfo(uint16_t slave_index) = 0;
   virtual HandType GetHandType(uint16_t slave_index) = 0;
@@ -82,12 +76,12 @@ class IComm {
   // addressed operations. Reads require one nonzero hand identifier.
   virtual bool MoveJoints(uint16_t slave_index,
                           const std::vector<JointCommand>& joints,
-                          ControlMode mode) = 0;
+                          HandControlMode mode) = 0;
   virtual bool Stop(uint16_t slave_index) = 0;
 
   virtual bool DisableHand(uint16_t slave_index) { return false; }
 
-  virtual bool GetHandStateMachine(uint16_t slave_index, HandStateMachine* value) { return false; }
+  virtual bool GetHandStateMachine(uint16_t slave_index, HandRuntimeState* value) { return false; }
 
   virtual bool GetStallTolerances(uint16_t slave_index, std::map<JointId, uint8_t>* value) { return false; }
 

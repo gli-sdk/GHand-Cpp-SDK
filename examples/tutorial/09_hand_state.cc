@@ -15,24 +15,22 @@
 
 namespace {
 
-const char* ToString(ghand::HandStateMachine state) {
+const char* ToString(ghand::HandRuntimeState state) {
   switch (state) {
-    case ghand::HandStateMachine::INITIALIZED:
+    case ghand::HandRuntimeState::INITIALIZED:
       return "INITIALIZED";
-    case ghand::HandStateMachine::POWER_ON_SELF_TEST:
+    case ghand::HandRuntimeState::POWER_ON_SELF_TEST:
       return "POWER_ON_SELF_TEST";
-    case ghand::HandStateMachine::IDLE:
+    case ghand::HandRuntimeState::IDLE:
       return "IDLE";
-    case ghand::HandStateMachine::MOVING:
+    case ghand::HandRuntimeState::MOVING:
       return "MOVING";
-    case ghand::HandStateMachine::FAULT:
+    case ghand::HandRuntimeState::FAULT:
       return "FAULT";
-    case ghand::HandStateMachine::LOW_POWER:
+    case ghand::HandRuntimeState::LOW_POWER:
       return "LOW_POWER";
-    case ghand::HandStateMachine::FIRMWARE_UPGRADE:
+    case ghand::HandRuntimeState::FIRMWARE_UPGRADE:
       return "FIRMWARE_UPGRADE";
-    case ghand::HandStateMachine::UNKNOWN_STATE:
-      return "UNKNOWN_STATE";
   }
   return "UNKNOWN_STATE";
 }
@@ -54,14 +52,17 @@ int main() {
   }
 
   for (ghand::GHand* hand : connected.value) {
-    const uint16_t index = hand->slave_index();
-    hand->SetHandStateCallback([index](const ghand::HandState& state) {
-      std::cout << "Slave " << index << ": " << ghand::ToString(state) << '\n';
+    const uint16_t index = hand->GetSlaveIndex();
+    hand->SetHandStateCallback([index](const ghand::HandData& state) {
+      std::cout << "Slave " << index << ": " << ghand::ToString(state.joints_state) << '\n';
     });
     hand->SetJointsCallback(
-        [index](const std::vector<ghand::Joint>& joints) {
+        [index](const std::vector<ghand::JointData>& joints) {
           for (const auto& joint : joints) {
-            std::cout << "Slave " << index << ": " << ghand::ToString(joint)
+            std::cout << "Slave " << index << ": " << ghand::ToString(joint.id)
+                      << ": state=" << ghand::ToString(joint.state)
+                      << ", error=" << ghand::ToString(joint.error)
+                      << ", angle=" << joint.angle
                       << '\n';
           }
         });
