@@ -21,11 +21,24 @@ deps/
       Packet.lib
     linux/
       libsoem.a
+  qt/
+    windows/
+      msvc2022_64/    # Qt 6.9.1 runtime DLLs/plugins, Release only
 ```
 
 The Windows dependency set is included in this repository. Linux builds use the
 bundled SOEM static library and the system `libmodbus` development package
 discovered through pkg-config.
+
+The optional tactile display is built against a local Qt 6 Widgets development
+installation (`-DGHAND_BUILD_TACTILE_DISPLAY=ON`, CMake 3.22+ and MSVC 2022);
+pass `CMAKE_PREFIX_PATH` when Qt is not on the default search path. CMake copies
+the found runtime DLLs and plugins next to the GUI examples and tests.
+`deps/qt/` contains only the Qt 6.9.1 Windows x64 runtime (Core/Gui/Widgets DLLs,
+window/offscreen/style plugins) for redistributing or running the examples on
+machines without Qt; it is Release-only. Linux uses its own Qt development
+installation.
+See [qt/README.md](qt/README.md) for provenance and licensing.
 
 ## Third-Party Licensing
 

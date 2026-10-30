@@ -7,6 +7,8 @@ include(CMakePackageConfigHelpers)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(GHAND_BUILD_TACTILE_DISPLAY "Build the optional Qt 6 tactile display" OFF)
+
 # Windows-specific compile options
 if(WIN32)
     add_compile_definitions(_WIN32)

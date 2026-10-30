@@ -45,9 +45,31 @@ add_ghand_example(connect_hands tutorial/11_connect_hands.cc)
 add_ghand_example(mit_control tutorial/13_mit_control.cc)
 add_ghand_example(custom_control tutorial/14_custom_control.cc)
 
-option(GHAND_BUILD_TACTILE_DISPLAY "Build the optional Qt 6 tactile display" OFF)
 if(GHAND_BUILD_TACTILE_DISPLAY)
     find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets)
+    get_filename_component(GHAND_QT_ROOT "${Qt6_DIR}/../../.." ABSOLUTE)
+
+    function(deploy_ghand_qt target_name)
+        if(WIN32)
+            foreach(module Core Gui Widgets)
+                add_custom_command(TARGET ${target_name} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "$<TARGET_FILE:Qt6::${module}>" "$<TARGET_FILE_DIR:${target_name}>")
+            endforeach()
+            foreach(plugin qwindows qoffscreen)
+                add_custom_command(TARGET ${target_name} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target_name}>/platforms"
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${GHAND_QT_ROOT}/plugins/platforms/${plugin}$<$<CONFIG:Debug>:d>.dll"
+                        "$<TARGET_FILE_DIR:${target_name}>/platforms")
+            endforeach()
+            add_custom_command(TARGET ${target_name} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target_name}>/styles"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${GHAND_QT_ROOT}/plugins/styles/qmodernwindowsstyle$<$<CONFIG:Debug>:d>.dll"
+                    "$<TARGET_FILE_DIR:${target_name}>/styles")
+        endif()
+    endfunction()
     add_library(ghand_tactile_display STATIC
         ../src/tactile_display/tactile_display.cc
         ../src/tactile_display/tactile_widgets.cc
@@ -58,11 +80,13 @@ if(GHAND_BUILD_TACTILE_DISPLAY)
     target_link_libraries(ghand_tactile_display PUBLIC ghand Qt6::Widgets)
     add_ghand_example(tactile_display tutorial/15_tactile_display.cc)
     target_link_libraries(tactile_display ghand_tactile_display)
+    deploy_ghand_qt(tactile_display)
     if(GHAND_BUILD_TESTS)
         add_ghand_example(tactile_display_test ../tests/tactile_display_test.cc)
         target_include_directories(tactile_display_test PRIVATE ${PROJECT_SOURCE_DIR}/src)
         target_compile_features(tactile_display_test PRIVATE cxx_std_17)
         target_link_libraries(tactile_display_test ghand_tactile_display)
+        deploy_ghand_qt(tactile_display_test)
         add_test(NAME tactile_display_test COMMAND tactile_display_test)
         set_tests_properties(tactile_display_test PROPERTIES
             ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 10)

@@ -87,6 +87,16 @@ dependency set.
 | [libmodbus](https://github.com/stephane/libmodbus) | 3.1.12 | Modbus RTU/RS485 support | LGPL-2.1-or-later | Dynamically linked |
 | [nlohmann/json](https://github.com/nlohmann/json) | bundled header | JSON parsing | MIT | Header-only |
 | WinPcap | Developer Pack components | Packet capture (Windows EtherCAT) | WinPcap BSD-style license and incorporated notices | Headers and import libraries |
+| Qt | 6.9.1 (Windows x64 / MSVC 2022) | Optional tactile display | Upstream component terms, see `deps/qt/` | Dynamic linking; Windows runtime DLLs and plugins bundled, builds use a local Qt installation |
+
+The Windows Qt runtime (Core/Gui/Widgets DLLs, window/offscreen/style plugins) is
+bundled under `deps/qt/windows/msvc2022_64/` and matches the GHand GUI deployment.
+Building the GUI requires a local Qt 6.2+ (6.9.1 recommended) Widgets development
+installation; pass `CMAKE_PREFIX_PATH` when Qt is not on the default search path.
+The bundled runtime is Release-only; Debug GUI builds should use a local Qt
+installation that includes debug binaries. GUI builds require CMake 3.22+ and
+MSVC 2022 x64/C++17; the core SDK remains C++11. Linux uses a local Qt
+development installation rather than the Windows runtime.
 
 ### System Libraries (Linux only)
 - libssl-dev
@@ -215,16 +225,21 @@ including disabled joints. Check feedback after sending and disable the hand bef
 
 ### Qt tactile display
 
-Enable the optional Qt 6.2+ Widgets target (C++17 for GUI targets only):
+On Windows, install Qt 6.2+ (6.9.1 recommended) Widgets development components and
+set `CMAKE_PREFIX_PATH` if Qt is not on the default search path. CMake copies the
+runtime DLLs and platform plugins of the found Qt next to the example; the bundled
+`deps/qt/` runtime can instead be copied to machines without Qt:
 
 ```powershell
-cmake -S . -B build -DGHAND_BUILD_TACTILE_DISPLAY=ON -DCMAKE_PREFIX_PATH=C:/Qt/6.9.1/msvc2022_64
+cmake -S . -B build -A x64 -DGHAND_BUILD_TACTILE_DISPLAY=ON -DCMAKE_PREFIX_PATH=C:/Qt/6.9.1/msvc2022_64
 cmake --build build --config Release --target tactile_display mit_control custom_control
-C:/Qt/6.9.1/msvc2022_64/bin/windeployqt.exe build/examples/Release/tactile_display.exe
 ./build/examples/Release/tactile_display.exe --preview
 ```
 
-On Linux, use your Qt prefix and `./build/examples/tactile_display --preview`.
+On Linux, install Qt 6.2+ Widgets development components, specify `CMAKE_PREFIX_PATH`
+if needed, and run `./build/examples/tactile_display --preview`. Build directories
+that cached the removed bundled Qt development kit or another Qt path must be
+configured anew (or have their `Qt6*_DIR` cache entries cleared).
 Without `--preview`, the example connects GHand5 over EtherCAT (`auto`). Edit the
 connection settings for other transports. The Tactile switch starts acquisition;
 zero with unloaded sensors. The Python layout is retained: a 1600×1000 black window,
@@ -241,7 +256,7 @@ destroyed. The widget exclusively uses its tactile callback slot and closes tact
 acquisition and joins its worker on shutdown. It sends no motion commands.
 Qt is not required by the default build. Enable `GHAND_BUILD_TESTS` for hardware-free
 checks using `ctest --test-dir build -C Release --output-on-failure`; on Windows,
-put Qt's `bin` on `PATH` and point `QT_QPA_PLATFORM_PLUGIN_PATH` to Qt's `plugins`.
+the required Qt DLLs and offscreen plugin are copied automatically.
 
 Action demos, including `preset_gesture`, `gesture_dance` and `clap_pose`, are in
 [`examples/demo/`](examples/demo/).

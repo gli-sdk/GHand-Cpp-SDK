@@ -85,6 +85,13 @@ Linux 构建通过 pkg-config 使用系统 `libmodbus` 开发包；`libmodbus.so
 | [libmodbus](https://github.com/stephane/libmodbus) | 3.1.12 | Modbus RTU/RS485 支持 | LGPL-2.1-or-later | 动态链接 |
 | [nlohmann/json](https://github.com/nlohmann/json) | 随附头文件 | JSON 解析 | MIT | Header-only |
 | WinPcap | Developer Pack 组件 | 数据包捕获（Windows EtherCAT） | WinPcap BSD 风格许可证及附带声明 | 头文件与导入库 |
+| Qt | 6.9.1（Windows x64 / MSVC 2022） | 可选触觉显示界面 | 按组件保留上游许可，见 `deps/qt/` | 动态链接；随附 Windows 运行 DLL 与插件，构建使用本机 Qt |
+
+Windows 的 Qt 运行库（Core/Gui/Widgets DLL、窗口/离屏/样式插件）位于 `deps/qt/windows/msvc2022_64/`，与 GHand GUI 部署保持一致。
+构建界面需要本机安装 Qt 6.2+（推荐 6.9.1）Widgets 开发组件，Qt 不在默认搜索路径时通过 `CMAKE_PREFIX_PATH` 指定。
+随附运行库仅为 Release；Debug 界面构建请使用带 Debug 库的本机 Qt。
+启用界面需要 CMake 3.22+ 和 MSVC 2022 x64/C++17；核心 SDK 仍使用 C++11。
+Linux 的 Qt 需由本机开发环境提供，仓库中不混用 Windows 二进制。
 
 ### 系统库（仅 Linux）
 - libssl-dev
@@ -212,16 +219,17 @@ CUSTOM 同一手指仲裁组内的控制模式和反馈环必须一致，禁用�
 
 ### Qt 触觉显示
 
-安装 Qt 6.2 或更高版本的 Widgets 开发组件后，启用可选构建（仅界面目标使用 C++17）：
+Windows 需安装 Qt 6.2+（推荐 6.9.1）Widgets 开发组件，Qt 不在默认搜索路径时通过 `CMAKE_PREFIX_PATH` 指定。
+CMake 会将找到的运行库与平台插件复制到示例目录；未安装 Qt 的机器可直接使用仓库随附的 `deps/qt/` 运行库：
 
 ```powershell
-cmake -S . -B build -DGHAND_BUILD_TACTILE_DISPLAY=ON -DCMAKE_PREFIX_PATH=C:/Qt/6.9.1/msvc2022_64
+cmake -S . -B build -A x64 -DGHAND_BUILD_TACTILE_DISPLAY=ON -DCMAKE_PREFIX_PATH=C:/Qt/6.9.1/msvc2022_64
 cmake --build build --config Release --target tactile_display mit_control custom_control
-C:/Qt/6.9.1/msvc2022_64/bin/windeployqt.exe build/examples/Release/tactile_display.exe
 ./build/examples/Release/tactile_display.exe --preview
 ```
 
-Linux 将 `CMAKE_PREFIX_PATH` 换为本机 Qt 路径，使用 `./build/examples/tactile_display --preview`。
+Linux 安装 Qt 6.2+ Widgets 开发组件，必要时通过 `CMAKE_PREFIX_PATH` 指定路径，使用 `./build/examples/tactile_display --preview`。
+缓存了已移除的随附 Qt 开发包或其他 Qt 路径的构建目录，请重新创建构建目录，或清除旧的 `Qt6*_DIR` 缓存后重新配置。
 省略 `--preview` 会连接 GHand5 EtherCAT（`auto`）；其他通信方式请修改教程中的创建/连接参数。
 窗口打开后使用 Tactile 开关开始采集，卸载传感器负载后点击 Zero Tactile 归零。
 界面沿用 Python 的 1600×1000 黑色布局：左侧显示整手图与底部五指触点图，右侧纵向排列五组 Fx/Fy/Fz 曲线。
@@ -234,7 +242,7 @@ Linux 将 `CMAKE_PREFIX_PATH` 换为本机 Qt 路径，使用 `./build/examples/
 调用方拥有连接并保证 `GHand` 比窗口存活更久；窗口独占该手的触觉回调槽，关闭窗口会注销回调、
 关闭触觉并回收工作线程，连接由调用方断开。界面不会发送运动指令。
 默认构建不依赖 Qt。无硬件验证可启用 `GHAND_BUILD_TESTS` 后运行 `ctest --test-dir build -C Release --output-on-failure`；
-Windows 运行测试前需将 Qt 的 `bin` 加入 `PATH` 并设置 `QT_QPA_PLATFORM_PLUGIN_PATH` 指向 Qt 的 `plugins`。
+Windows 测试所需的 Qt DLL 与离屏插件也会自动复制。
 
 `preset_gesture`、`gesture_dance`、`clap_pose` 等动作示例位于
 [`examples/demo/`](examples/demo/)。
