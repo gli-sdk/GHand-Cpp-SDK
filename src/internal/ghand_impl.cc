@@ -422,12 +422,40 @@ Result GHandImpl::MoveJoints(uint16_t slave_index, const std::vector<JointComman
         if (effective == HandControlMode::CUSTOM)
           effective = static_cast<HandControlMode>(mode_value & 0x0F);
         ClampJointAngle(limited);
-        int speed = limited.velocity;
-        int current = limited.current;
-        limited.velocity = static_cast<int16_t>(effective == HandControlMode::VELOCITY
-            ? std::max(-100, std::min(100, speed)) : std::min(100, std::abs(speed)));
-        limited.current = static_cast<int16_t>(effective == HandControlMode::CURRENT
-            ? std::max(-100, std::min(100, current)) : std::min(100, std::abs(current)));
+        const int speed = limited.velocity;
+        const int current = limited.current;
+        if (effective == HandControlMode::VELOCITY ||
+            effective == HandControlMode::MIT) {
+          limited.velocity = static_cast<int16_t>(
+              std::max(-100, std::min(100, speed)));
+        } else if (effective != HandControlMode::CURRENT) {
+          limited.velocity =
+              static_cast<int16_t>(std::min(100, std::abs(speed)));
+        }
+        if (effective == HandControlMode::CURRENT ||
+            effective == HandControlMode::MIT) {
+          limited.current = static_cast<int16_t>(
+              std::max(-100, std::min(100, current)));
+        } else {
+          limited.current =
+              static_cast<int16_t>(std::min(100, std::abs(current)));
+        }
+        if (effective == HandControlMode::MIT) {
+          const int kp =
+              std::max(10, std::min(2000, static_cast<int>(limited.kp)));
+          const int kd = std::max(
+              0, std::min(50,
+                          std::min(kp - 1, static_cast<int>(limited.kd))));
+          if (kp != limited.kp || kd != limited.kd) {
+            GHAND_LOG_WARNING("[Joint] "
+                              << ToString(limited.id)
+                              << " MIT gains adjusted from kp=" << limited.kp
+                              << ", kd=" << limited.kd << " to kp=" << kp
+                              << ", kd=" << kd);
+          }
+          limited.kp = static_cast<int16_t>(kp);
+          limited.kd = static_cast<int16_t>(kd);
+        }
         ordered_joints.push_back(limited);
         break;
       }
@@ -652,7 +680,10 @@ Result GHandImpl::SetStallTolerances(uint16_t slave_index, const std::map<JointI
 ResultOf<std::vector<uint16_t>> GHandImpl::GetPidParameters(uint16_t slave_index) {
   if (!IsConnected()) return {SdkError::NOT_CONNECTED, "device is not connected"};
   if (slave_index == 0) return {SdkError::INVALID_ARGUMENT, "one hand must be selected"};
-  if (comm_type_ != CommType::ETHERCAT) return {SdkError::NOT_SUPPORTED, "parameter access requires EtherCAT"};
+  if (comm_type_ != CommType::ETHERCAT &&
+      config_.product_type != ProductType::GHand5)
+    return {SdkError::NOT_SUPPORTED,
+            "parameter access requires GHand5 or EtherCAT"};
   std::vector<uint16_t> value{};
   if (!comm_->GetPidParameters(slave_index, &value)) return {SdkError::DEVICE_REJECTED, "GetPidParameters failed"};
   return value;
@@ -661,7 +692,10 @@ ResultOf<std::vector<uint16_t>> GHandImpl::GetPidParameters(uint16_t slave_index
 Result GHandImpl::SetPidParameters(uint16_t slave_index, const std::vector<uint16_t>& values) {
   if (!IsConnected()) return {SdkError::NOT_CONNECTED, "device is not connected"};
   if (slave_index == 0) return {SdkError::INVALID_ARGUMENT, "one hand must be selected"};
-  if (comm_type_ != CommType::ETHERCAT) return {SdkError::NOT_SUPPORTED, "parameter access requires EtherCAT"};
+  if (comm_type_ != CommType::ETHERCAT &&
+      config_.product_type != ProductType::GHand5)
+    return {SdkError::NOT_SUPPORTED,
+            "parameter access requires GHand5 or EtherCAT"};
   if (!comm_->SetPidParameters(slave_index, values)) return {SdkError::DEVICE_REJECTED, "SetPidParameters failed"};
   return {};
 }

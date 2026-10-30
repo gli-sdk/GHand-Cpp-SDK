@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-30
+
 ### Added
+- Added MIT and CUSTOM tutorials (`13_mit_control.cc`, `14_custom_control.cc`) covering compliant grasping, tactile contact detection, per-finger mode consistency, feedback and explicit drive disabling.
+- Added the optional Qt 6 tactile display and tutorial (`15_tactile_display.cc`), with Python-aligned hand images, left/right hand detection, five finger maps, force markers, Fz bars, point tooltips, tactile switching and zeroing.
+- Added 60-second timestamped XYZ force history with 50 Hz callback coalescing, missing-data gaps, stale-subscription rejection and embedded Qt image resources. GUI targets use C++17; the core SDK remains C++11.
+- Added hardware-free tactile acquisition, resource and window lifecycle checks, plus `--preview` for viewing the interface without connecting hardware.
 - Added a numbered tutorial sequence covering position, velocity and current control, tactile callbacks, multi-hand and glove control, interactive joint commands, hand state feedback, CANFD bit-timing configuration, and shared-bus connection examples.
 - Integrated the new protocol with the V2.2.3 `Master` / `GHand` ownership model for same-product hands sharing an EtherCAT, CANFD, or RS485 bus.
 - Added per-hand new-protocol controls, mode state, tactile state, callbacks and feedback caches; EtherCAT routes commands and feedback by physical hand slave index, including hands behind a junction.
@@ -16,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Standardized tutorial filenames as `01_basic_connection.cc` through `11_connect_hands.cc`; executable targets keep unnumbered names. Renamed the clap demo to `clap_pose`.
 - Clarified `JointCommand` units, defaults and mode-dependent fields in `02_move_joints.cc`, with explicit position mode and command failure messages.
-- **BREAKING ABI:** Set the SDK version to 3.0.0 and SOVERSION to 3. Applications must rebuild against matching headers and libraries. Existing library base names, CMake package/target names and `SameMajorVersion` package compatibility are retained.
+- **BREAKING ABI (relative to 2.x):** Set the SDK version to 3.1.0 and SOVERSION to 3. Applications must rebuild against matching headers and libraries. Existing library base names, CMake package/target names and `SameMajorVersion` package compatibility are retained.
 - Restored V2.2.3 firmware-result polling (500 ms interval, 10 s per query) and command acknowledgment checks. Firmware updates remain limited to one EtherCAT hand at physical slave 1.
 - **BREAKING (relative to 2.2.2 and earlier):** Create a `Master` and obtain non-owning `GHand*` objects from `Connect()` or `hand()`. Results use `Result` / `ResultOf`; the single-connection `GHand::Create`, `SetControlMode` and `GetLastResult` API is replaced. Reconnect, disconnect and Master destruction invalidate old hand pointers.
 - Bus-wide commands address each discovered hand individually and attempt all hands even if one fails. New-protocol register values, PDO layouts, units, mailbox handling and control modes are preserved.
@@ -24,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING:** Under the new protocol, `SetSlaveId()` writes holding register `0x0003` and `SetBaudrateConfig()` writes holding register `0x0004` for both RS485 and CANFD (2.2.0 used `0x002C` for baud-rate configuration).
 
 ### Fixed
+- Preserve signed velocity/current targets in MIT mode and clamp MIT gains to `kp=10..2000`, `kd=0..50`, `kp>kd`, matching Python SDK semantics.
+- Read thumb and finger tactile firmware versions over RS485 and CANFD.
+- Use EtherCAT subindex 0 for serial-number and runtime-state reads, and issue the firmware read command before fetching stall tolerances and PID parameters.
 - Parse the joint stop field from Modbus feedback so `Joint::stop` reflects the received state.
 
 ### Removed
@@ -40,7 +49,7 @@ Release date is not recorded in the source branch; this entry summarizes the `V2
 - Added `SensorError` (A2 bit mask) and `JointError` (A6 bit mask), matching Python SDK `pan_fix_sn`.
 
 ### Changed
-- **BREAKING:** Aligned legacy self-test diagnostics with Python SDK `pan_fix_sn`: A0 flags are `Motor=0x01`, `Sensor=0x02`, and `Joint=0x04`; detail queries use A8, A2, and A6. `SelfTestErrorInfo` contains `summary`, `sensor`, `joint`, and `motor`. Removed legacy summary flags, `VersionCheckError`, `TactileCheckError`, `ZeroingCheckError`, and their result fields. Applications must rebuild and use firmware implementing the matching diagnostic protocol. These legacy APIs are subsequently removed in 3.0.0.
+- **BREAKING:** Aligned legacy self-test diagnostics with Python SDK `pan_fix_sn`: A0 flags are `Motor=0x01`, `Sensor=0x02`, and `Joint=0x04`; detail queries use A8, A2, and A6. `SelfTestErrorInfo` contains `summary`, `sensor`, `joint`, and `motor`. Removed legacy summary flags, `VersionCheckError`, `TactileCheckError`, `ZeroingCheckError`, and their result fields. Applications must rebuild and use firmware implementing the matching diagnostic protocol. These legacy APIs are subsequently removed in 3.1.0.
 - EtherCAT, CANFD, and RS485 self-test query failures and timeouts throw `std::runtime_error` instead of returning empty or partial diagnostics.
 
 ### Fixed

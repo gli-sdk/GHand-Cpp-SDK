@@ -629,6 +629,8 @@ DeviceInfo CANFDComm::GetDeviceInfo(uint16_t slave) {
     info.tactile_sensor_version = version(0x101B);
     info.motor_driver_version = version(0x101C);
     info.firmware_package_version = version(0x101D);
+    info.thumb_tactile_sensor_version = version(0x101E);
+    info.finger_tactile_sensor_version = version(0x101F);
   }
   return info;
 }

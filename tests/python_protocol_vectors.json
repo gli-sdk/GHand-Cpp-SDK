@@ -1,5 +1,5 @@
 {
-  "python_commit": "4fca455a0bc700531a58b8e8853cf8249b5be1d7",
+  "python_commit": "02cf410aa54bd751df47ee700e39c5cb3ba2cbf2",
   "configuration_overrides": "GHand5 FF_MCP_AA follows config/ghand5.json (-8..8). Lite1 follows the existing C++ profile: contiguous feedback, 8-byte commands, 22-byte header and 38/31 tactile counts. GHand5 V2.4 tactile frames are independently built in the test.",
   "hand_raw": [
     1,

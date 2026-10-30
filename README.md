@@ -1,5 +1,5 @@
 # GHand SDK C++
-[![Version](https://img.shields.io/badge/version-v3.0.0-blue.svg)](include/ghand/version.h)
+[![Version](https://img.shields.io/badge/version-V3.1.0-blue.svg)](include/ghand/version.h)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 [![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
@@ -13,12 +13,18 @@ C++ SDK for GHand dexterous hands, supporting EtherCAT, CANFD, and RS485 communi
 ## Features
 
 - EtherCAT, CANFD, and RS485 communication
-- Independent per-joint control for all 5 fingers (position, velocity, current, MIT)
+- Independent per-joint control for all 5 fingers (position, velocity, current, MIT and CUSTOM)
+- MIT and CUSTOM control tutorials with command feedback and explicit hand disabling
+- Optional Qt 6 tactile display aligned with Python: whole-hand view, finger maps and 60-second XYZ force plots
 - Real-time data callbacks for joint states and tactile data
 - Left and right hand device support
 - Automatic product detection via device name matching
 - Same-product left and right hands sharing a bus with independent control and feedback
 - Windows DLL and Linux shared-library builds
+
+V3.1.0 uses the `Master` / `GHand` ownership model and new-protocol command types.
+Applications upgrading from 2.x must rebuild against matching headers and libraries;
+see [CHANGELOG.md](CHANGELOG.md) for API and protocol migration details.
 
 ## Official Documentation
 
@@ -198,6 +204,44 @@ Executable names omit the numeric prefix and are defined in `examples/CMakeLists
 | [09_hand_state.cc](examples/tutorial/09_hand_state.cc) | `hand_state` | Hand state and joint feedback |
 | [10_switch_baud_rate.cc](examples/tutorial/10_switch_baud_rate.cc) | `switch_baud_rate` | CANFD bit-timing configuration |
 | [11_connect_hands.cc](examples/tutorial/11_connect_hands.cc) | `connect_hands` | Shared-bus discovery, bus-wide and per-hand commands |
+| [13_mit_control.cc](examples/tutorial/13_mit_control.cc) | `mit_control` | MIT compliant grasp with tactile contact, hold and release |
+| [14_custom_control.cc](examples/tutorial/14_custom_control.cc) | `custom_control` | Per-finger position/current modes and feedback |
+| [15_tactile_display.cc](examples/tutorial/15_tactile_display.cc) | `tactile_display` | Optional Qt 6 tactile maps, force arrows and XYZ history |
+
+The new tutorials retain the Python SDK's 13/14/15 numbering. MIT uses degrees and
+velocity/current percentages, `kp=10..2000`, `kd=0..50`, `kp>kd`; current is feed-forward.
+CUSTOM requires consistent mode/loop selection within each finger arbitration group,
+including disabled joints. Check feedback after sending and disable the hand before disconnecting.
+
+### Qt tactile display
+
+Enable the optional Qt 6.2+ Widgets target (C++17 for GUI targets only):
+
+```powershell
+cmake -S . -B build -DGHAND_BUILD_TACTILE_DISPLAY=ON -DCMAKE_PREFIX_PATH=C:/Qt/6.9.1/msvc2022_64
+cmake --build build --config Release --target tactile_display mit_control custom_control
+C:/Qt/6.9.1/msvc2022_64/bin/windeployqt.exe build/examples/Release/tactile_display.exe
+./build/examples/Release/tactile_display.exe --preview
+```
+
+On Linux, use your Qt prefix and `./build/examples/tactile_display --preview`.
+Without `--preview`, the example connects GHand5 over EtherCAT (`auto`). Edit the
+connection settings for other transports. The Tactile switch starts acquisition;
+zero with unloaded sensors. The Python layout is retained: a 1600×1000 black window,
+whole-hand view and five finger maps on the left, and five XYZ plots on the right.
+Device identity selects the left/right hand image. GHand5's 38/31/31/31/31 point
+order, image offsets, normal-force colors/glow, tangential arrows, Fz bars and
+point tooltips follow Python. Plots retain 60 seconds of timestamped history,
+coalesce callbacks into 50 Hz buckets and insert gaps after 0.5 seconds without data.
+Images are embedded with Qt resources, without a runtime dependency on Python.
+
+The reusable [display widget](src/tactile_display/) links as `ghand_tactile_display`.
+The caller owns the connection and must keep the hand alive until the widget is
+destroyed. The widget exclusively uses its tactile callback slot and closes tactile
+acquisition and joins its worker on shutdown. It sends no motion commands.
+Qt is not required by the default build. Enable `GHAND_BUILD_TESTS` for hardware-free
+checks using `ctest --test-dir build -C Release --output-on-failure`; on Windows,
+put Qt's `bin` on `PATH` and point `QT_QPA_PLATFORM_PLUGIN_PATH` to Qt's `plugins`.
 
 Action demos, including `preset_gesture`, `gesture_dance` and `clap_pose`, are in
 [`examples/demo/`](examples/demo/).

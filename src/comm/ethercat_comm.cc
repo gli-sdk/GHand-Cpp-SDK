@@ -915,8 +915,7 @@ DeviceInfo EtherCATComm::GetDeviceInfo(uint16_t slave) {
     info.device_name = ByteArrayString(bytes, size);
   }
   size = 19;
-  uint8_t serial_subindex = UsesLite1Layout(config_) ? 0 : 1;
-  if (SDORead(slave, kSdoSerialNumber, serial_subindex, &size, bytes,
+  if (SDORead(slave, kSdoSerialNumber, 0, &size, bytes,
               EC_TIMEOUTRXM) > 0) {
     info.serial_number = ParseAsciiSerialNumber(bytes, size);
   }
@@ -1343,8 +1342,7 @@ bool EtherCATComm::GetHandStateMachine(uint16_t slave, HandRuntimeState* state) 
   if (!IsConnected() || !state) return false;
   uint8_t value = 0;
   int size = 1;
-  uint8_t subindex = UsesLite1Layout(config_) ? 0 : 1;
-  if (SDORead(slave, 0x200A, subindex, &size, &value, EC_TIMEOUTRXM) <= 0 ||
+  if (SDORead(slave, 0x200A, 0, &size, &value, EC_TIMEOUTRXM) <= 0 ||
       size != 1) {
     return false;
   }
@@ -1366,6 +1364,7 @@ bool EtherCATComm::GetStallTolerances(uint16_t slave, std::map<JointId, uint8_t>
   if (slave == 0 || TargetSlaves(slave).empty()) return false;
 
   if (!IsConnected() || !values) return false;
+  if (!ExecuteSdoCommand(slave, 0x2003, 0xA2, 2, 3, 4)) return false;
   uint8_t bytes[13] = {};
   int size = 13;
   if (SDORead(slave, 0x2003, 1, &size, bytes, EC_TIMEOUTRXM) <= 0 || size != 13) return false;
@@ -1392,6 +1391,7 @@ bool EtherCATComm::GetPidParameters(uint16_t slave, std::vector<uint16_t>* value
   if (slave == 0 || TargetSlaves(slave).empty()) return false;
 
   if (!IsConnected() || !values) return false;
+  if (!ExecuteSdoCommand(slave, 0x2008, 0xA2, 2, 3, 4)) return false;
   uint8_t bytes[78] = {};
   int size = 78;
   if (SDORead(slave, 0x2008, 1, &size, bytes, EC_TIMEOUTRXM) <= 0 || size != 78) return false;
