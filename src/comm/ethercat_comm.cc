@@ -1061,9 +1061,9 @@ bool EtherCATComm::ZeroTactile(uint16_t slave) {
 namespace {
 
 std::vector<float> ParseResultantForce(const uint8_t* data) {
-  return {static_cast<int16_t>(data[0] | (data[1] << 8)) / 10.0f,
-          static_cast<int16_t>(data[2] | (data[3] << 8)) / 10.0f,
-          static_cast<int16_t>(data[4] | (data[5] << 8)) / 10.0f};
+  return {static_cast<int8_t>(data[0]) / 10.0f,
+          static_cast<int8_t>(data[2]) / 10.0f,
+          data[4] / 10.0f};
 }
 
 std::vector<float> ParseSampleForces(const uint8_t* data, int sensor_count) {

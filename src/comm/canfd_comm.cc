@@ -862,6 +862,9 @@ std::map<TactileSensorId, TactileData> CANFDComm::GetTactileData(uint16_t slave)
       GHAND_LOG_ERROR("Failed to read tactile region over CANFD");
       return data;
     }
+    // Byte arrays are stored low byte first within each Modbus register.
+    for (size_t j = 0; j + 1 < dist_bytes.size(); j += 2)
+      std::swap(dist_bytes[j], dist_bytes[j + 1]);
     rt.distributed_force = ParseTactileDistributed(
         dist_bytes.data(), dist_bytes.size(), region.sensor_count);
     current_addr += dist_regs;

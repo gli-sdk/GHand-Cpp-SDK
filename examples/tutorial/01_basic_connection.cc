@@ -7,7 +7,7 @@
 
 int main() {
   auto master = ghand::Master::Create(ghand::ProductType::GHand5,
-                                      ghand::CommType::CANFD);
+                                      ghand::CommType::ETHERCAT);
   if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return -1;

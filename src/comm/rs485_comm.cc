@@ -736,6 +736,9 @@ std::map<TactileSensorId, TactileData> RS485Comm::GetTactileData(uint16_t slave)
     if (ReadInputRegisters(slave, current_addr, dist_regs,
                                   dist_data.data()) == dist_regs) {
       std::vector<uint8_t> bytes = RegistersToBytes(dist_data);
+      // Byte arrays are stored low byte first within each Modbus register.
+      for (size_t j = 0; j + 1 < bytes.size(); j += 2)
+        std::swap(bytes[j], bytes[j + 1]);
       rt.distributed_force =
           ParseTactileDistributed(bytes.data(), bytes.size(),
                                    region.sensor_count);

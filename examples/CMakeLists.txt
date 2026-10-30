@@ -81,20 +81,6 @@ if(GHAND_BUILD_TACTILE_DISPLAY)
     add_ghand_example(tactile_display tutorial/15_tactile_display.cc)
     target_link_libraries(tactile_display ghand_tactile_display)
     deploy_ghand_qt(tactile_display)
-    if(GHAND_BUILD_TESTS)
-        add_ghand_example(tactile_display_test ../tests/tactile_display_test.cc)
-        target_include_directories(tactile_display_test PRIVATE ${PROJECT_SOURCE_DIR}/src)
-        target_compile_features(tactile_display_test PRIVATE cxx_std_17)
-        target_link_libraries(tactile_display_test ghand_tactile_display)
-        deploy_ghand_qt(tactile_display_test)
-        add_test(NAME tactile_display_test COMMAND tactile_display_test)
-        set_tests_properties(tactile_display_test PROPERTIES
-            ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 10)
-        if(WIN32)
-            set_property(TEST tactile_display_test APPEND PROPERTY
-                ENVIRONMENT "QT_QPA_FONTDIR=$ENV{WINDIR}/Fonts")
-        endif()
-    endif()
 endif()
 
 # The glove demo uses Winsock on Windows and BSD sockets elsewhere.

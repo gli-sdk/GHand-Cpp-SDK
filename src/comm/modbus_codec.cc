@@ -219,9 +219,9 @@ std::pair<uint8_t, uint8_t> ParseTactileStateError(uint16_t first_reg) {
 
 std::vector<float> ParseTactileResultant(const uint16_t* raw, int region_index) {
   int base = 1 + region_index * 3;
-  return {static_cast<int16_t>(raw[base]) / 10.0f,
-          static_cast<int16_t>(raw[base + 1]) / 10.0f,
-          static_cast<int16_t>(raw[base + 2]) / 10.0f};
+  return {static_cast<int8_t>(raw[base] & 0xFF) / 10.0f,
+          static_cast<int8_t>(raw[base + 1] & 0xFF) / 10.0f,
+          (raw[base + 2] & 0xFF) / 10.0f};
 }
 
 std::vector<float> ParseTactileDistributed(const uint8_t* data_bytes,
