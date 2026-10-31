@@ -112,7 +112,7 @@ def main():
                     packages[owner] = metadata
                     copyright_file = Path('/usr/share/doc') / owner.split(':')[0] / 'copyright'
                     if copyright_file.exists():
-                        shutil.copy2(copyright_file, stage / 'LICENSES/packages' / (owner + '.copyright'))
+                        shutil.copy2(copyright_file, stage / 'LICENSES/packages' / (owner.replace(':', '_') + '.copyright'))
                     break
                 except subprocess.CalledProcessError:
                     continue
