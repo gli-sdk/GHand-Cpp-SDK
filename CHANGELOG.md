@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Moved the Windows Qt runtime distribution to `dist/windows/` and removed the redundant `deps/qt/` bundle. GUI builds use a local Qt development installation; release runtime dependencies are deployed with windeployqt.
+
 ## [3.1.0] - 2026-10-30
 
 ### Added

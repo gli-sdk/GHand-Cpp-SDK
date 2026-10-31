@@ -1,8 +1,8 @@
 # deps
 
 This directory contains the bundled third-party dependencies required to build
-the SDK. Release packages should keep the same layout, except Linux libmodbus is
-a system dependency and is intentionally not bundled in this repository.
+the SDK. Linux source builds use the system libmodbus development package.
+Release executables and their runtime dependencies are provided under `dist/`.
 
 Expected layout:
 
@@ -21,24 +21,24 @@ deps/
       Packet.lib
     linux/
       libsoem.a
-  qt/
-    windows/
-      msvc2022_64/    # Qt 6.9.1 runtime DLLs/plugins, Release only
 ```
 
 The Windows dependency set is included in this repository. Linux builds use the
 bundled SOEM static library and the system `libmodbus` development package
 discovered through pkg-config.
 
-The optional tactile display is built against a local Qt 6 Widgets development
-installation (`-DGHAND_BUILD_TACTILE_DISPLAY=ON`, CMake 3.22+ and MSVC 2022);
-pass `CMAKE_PREFIX_PATH` when Qt is not on the default search path. CMake copies
-the found runtime DLLs and plugins next to the GUI examples and tests.
-`deps/qt/` contains only the Qt 6.9.1 Windows x64 runtime (Core/Gui/Widgets DLLs,
-window/offscreen/style plugins) for redistributing or running the examples on
-machines without Qt; it is Release-only. Linux uses its own Qt development
-installation.
-See [qt/README.md](qt/README.md) for provenance and licensing.
+The tactile display example is built only when CMake finds a local Qt 6 Widgets
+development installation (MSVC 2022 x64 on Windows); pass `CMAKE_PREFIX_PATH`
+when Qt is not on the default search path. CMake does not deploy Qt runtime
+dependencies. The release package's `dist/` directory contains the executables
+and their required runtime libraries and plugins.
+Keep upstream license texts and notices with redistributed Qt components.
+Qt 6.9.1 runtime files are deployed from the local MSVC 2022 x64 Qt installation
+using `windeployqt --release`. See `../dist/README.md` for deployment details,
+`../dist/windows/LICENSES/Qt/` for the retained upstream license texts, and
+`../THIRD_PARTY_NOTICES.md` for Qt licensing and corresponding source links.
+The project requires CMake 3.16 or newer; GUI builds must also meet the selected
+Qt version's requirements (Qt 6.9 requires CMake 3.22 on most target platforms).
 
 ## Third-Party Licensing
 

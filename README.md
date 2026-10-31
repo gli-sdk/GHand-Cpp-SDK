@@ -15,7 +15,7 @@ C++ SDK for GHand dexterous hands, supporting EtherCAT, CANFD, and RS485 communi
 - EtherCAT, CANFD, and RS485 communication
 - Independent per-joint control for all 5 fingers (position, velocity, current, MIT and CUSTOM)
 - MIT and CUSTOM control tutorials with command feedback and explicit hand disabling
-- Optional Qt 6 tactile display aligned with Python: whole-hand view, finger maps and 60-second XYZ force plots
+- Optional Qt 6 tactile display with whole-hand view, finger maps and 60-second XYZ force plots
 - Real-time data callbacks for joint states and tactile data
 - Left and right hand device support
 - Automatic product detection via device name matching
@@ -26,6 +26,18 @@ V3.1.0 uses the `Master` / `GHand` ownership model and new-protocol command type
 Applications upgrading from 2.x must rebuild against matching headers and libraries;
 see [CHANGELOG.md](CHANGELOG.md) for API and protocol migration details.
 
+## Product Support Matrix
+
+The capabilities below apply to GHand5 with the current V3.1.0 release.
+**For GHandLite1, use SDK 2.xx (2.x)** and follow that version's README, API and protocol documentation.
+
+| Product | SDK version | Transports | Control modes | Tactile capabilities |
+| --- | --- | --- | --- | --- |
+| GHand5 | Current V3.1.0 | EtherCAT, CANFD, RS485 | Position, velocity, current, MIT, CUSTOM | Five-finger three-axis force feedback, tactile callbacks, acquisition on/off and zeroing; optional Qt display |
+| GHandLite1 | Use 2.xx (2.x) | See the corresponding 2.x documentation | See the corresponding 2.x documentation | See the corresponding 2.x documentation |
+
+The GHandLite1 types and configuration files retained in this repository do not indicate support for connecting that product with V3.1.0.
+
 ## Official Documentation
 
 For detailed technical specifications and API references, visit: [C++ SDK Developer Documentation](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)
@@ -33,6 +45,7 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 ## Table of Contents
 
 - [Features](#features)
+- [Product Support Matrix](#product-support-matrix)
 - [Official Documentation](#official-documentation)
 - [System Requirements](#system-requirements)
 - [Dependencies](#dependencies)
@@ -77,7 +90,7 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 
 Source builds use the bundled SOEM and header-only dependencies under `deps/`.
 Linux builds use the system `libmodbus` development package discovered through
-pkg-config; `libmodbus.so*` is not bundled in the source repository. Windows
+pkg-config. Windows
 builds use the libmodbus import library/DLL supplied in the Windows release
 dependency set.
 
@@ -87,16 +100,14 @@ dependency set.
 | [libmodbus](https://github.com/stephane/libmodbus) | 3.1.12 | Modbus RTU/RS485 support | LGPL-2.1-or-later | Dynamically linked |
 | [nlohmann/json](https://github.com/nlohmann/json) | bundled header | JSON parsing | MIT | Header-only |
 | WinPcap | Developer Pack components | Packet capture (Windows EtherCAT) | WinPcap BSD-style license and incorporated notices | Headers and import libraries |
-| Qt | 6.9.1 (Windows x64 / MSVC 2022) | Optional tactile display | Upstream component terms, see `deps/qt/` | Dynamic linking; Windows runtime DLLs and plugins bundled, builds use a local Qt installation |
+| Qt | 6.2+ | Optional tactile display | Upstream component terms | Dynamically linked; runtime dependencies ship with the program in `dist/`, builds use local Qt |
 
-The Windows Qt runtime (Core/Gui/Widgets DLLs, window/offscreen/style plugins) is
-bundled under `deps/qt/windows/msvc2022_64/` and matches the GHand GUI deployment.
-Building the GUI requires a local Qt 6.2+ (6.9.1 recommended) Widgets development
-installation; pass `CMAKE_PREFIX_PATH` when Qt is not on the default search path.
-The bundled runtime is Release-only; Debug GUI builds should use a local Qt
-installation that includes debug binaries. GUI builds require CMake 3.22+ and
-MSVC 2022 x64/C++17; the core SDK remains C++11. Linux uses a local Qt
-development installation rather than the Windows runtime.
+Building the GUI requires a local Qt 6.2+ Widgets development installation;
+Windows builds use MSVC 2022 x64. The project requires CMake 3.16 or newer;
+GUI builds must also meet the selected Qt version's requirements
+(Qt 6.9 requires CMake 3.22 on most target platforms).
+If CMake cannot find Qt, set `CMAKE_PREFIX_PATH` to the local Qt kit directory.
+The tactile display requires C++17; the core SDK uses C++11.
 
 ### System Libraries (Linux only)
 - libssl-dev
@@ -169,6 +180,12 @@ int main() {
 }
 ```
 
+### Public Object Lifetime
+
+`Master` owns each `GHand` object. The pointers returned by `Connect()`, `hands()`, and `hand()` are borrowed; callers must not delete them.
+Calling `Disconnect()`, calling any `Connect()` overload again (even if the connection fails), or destroying `Master` invalidates all previously obtained `GHand*` pointers. Do not use them afterward.
+After reconnecting successfully, obtain new pointers from the new connection result or from `Master`.
+
 ### RS485 Example
 
 ```cpp
@@ -199,24 +216,26 @@ RS485 retains `RATE_*` names because Windows defines conflicting `BAUD_*` macros
 ## Examples
 
 Tutorial sources are numbered in learning order under `examples/tutorial/`.
-Executable names omit the numeric prefix and are defined in `examples/CMakeLists.txt`.
+Executables keep the numeric prefix (for example `01_basic_connection`) and are
+written to `build/examples/`; multi-config generators on Windows place them in
+`build/examples/Release/` (or `Debug/` for debug builds).
 
 | Source | Executable | Purpose |
 | --- | --- | --- |
-| [01_basic_connection.cc](examples/tutorial/01_basic_connection.cc) | `basic_connection` | Connect and query device information |
-| [02_move_joints.cc](examples/tutorial/02_move_joints.cc) | `move_joints` | Position commands, parameter units, control modes and joint feedback |
-| [03_speed_control.cc](examples/tutorial/03_speed_control.cc) | `speed_control` | Velocity control |
-| [04_current_control.cc](examples/tutorial/04_current_control.cc) | `current_control` | Current control |
-| [05_tactile_callback.cc](examples/tutorial/05_tactile_callback.cc) | `tactile_callback` | Tactile feedback callbacks |
-| [06_multi_hand.cc](examples/tutorial/06_multi_hand.cc) | `multi_hand` | Multi-hand control |
-| [07_glove_control.cc](examples/tutorial/07_glove_control.cc) | `glove_control` | Glove control |
-| [08_interactive_joint_control.cc](examples/tutorial/08_interactive_joint_control.cc) | `interactive_joint_control` | Interactive joint commands and feedback |
-| [09_hand_state.cc](examples/tutorial/09_hand_state.cc) | `hand_state` | Hand state and joint feedback |
-| [10_switch_baud_rate.cc](examples/tutorial/10_switch_baud_rate.cc) | `switch_baud_rate` | CANFD bit-timing configuration |
-| [11_connect_hands.cc](examples/tutorial/11_connect_hands.cc) | `connect_hands` | Shared-bus discovery, bus-wide and per-hand commands |
-| [13_mit_control.cc](examples/tutorial/13_mit_control.cc) | `mit_control` | MIT compliant grasp with tactile contact, hold and release |
-| [14_custom_control.cc](examples/tutorial/14_custom_control.cc) | `custom_control` | Per-finger position/current modes and feedback |
-| [15_tactile_display.cc](examples/tutorial/15_tactile_display.cc) | `tactile_display` | Optional Qt 6 tactile maps, force arrows and XYZ history |
+| [01_basic_connection.cc](examples/tutorial/01_basic_connection.cc) | `01_basic_connection` | Connect and query device information |
+| [02_move_joints.cc](examples/tutorial/02_move_joints.cc) | `02_move_joints` | Position commands, parameter units, control modes and joint feedback |
+| [03_speed_control.cc](examples/tutorial/03_speed_control.cc) | `03_speed_control` | Velocity control |
+| [04_current_control.cc](examples/tutorial/04_current_control.cc) | `04_current_control` | Current control |
+| [05_tactile_callback.cc](examples/tutorial/05_tactile_callback.cc) | `05_tactile_callback` | Tactile feedback callbacks |
+| [06_multi_hand.cc](examples/tutorial/06_multi_hand.cc) | `06_multi_hand` | Multi-hand control |
+| [07_glove_control.cc](examples/tutorial/07_glove_control.cc) | `07_glove_control` | Glove control |
+| [08_interactive_joint_control.cc](examples/tutorial/08_interactive_joint_control.cc) | `08_interactive_joint_control` | Interactive joint commands and feedback |
+| [09_hand_state.cc](examples/tutorial/09_hand_state.cc) | `09_hand_state` | Hand state and joint feedback |
+| [10_switch_baud_rate.cc](examples/tutorial/10_switch_baud_rate.cc) | `10_switch_baud_rate` | CANFD bit-timing configuration |
+| [11_connect_hands.cc](examples/tutorial/11_connect_hands.cc) | `11_connect_hands` | Shared-bus discovery, bus-wide and per-hand commands |
+| [13_mit_control.cc](examples/tutorial/13_mit_control.cc) | `13_mit_control` | MIT compliant grasp with tactile contact, hold and release |
+| [14_custom_control.cc](examples/tutorial/14_custom_control.cc) | `14_custom_control` | Per-finger position/current modes and feedback |
+| [15_tactile_display.cc](examples/tutorial/15_tactile_display.cc) | `15_tactile_display` | Qt 6 tactile maps, force arrows and XYZ history (requires Qt to build) |
 
 The new tutorials retain the Python SDK's 13/14/15 numbering. MIT uses degrees and
 velocity/current percentages, `kp=10..2000`, `kd=0..50`, `kp>kd`; current is feed-forward.
@@ -225,51 +244,61 @@ including disabled joints. Check feedback after sending and disable the hand bef
 
 ### Qt tactile display
 
+`15_tactile_display` is built only when CMake finds Qt 6.2+ Widgets during
+configuration; the SDK and all other examples build without Qt. Release
+packages ship a prebuilt binary, so users without Qt can still run it.
+
 On Windows, install Qt 6.2+ (6.9.1 recommended) Widgets development components and
-set `CMAKE_PREFIX_PATH` if Qt is not on the default search path. CMake copies the
-runtime DLLs and platform plugins of the found Qt next to the example; the bundled
-`deps/qt/` runtime can instead be copied to machines without Qt:
+set `CMAKE_PREFIX_PATH` if Qt is not on the default search path.
+The release package's `dist/` directory includes executables, runtime libraries
+and platform plugins, so the programs can run without Qt installed.
+The following commands build from source; CMake does not deploy Qt runtime dependencies:
 
 ```powershell
-cmake -S . -B build -A x64 -DGHAND_BUILD_TACTILE_DISPLAY=ON -DCMAKE_PREFIX_PATH=C:/Qt/6.9.1/msvc2022_64
+cmake -S . -B build -A x64 -DCMAKE_PREFIX_PATH="<Qt installation prefix>"
 cmake --build build --config Release --target tactile_display mit_control custom_control
-./build/examples/Release/tactile_display.exe --preview
+./build/examples/Release/15_tactile_display.exe
 ```
 
+Replace `<Qt installation prefix>` with your local Qt MSVC 2022 x64 kit directory;
+omit `-DCMAKE_PREFIX_PATH` if CMake can already find Qt.
+
 On Linux, install Qt 6.2+ Widgets development components, specify `CMAKE_PREFIX_PATH`
-if needed, and run `./build/examples/tactile_display --preview`. Build directories
+if needed, and run `./build/examples/15_tactile_display`. Without Qt,
+the configure step prints a notice and skips only this example. Build directories
 that cached the removed bundled Qt development kit or another Qt path must be
 configured anew (or have their `Qt6*_DIR` cache entries cleared).
-Without `--preview`, the example connects GHand5 over EtherCAT (`auto`). Edit the
+On startup, the example connects GHand5 over EtherCAT (`auto`). Edit the
 connection settings for other transports. The Tactile switch starts acquisition;
-zero with unloaded sensors. The Python layout is retained: a 1600×1000 black window,
+zero with unloaded sensors. The display uses a 1600×1000 black window,
 whole-hand view and five finger maps on the left, and five XYZ plots on the right.
-Device identity selects the left/right hand image. GHand5's 38/31/31/31/31 point
-order, image offsets, normal-force colors/glow, tangential arrows, Fz bars and
-point tooltips follow Python. Plots retain 60 seconds of timestamped history,
+Device identity selects the left/right hand image. The five fingers display
+38/31/31/31/31 points with normal-force colors/glow, tangential arrows and Fz bars.
+Hover over a point to view its three-axis force values. Plots retain 60 seconds of timestamped history,
 coalesce callbacks into 50 Hz buckets and insert gaps after 0.5 seconds without data.
-Images are embedded with Qt resources, without a runtime dependency on Python.
+Images are embedded with Qt resources, so no separate image files need to be copied.
 
 The reusable [display widget](src/tactile_display/) links as `ghand_tactile_display`.
 The caller owns the connection and must keep the hand alive until the widget is
 destroyed. The widget exclusively uses its tactile callback slot and closes tactile
 acquisition and joins its worker on shutdown. It sends no motion commands.
-Qt is not required by the default build. Enable `GHAND_BUILD_TESTS` for hardware-free
+Qt is required only for `15_tactile_display`; every other target builds without it.
+Enable `GHAND_BUILD_TESTS` for hardware-free
 checks using `ctest --test-dir build -C Release --output-on-failure`; on Windows,
 the required Qt DLLs and offscreen plugin are copied automatically.
 
 Action demos, including `preset_gesture`, `gesture_dance` and `clap_pose`, are in
 [`examples/demo/`](examples/demo/).
 
-After building, run `connect_hands` with a transport and optional device:
+After building, run `11_connect_hands` with a transport and optional device:
 
 ```bash
-./build/examples/connect_hands ethcat auto
-./build/examples/connect_hands canfd /dev/ttyACM0:0
-./build/examples/connect_hands rs485 /dev/ttyUSB0
+./build/examples/11_connect_hands ethcat auto
+./build/examples/11_connect_hands canfd /dev/ttyACM0:0
+./build/examples/11_connect_hands rs485 /dev/ttyUSB0
 ```
 
-On Windows, use `build\examples\Release\connect_hands.exe` with devices such as
+On Windows, use `build\examples\Release\11_connect_hands.exe` with devices such as
 `COM17:0` (CANFD) or `COM7` (RS485). The example moves the connected hands;
 use `--help` to view its arguments and supported topologies.
 
@@ -284,7 +313,7 @@ cmake -S . -B build
 cmake --build build --config Release
 
 # Run example
-.\build\examples\Release\basic_connection.exe
+.\build\examples\Release\01_basic_connection.exe
 ```
 
 > **Windows RS485:** `modbus.dll` from `deps/lib/windows` is copied next to `ghand.dll` during the build when present.
@@ -304,7 +333,7 @@ find build/examples -maxdepth 1 -type f -executable \
   -exec sudo setcap cap_net_raw,cap_net_admin=eip {} \;
 
 # Run the EtherCAT example
-./build/examples/basic_connection
+./build/examples/01_basic_connection
 ```
 
 ### Linux RS485 / CANFD
@@ -374,25 +403,35 @@ CANFD baud-rate gears:
 
 | Gear | Arbitration phase | Data phase |
 | --- | --- | --- |
-| `0x00` | 500 Kbps, 80% sample point | 1 Mbps, 75% sample point |
-| `0x01` | 500 Kbps, 80% sample point | 2 Mbps, 80% sample point |
-| `0x02` | 500 Kbps, 80% sample point | 4 Mbps, 80% sample point |
-| `0x03` | 500 Kbps, 80% sample point | 5 Mbps, 75% sample point |
-| `0x04` | 1 Mbps, 75% sample point | 4 Mbps, 80% sample point |
-| `0x05` | 1 Mbps, 75% sample point | 5 Mbps, 75% sample point |
+| `0x00` | 500 Kbps, 80% sample point | 800 Kbps, 80% sample point |
+| `0x01` | 500 Kbps, 80% sample point | 1 Mbps, 75% sample point |
+| `0x02` | 500 Kbps, 80% sample point | 2 Mbps, 80% sample point |
+| `0x03` | 500 Kbps, 80% sample point | 4 Mbps, 80% sample point |
+| `0x04` | 1 Mbps, 75% sample point | 1 Mbps, 75% sample point |
+| `0x05` | 1 Mbps, 75% sample point | 2 Mbps, 80% sample point |
+| `0x06` | 1 Mbps, 75% sample point | 4 Mbps, 80% sample point |
+| `0x07` | 1 Mbps, 75% sample point | 5 Mbps, 75% sample point |
 
 ## Directory Structure
 
 ```
-ghand-sdk-cpp/
-|-- include/ghand/    # Public API headers
-|-- src/              # Source implementation
-|   |-- comm/         # Communication layer (EtherCAT, CANFD, RS485)
-|   `-- internal/     # Internal state machine & config
-|-- config/           # Product configuration (JSON)
-|-- cmake/            # CMake package config template
-|-- examples/         # Tutorial and demo programs
-`-- deps/             # Release-package prebuilt dependencies
+GHand-Cpp-SDK/
+|-- CMakeLists.txt       # Project build and installation configuration
+|-- include/ghand/      # Public API headers
+|   `-- types/          # Public enums and data types
+|-- src/                # Source implementation
+|   |-- comm/           # Communication layer (EtherCAT, CANFD, RS485)
+|   |-- internal/       # Internal state machine and configuration
+|   `-- tactile_display/ # Qt tactile display widget and image resources
+|-- config/             # GHand5 and GHandLite1 product configuration (JSON)
+|-- cmake/              # CMake package config template
+|-- examples/
+|   |-- tutorial/       # Numbered tutorials
+|   `-- demo/           # Motion demos
+|-- deps/               # Bundled headers and prebuilt dependencies
+|-- dist/               # Release executables and runtime dependencies
+|-- docs/               # Communication protocol documentation
+`-- LICENSES/           # Third-party licenses and notices
 ```
 
 ## Open Source & Ecosystem Resources

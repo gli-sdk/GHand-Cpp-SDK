@@ -31,7 +31,10 @@ install_manifest.txt
 !deps/lib/**/*.so.*
 !deps/lib/**/*.a
 !deps/lib/**/*.lib
-!deps/qt/**/*.dll
+
+# Prebuilt Windows release programs and runtime dependencies.
+!dist/windows/**/*.exe
+!dist/windows/**/*.dll
 
 # IDE and local agent state
 .vscode/

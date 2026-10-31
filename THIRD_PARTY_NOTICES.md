@@ -72,14 +72,16 @@ See `LICENSES/WinPcap.txt`.
 ## Qt (optional tactile display)
 
 - Version: 6.9.1, Windows x64/MSVC 2022 runtime subset.
-- Location: `deps/qt/windows/msvc2022_64/`.
-- Integration: dynamically linked Core, Gui and Widgets; the bundled DLLs and
+- Location: `dist/windows/`.
+- Integration: dynamically linked Core, Gui and Widgets, with Network and Svg
+  dependencies deployed by windeployqt; the bundled DLLs and
   plugins retain their own upstream license terms and notices.
 - Project and licensing: https://doc.qt.io/qt-6/licensing.html
 - Corresponding upstream source: https://download.qt.io/archive/qt/6.9/6.9.1/submodules/
-- Original license texts are retained in the bundle's `LICENSES/` directory;
-  provenance is documented in `deps/qt/README.md`.
-- Upstream binary files are copied unmodified.
+- Original license texts are retained in `dist/windows/LICENSES/Qt/`;
+  deployment is documented in `dist/README.md`.
+- Runtime files are deployed from the local Qt 6.9.1 MSVC 2022 x64 installation
+  using windeployqt. Building the GUI requires a local Qt development installation.
 
 ## OpenSSL
 
