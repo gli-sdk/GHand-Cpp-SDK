@@ -39,6 +39,7 @@ const int SOCKET_ERROR = -1;
 #include <vector>
 
 #include "ghand/ghand.h"
+#include "../example_options.h"
 
 struct ThumbFinger {
   float mcp_bend, mcp_sway, mcp_roll;
@@ -371,7 +372,16 @@ void ReceiveLoop(SOCKET sock, ghand::GHand& hand) {
   }
 }
 
-int main() {
+int main(int argc, char** argv) {
+  example::Options options{
+      ghand::ProductType::GHand5,
+      ghand::CommType::ETHERCAT,
+      "auto",
+  };
+  const auto parsed = example::ParseOptions(argc, argv, options);
+  if (parsed != example::ParseResult::Run)
+    return parsed == example::ParseResult::Help ? 0 : 1;
+
   std::cout << "========================================" << '\n';
   std::cout << "  GHand Dexterous Hand SDK - Glove Control        " << '\n';
   std::cout << "========================================" << '\n';
@@ -392,8 +402,7 @@ int main() {
 
   ConfigureReceiveTimeout(sock);
 
-  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
-                                      ghand::CommType::ETHERCAT);
+  auto master = ghand::Master::Create(options.product, options.comm);
   if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     closesocket(sock);
@@ -402,7 +411,7 @@ int main() {
   }
 
   std::cout << "\nConnecting to dexterous hand..." << '\n';
-  const auto connected = master->Connect("auto");
+  const auto connected = master->Connect(options.device);
   if (!connected) {
     std::cerr << "Error: Unable to connect to dexterous hand: "
               << connected.message << '\n';

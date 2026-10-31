@@ -11,10 +11,10 @@
 #include <thread>
 
 #include "ghand/ghand.h"
+#include "../example_options.h"
 
 namespace {
 
-constexpr const char* kDeviceName = "auto";
 constexpr uint8_t kSlaveId = 0x31;
 
 std::string CanfdTimingName(ghand::CANFDBitTiming timing) {
@@ -40,12 +40,21 @@ std::string CanfdTimingName(ghand::CANFDBitTiming timing) {
 }
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+  example::Options options{
+      ghand::ProductType::GHand5,
+      ghand::CommType::CANFD,
+      "auto",
+  };
+  const auto parsed = example::ParseOptions(argc, argv, options, true);
+  if (parsed != example::ParseResult::Run)
+    return parsed == example::ParseResult::Help ? 0 : 1;
+
   const auto current_timing = ghand::CANFDBitTiming::TIMING_1M_5M;
   const auto target_timing = ghand::CANFDBitTiming::TIMING_1M_4M;
 
   auto master =
-      ghand::Master::Create(ghand::ProductType::GHand5, ghand::CommType::CANFD);
+      ghand::Master::Create(options.product, options.comm);
   if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return 1;
@@ -53,7 +62,7 @@ int main() {
 
   std::cout << "Connecting with current CANFD timing "
             << CanfdTimingName(current_timing) << "..." << '\n';
-  const auto connected = master->Connect(kDeviceName, kSlaveId, current_timing);
+  const auto connected = master->Connect(options.device, kSlaveId, current_timing);
   if (!connected) {
     std::cerr << "Connection failed: " << connected.message << '\n';
     return 1;
@@ -75,7 +84,7 @@ int main() {
 
   std::cout << "Baud-rate configuration written successfully." << '\n';
   std::cout << "Power-cycle the device, then reconnect with:" << '\n';
-  std::cout << "  master->Connect(\"" << kDeviceName << "\", 0x" << std::hex
+  std::cout << "  master->Connect(\"" << options.device << "\", 0x" << std::hex
             << static_cast<int>(kSlaveId) << std::dec << ", "
             << "ghand::CANFDBitTiming::" << CanfdTimingName(target_timing)
             << ")" << '\n';

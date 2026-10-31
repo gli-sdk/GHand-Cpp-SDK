@@ -11,8 +11,18 @@
 #include <vector>
 
 #include "ghand/ghand.h"
+#include "../example_options.h"
 
-int main() {
+int main(int argc, char** argv) {
+  example::Options options{
+      ghand::ProductType::GHand5,
+      ghand::CommType::ETHERCAT,
+      "auto",
+  };
+  const auto parsed = example::ParseOptions(argc, argv, options);
+  if (parsed != example::ParseResult::Run)
+    return parsed == example::ParseResult::Help ? 0 : 1;
+
   std::cout << "========================================\n"
             << "  GHand Dexterous Hand SDK - Multi-Hand Control Demo\n"
             << "========================================\n";
@@ -21,13 +31,15 @@ int main() {
   // before any bus is opened.
   std::map<std::string, std::string> adapters;
   {
-    auto discovery = ghand::Master::Create(ghand::ProductType::GHand5,
-                                           ghand::CommType::ETHERCAT);
+    auto discovery = ghand::Master::Create(options.product, options.comm);
     if (!discovery) {
       std::cerr << "Failed to create GHand\n";
       return 1;
     }
-    adapters = discovery->SearchAdapters();
+    if (options.device == "auto")
+      adapters = discovery->SearchAdapters();
+    else
+      adapters.emplace(options.device, "Selected adapter");
   }
   if (adapters.empty()) {
     std::cerr << "No available adapters found\n";
@@ -53,8 +65,7 @@ int main() {
       continue;
     }
 
-    auto master = ghand::Master::Create(ghand::ProductType::GHand5,
-                                        ghand::CommType::ETHERCAT);
+    auto master = ghand::Master::Create(options.product, options.comm);
     if (!master) {
       std::cerr << "Failed to create GHand for adapter " << name << '\n';
       continue;

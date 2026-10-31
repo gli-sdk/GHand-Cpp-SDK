@@ -235,6 +235,21 @@ RS485 保留 `RATE_*` 命名，避免与 Windows 的 `BAUD_*` 宏冲突。
 CUSTOM 同一手指仲裁组内的控制模式和反馈环必须一致，禁用关节也应显式选择同组模式。
 发送成功后应检查状态反馈；断开通信前显式调用 `DisableHand()` 释放驱动力。
 
+### 示例命令行参数
+
+所有示例均支持以下参数，不传参数时默认使用 `GHand5 + ETHERCAT`，设备为 `auto`：
+
+```bash
+./01_basic_connection
+./01_basic_connection --comm canfd
+./01_basic_connection --product ghand5 --comm rs485 --device /dev/ttyUSB0
+./01_basic_connection --help
+```
+
+`--product` 支持 `ghand5`、`ghandlite1`、`auto`；`--comm` 支持 `ethercat`（或 `ethcat`）、`canfd`、`rs485`。实际功能仍受产品及通信协议支持范围限制。`--device` 指定适配器；`06_multi_hand` 默认扫描所有适配器，指定设备后仅使用该适配器。
+
+`10_switch_baud_rate` 默认且仅支持 CAN-FD；`11_connect_hands` 兼容原来的 `[ethcat|canfd|rs485] [device]` 用法。`--help` 不连接硬件。修改源码后需重新编译，已有预编译包不会自动更新。
+
 ### Qt 触觉显示
 
 `15_tactile_display` 仅在 configure 阶段检测到 Qt 6.2+ Widgets 时才会编译，SDK 与其他示例不依赖 Qt；

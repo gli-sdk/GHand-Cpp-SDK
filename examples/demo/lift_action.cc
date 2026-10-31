@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "ghand/ghand.h"
+#include "../example_options.h"
 
 // Lift pose
 std::vector<ghand::JointCommand> MakeLiftPose() {
@@ -108,16 +109,24 @@ bool ResetToOpenHand(ghand::GHand& hand) {
   return hand.MoveJoints(joints);
 }
 
-int main() {
+int main(int argc, char** argv) {
+  example::Options options{
+      ghand::ProductType::GHand5,
+      ghand::CommType::ETHERCAT,
+      "auto",
+  };
+  const auto parsed = example::ParseOptions(argc, argv, options);
+  if (parsed != example::ParseResult::Run)
+    return parsed == example::ParseResult::Help ? 0 : 1;
+
   std::cout << "***** GHand SDK - Lift Demo *****\n\n";
-  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
-                                      ghand::CommType::ETHERCAT);
+  auto master = ghand::Master::Create(options.product, options.comm);
   if (!master) {
     std::cerr << "Failed to create GHand\n";
     return 1;
   }
 
-  const auto connected = master->Connect("auto");
+  const auto connected = master->Connect(options.device);
   if (!connected) {
     std::cerr << "Failed to connect to dexterous hand: " << connected.message
               << '\n';

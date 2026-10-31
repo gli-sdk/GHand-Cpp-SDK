@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "ghand/ghand.h"
+#include "../example_options.h"
 
 // Gesture type definitions.
 
@@ -223,16 +224,15 @@ std::vector<ghand::JointCommand> CreateJointsFromGesture(
   return joints;
 }
 
-std::unique_ptr<ghand::Master> CreateConnectedHand() {
-  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
-                                      ghand::CommType::ETHERCAT);
+std::unique_ptr<ghand::Master> CreateConnectedHand(const example::Options& options) {
+  auto master = ghand::Master::Create(options.product, options.comm);
   if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return nullptr;
   }
 
   std::cout << "\nConnecting to dexterous hand..." << '\n';
-  const auto connected = master->Connect("auto");
+  const auto connected = master->Connect(options.device);
   if (!connected) {
     std::cerr << "Failed to connect: " << connected.message << '\n';
     return nullptr;
@@ -317,12 +317,21 @@ void HandleDetectedError(ghand::GHand& hand) {
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 }
 
-int main() {
+int main(int argc, char** argv) {
+  example::Options options{
+      ghand::ProductType::GHand5,
+      ghand::CommType::ETHERCAT,
+      "auto",
+  };
+  const auto parsed = example::ParseOptions(argc, argv, options);
+  if (parsed != example::ParseResult::Run)
+    return parsed == example::ParseResult::Help ? 0 : 1;
+
   std::cout << "========================================" << '\n';
   std::cout << "  GHand Dexterous Hand SDK - Preset Gesture Demo" << '\n';
   std::cout << "========================================" << '\n';
 
-  auto master = CreateConnectedHand();
+  auto master = CreateConnectedHand(options);
   if (!master) return 1;
   auto* hand = master->hands().front();
 

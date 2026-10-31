@@ -242,6 +242,21 @@ velocity/current percentages, `kp=10..2000`, `kd=0..50`, `kp>kd`; current is fee
 CUSTOM requires consistent mode/loop selection within each finger arbitration group,
 including disabled joints. Check feedback after sending and disable the hand before disconnecting.
 
+### Example command-line options
+
+All examples accept these options. With no arguments, they use `GHand5 + ETHERCAT` and device `auto`:
+
+```bash
+./01_basic_connection
+./01_basic_connection --comm canfd
+./01_basic_connection --product ghand5 --comm rs485 --device /dev/ttyUSB0
+./01_basic_connection --help
+```
+
+`--product` accepts `ghand5`, `ghandlite1`, or `auto`; `--comm` accepts `ethercat` (or `ethcat`), `canfd`, or `rs485`. Available features still depend on the product and transport. `--device` selects an adapter; `06_multi_hand` scans all adapters by default and uses only the selected adapter when specified.
+
+`10_switch_baud_rate` defaults to and only supports CAN-FD. `11_connect_hands` also retains its original `[ethcat|canfd|rs485] [device]` syntax. `--help` does not connect to hardware. Rebuild after changing the source; existing prebuilt bundles are not updated automatically.
+
 ### Qt tactile display
 
 `15_tactile_display` is built only when CMake finds Qt 6.2+ Widgets during

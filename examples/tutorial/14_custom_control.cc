@@ -7,16 +7,26 @@
 #include <vector>
 
 #include "ghand/ghand.h"
+#include "../example_options.h"
 
 // CUSTOM preserves per-joint mode and loop type. Keep each arbitration group
 // consistent: FF_PIP/MCP/MCP_AA, MF_PIP/MCP, RF_PIP/MCP, LF_PIP/MCP.
 // The four active thumb joints are independent. Inconsistent groups can be
 // silently ignored by firmware while previous commands continue executing.
-int main() {
+int main(int argc, char** argv) {
+  example::Options options{
+      ghand::ProductType::GHand5,
+      ghand::CommType::ETHERCAT,
+      "auto",
+  };
+  const auto parsed = example::ParseOptions(argc, argv, options);
+  if (parsed != example::ParseResult::Run)
+    return parsed == example::ParseResult::Help ? 0 : 1;
+
   using namespace ghand;
-  auto master = Master::Create(ProductType::GHand5, CommType::ETHERCAT);
+  auto master = ghand::Master::Create(options.product, options.comm);
   if (!master) return 1;
-  const auto connected = master->Connect("auto");
+  const auto connected = master->Connect(options.device);
   if (!connected || connected.value.empty()) {
     std::cerr << "Connection failed: " << connected.message << '\n';
     return 1;

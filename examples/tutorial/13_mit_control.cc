@@ -7,14 +7,24 @@
 #include <vector>
 
 #include "ghand/ghand.h"
+#include "../example_options.h"
 
 // GHand5: degrees, velocity/current in percent, kp=10..2000, kd=0..50,
 // kp > kd. MIT current is feed-forward, not a current limit.
-int main() {
+int main(int argc, char** argv) {
+  example::Options options{
+      ghand::ProductType::GHand5,
+      ghand::CommType::ETHERCAT,
+      "auto",
+  };
+  const auto parsed = example::ParseOptions(argc, argv, options);
+  if (parsed != example::ParseResult::Run)
+    return parsed == example::ParseResult::Help ? 0 : 1;
+
   using namespace ghand;
-  auto master = Master::Create(ProductType::GHand5, CommType::ETHERCAT);
+  auto master = ghand::Master::Create(options.product, options.comm);
   if (!master) return 1;
-  const auto connected = master->Connect("auto");
+  const auto connected = master->Connect(options.device);
   if (!connected || connected.value.empty()) {
     std::cerr << "Connection failed: " << connected.message << '\n';
     return 1;

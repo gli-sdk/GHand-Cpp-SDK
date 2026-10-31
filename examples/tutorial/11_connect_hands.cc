@@ -10,32 +10,9 @@
 #include <vector>
 
 #include "ghand/ghand.h"
+#include "../example_options.h"
 
 namespace {
-
-void PrintUsage(const char* program) {
-  std::cout
-      << "Usage:\n"
-      << "  " << program << " [ethcat|canfd|rs485] [device]\n\n"
-      << "Examples:\n"
-      << "  " << program << "                    (EtherCAT, auto adapter)\n"
-      << "  " << program << " ethcat <adapter>\n"
-      << "  " << program << " canfd COM17:0\n"
-      << "  " << program << " rs485 /dev/ttyUSB0\n\n"
-      << "Without a device every adapter is probed and the first bus that\n"
-      << "carries a hand is used. Every hand found is driven through the "
-         "poses\n"
-      << "below by calling MoveJoints() on each hand, whatever the "
-         "transport.\n\n"
-      << "EtherCAT topologies all handled by the same code below:\n"
-      << "  no junction,   single hand : PC -> hand\n"
-      << "  no junction,   dual hand   : PC -> {handA, handB}\n"
-      << "  with junction, single hand : PC -> junction -> hand\n"
-      << "  with junction, dual hand   : PC -> junction -> {handA, handB}\n"
-      << "The EtherCAT junction is a slave too, but it is not a hand, so\n"
-      << "Connect() skips it. On CAN-FD and RS485 both hands share one bus\n"
-      << "(1-in 2-out) and Connect() scans the default addresses 0x31/0x32.\n";
-}
 
 std::vector<ghand::JointCommand> BuildPose(float mcp, float pip) {
   return {
@@ -57,36 +34,17 @@ std::vector<ghand::JointCommand> BuildPose(float mcp, float pip) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc > 1) {
-    const std::string arg = argv[1];
-    if (arg == "-h" || arg == "--help") {
-      PrintUsage(argv[0]);
-      return 0;
-    }
-  }
+  example::Options options{
+      ghand::ProductType::GHand5,
+      ghand::CommType::ETHERCAT,
+      "auto",
+  };
+  const auto defaults = options;
+  const auto parsed = example::ParseOptions(argc, argv, options, false, true);
+  if (parsed != example::ParseResult::Run)
+    return parsed == example::ParseResult::Help ? 0 : 1;
 
-  ghand::CommType comm_type = ghand::CommType::ETHERCAT;
-  int first_device_arg = 1;
-  if (argc > 1) {
-    const std::string arg = argv[1];
-    if (arg == "ethcat") {
-      first_device_arg = 2;
-    } else if (arg == "canfd") {
-      comm_type = ghand::CommType::CANFD;
-      first_device_arg = 2;
-    } else if (arg == "rs485") {
-      comm_type = ghand::CommType::RS485;
-      first_device_arg = 2;
-    } else if (!arg.empty() && arg.front() == '-') {
-      PrintUsage(argv[0]);
-      return 1;
-    }
-  }
-
-  const std::string device =
-      argc > first_device_arg ? argv[first_device_arg] : "auto";
-
-  auto master = ghand::Master::Create(ghand::ProductType::GHand5, comm_type);
+  auto master = ghand::Master::Create(options.product, options.comm);
   if (!master) {
     std::cerr << "Failed to create GHand\n";
     return 1;
@@ -96,16 +54,16 @@ int main(int argc, char* argv[]) {
   // probes the adapters until one carries a controllable hand, and a named
   // device is used directly. Nothing here knows or cares which transport is
   // in use, or whether a junction is present.
-  const auto connected = master->Connect(device);
+  const auto connected = master->Connect(options.device);
   if (!connected) {
-    std::cerr << "Connect failed on " << device << ": " << connected.message
+    std::cerr << "Connect failed on " << options.device << ": " << connected.message
               << "\n\n";
-    PrintUsage(argv[0]);
+    example::PrintUsage(argv[0], defaults, false, true);
     return 1;
   }
   const std::vector<ghand::GHand*>& hands = connected.value;
 
-  std::cout << "Connected on " << device << " - " << hands.size()
+  std::cout << "Connected on " << options.device << " - " << hands.size()
             << " hand(s):\n";
   for (ghand::GHand* hand : hands) {
     const auto result = hand->GetDeviceInfo();
