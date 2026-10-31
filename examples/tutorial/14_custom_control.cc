@@ -38,7 +38,8 @@ int main() {
     commands.push_back(middle);
     // Disabled PIP still selects CURRENT to match its finger's MCP mode.
     commands.emplace_back(JointId::MF_PIP, JointControlMode::CURRENT,
-                          JointLoopType::CLOSED_LOOP, JointControlState::DISABLED);
+                          JointLoopType::CLOSED_LOOP,
+                          JointControlState::DISABLED);
     const auto sent = hand->MoveJoints(commands, HandControlMode::CUSTOM);
     if (!sent) {
       std::cerr << "CUSTOM command failed: " << sent.message << '\n';
@@ -47,7 +48,9 @@ int main() {
     }
     std::this_thread::sleep_for(std::chrono::seconds(2));
     const auto state = hand->GetHandStateMachine();
-    if (state) std::cout << "Hand runtime state: " << static_cast<int>(state.value) << '\n';
+    if (state)
+      std::cout << "Hand runtime state: " << static_cast<int>(state.value)
+                << '\n';
     const auto feedback = hand->GetJointsData();
     if (!feedback) {
       std::cerr << "Feedback failed: " << feedback.message << '\n';
@@ -56,8 +59,9 @@ int main() {
     }
     for (const auto& joint : feedback.value) {
       if (joint.id != JointId::FF_MCP && joint.id != JointId::MF_MCP) continue;
-      std::cout << ToString(joint.id) << ": " << joint.angle << " deg, velocity="
-                << joint.velocity << "%, current=" << joint.current
+      std::cout << ToString(joint.id) << ": " << joint.angle
+                << " deg, velocity=" << joint.velocity
+                << "%, current=" << joint.current
                 << "%, mode=" << static_cast<int>(joint.control_mode)
                 << ", loop=" << static_cast<int>(joint.loop_type)
                 << ", state=" << ToString(joint.state)

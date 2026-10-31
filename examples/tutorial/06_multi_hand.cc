@@ -78,8 +78,7 @@ int main() {
     return 1;
   }
 
-  std::cout << "\nSuccessfully connected " << hands.size()
-            << " device(s)\n";
+  std::cout << "\nSuccessfully connected " << hands.size() << " device(s)\n";
   std::cout << "\nDevice Information:\n";
   for (size_t i = 0; i < hands.size(); ++i) {
     const auto result = hands[i]->GetDeviceInfo();
@@ -96,8 +95,12 @@ int main() {
 
   std::cout << "\n========== Demo 1: Individual Control ==========\n";
   const std::vector<ghand::JointCommand> test_joints = {
-      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 45.0f, 100, 100},
-      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 30.0f, 100, 100},
+      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       45.0f, 100, 100},
+      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       30.0f, 100, 100},
   };
   for (size_t i = 0; i < hands.size(); ++i) {
     std::cout << "\nControlling hand " << i << "...\n";
@@ -115,19 +118,45 @@ int main() {
 
   std::cout << "\n========== Demo 2: Reset Every Hand ==========\n";
   const std::vector<ghand::JointCommand> reset_joints = {
-      {ghand::JointId::THUMB_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_TMC_FE, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-      {ghand::JointId::THUMB_TMC_AA, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 20.0f, 100, 100},
-      {ghand::JointId::THUMB_TMC_PS, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-      {ghand::JointId::FF_MCP_AA, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-      {ghand::JointId::MF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-      {ghand::JointId::MF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-      {ghand::JointId::RF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-      {ghand::JointId::RF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-      {ghand::JointId::LF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-      {ghand::JointId::LF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
+      {ghand::JointId::THUMB_MCP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_FE, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_AA, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       20.0f, 100, 100},
+      {ghand::JointId::THUMB_TMC_PS, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
+      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
+      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
+      {ghand::JointId::FF_MCP_AA, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
+      {ghand::JointId::MF_PIP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
+      {ghand::JointId::MF_MCP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
+      {ghand::JointId::RF_PIP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
+      {ghand::JointId::RF_MCP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
+      {ghand::JointId::LF_PIP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
+      {ghand::JointId::LF_MCP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       0.0f, 100, 100},
   };
 
   std::cout << "\nResetting every hand, one hand at a time...\n";

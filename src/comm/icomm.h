@@ -20,8 +20,8 @@ using JointsCallback =
     std::function<void(std::uint16_t slave, const std::vector<JointData>&)>;
 using HandStateCallback =
     std::function<void(std::uint16_t slave, const HandData&, HandRuntimeState)>;
-using TactileDataCallback =
-    std::function<void(std::uint16_t slave, const std::map<TactileSensorId, TactileData>&)>;
+using TactileDataCallback = std::function<void(
+    std::uint16_t slave, const std::map<TactileSensorId, TactileData>&)>;
 
 // One hand found on the bus. Internal: the public API exposes hands as GHand
 // objects instead.
@@ -81,15 +81,30 @@ class IComm {
 
   virtual bool DisableHand(uint16_t slave_index) { return false; }
 
-  virtual bool GetHandStateMachine(uint16_t slave_index, HandRuntimeState* value) { return false; }
+  virtual bool GetHandStateMachine(uint16_t slave_index,
+                                   HandRuntimeState* value) {
+    return false;
+  }
 
-  virtual bool GetStallTolerances(uint16_t slave_index, std::map<JointId, uint8_t>* value) { return false; }
+  virtual bool GetStallTolerances(uint16_t slave_index,
+                                  std::map<JointId, uint8_t>* value) {
+    return false;
+  }
 
-  virtual bool SetStallTolerances(uint16_t slave_index, const std::map<JointId, uint8_t>& values) { return false; }
+  virtual bool SetStallTolerances(uint16_t slave_index,
+                                  const std::map<JointId, uint8_t>& values) {
+    return false;
+  }
 
-  virtual bool GetPidParameters(uint16_t slave_index, std::vector<uint16_t>* value) { return false; }
+  virtual bool GetPidParameters(uint16_t slave_index,
+                                std::vector<uint16_t>* value) {
+    return false;
+  }
 
-  virtual bool SetPidParameters(uint16_t slave_index, const std::vector<uint16_t>& values) { return false; }
+  virtual bool SetPidParameters(uint16_t slave_index,
+                                const std::vector<uint16_t>& values) {
+    return false;
+  }
 
   // System operations
   virtual bool ClearFault(uint16_t slave_index) = 0;
@@ -105,12 +120,9 @@ class IComm {
   virtual void SetTactileDataCallback(TactileDataCallback cb) = 0;
 
   // Firmware update
-  virtual FirmwareUpdateError BootUpdate(
-      const std::string& filename,
-      std::function<void(int)> progress) = 0;
+  virtual FirmwareUpdateError BootUpdate(const std::string& filename,
+                                         std::function<void(int)> progress) = 0;
   virtual bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) = 0;
-
-
 };
 
 }  // namespace internal

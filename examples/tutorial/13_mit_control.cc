@@ -28,11 +28,12 @@ int main() {
       std::cerr << "Open tactile failed: " << opened.message << '\n';
       return false;
     }
-    const JointId ids[] = {JointId::THUMB_MCP, JointId::THUMB_TMC_FE,
-        JointId::THUMB_TMC_AA, JointId::THUMB_TMC_PS, JointId::FF_PIP,
-        JointId::FF_MCP, JointId::FF_MCP_AA, JointId::MF_PIP,
-        JointId::MF_MCP, JointId::RF_PIP, JointId::RF_MCP,
-        JointId::LF_PIP, JointId::LF_MCP};
+    const JointId ids[] = {
+        JointId::THUMB_MCP,    JointId::THUMB_TMC_FE, JointId::THUMB_TMC_AA,
+        JointId::THUMB_TMC_PS, JointId::FF_PIP,       JointId::FF_MCP,
+        JointId::FF_MCP_AA,    JointId::MF_PIP,       JointId::MF_MCP,
+        JointId::RF_PIP,       JointId::RF_MCP,       JointId::LF_PIP,
+        JointId::LF_MCP};
     const float angles[] = {66, 50, 90, 0, 80, 90, 0, 90, 90, 90, 90, 74, 90};
     std::vector<JointCommand> commands;
     for (size_t i = 0; i < 13; ++i) {
@@ -44,7 +45,8 @@ int main() {
     }
     const auto send = [&]() -> bool {
       const auto result = hand->MoveJoints(commands, HandControlMode::MIT);
-      if (!result) std::cerr << "MIT command failed: " << result.message << '\n';
+      if (!result)
+        std::cerr << "MIT command failed: " << result.message << '\n';
       return static_cast<bool>(result);
     };
     if (!send()) return false;
@@ -55,22 +57,34 @@ int main() {
       int touching = 0;
       if (data) {
         for (const auto& finger : data.value) {
-          if (finger.second.state && finger.second.resultant_force.size() == 3 &&
-              finger.second.resultant_force[2] >= 0.8f) ++touching;
+          if (finger.second.state &&
+              finger.second.resultant_force.size() == 3 &&
+              finger.second.resultant_force[2] >= 0.8f)
+            ++touching;
         }
       }
-      if (touching >= 3) { contact = true; break; }
+      if (touching >= 3) {
+        contact = true;
+        break;
+      }
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     if (!contact) {
       std::cout << "No contact within 10 s; disabling hand.\n";
       return true;
     }
-    for (auto& joint : commands) { joint.kp = 25; joint.kd = 2; joint.current = 5; }
+    for (auto& joint : commands) {
+      joint.kp = 25;
+      joint.kd = 2;
+      joint.current = 5;
+    }
     if (!send()) return false;
     std::this_thread::sleep_for(std::chrono::seconds(5));
     for (auto& joint : commands) {
-      joint.angle = 0; joint.kp = 10; joint.kd = 0; joint.current = 0;
+      joint.angle = 0;
+      joint.kp = 10;
+      joint.kd = 0;
+      joint.current = 0;
     }
     if (!send()) return false;
     std::this_thread::sleep_for(std::chrono::seconds(2));

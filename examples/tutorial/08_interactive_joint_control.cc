@@ -169,8 +169,7 @@ bool ReadJointParams(std::unordered_map<int, JointParams>* joint_params) {
     std::cout << "\nSetting parameters for joint "
               << ghand::ToString(static_cast<ghand::JointId>(joint_id))
               << ":\n";
-    params.angle =
-        ReadFloatWithDefault("Angle value (degrees)", params.angle);
+    params.angle = ReadFloatWithDefault("Angle value (degrees)", params.angle);
     params.speed = ReadIntInRange("Speed value (0-100)", params.speed, 0, 100);
     params.current =
         ReadIntInRange("Current value (0-100)", params.current, 0, 100);
@@ -184,8 +183,10 @@ std::vector<ghand::JointCommand> BuildJointCommands(
   joints.reserve(joint_params.size());
   for (const auto& pair : joint_params) {
     const JointParams& params = pair.second;
-    joints.push_back({static_cast<ghand::JointId>(pair.first), ghand::JointControlMode::POSITION,
-                      ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, params.angle,
+    joints.push_back({static_cast<ghand::JointId>(pair.first),
+                      ghand::JointControlMode::POSITION,
+                      ghand::JointLoopType::CLOSED_LOOP,
+                      ghand::JointControlState::RUNNING, params.angle,
                       static_cast<int16_t>(params.speed),
                       static_cast<int16_t>(params.current)});
   }
@@ -208,7 +209,8 @@ void DisplayJointFeedback(const std::vector<ghand::JointData>& joints) {
 void RunControlLoop(ghand::GHand& hand) {
   while (true) {
     DisplayJointIdList();
-    std::cout << "\nPlease set joint parameters (press Enter to finish input):\n";
+    std::cout
+        << "\nPlease set joint parameters (press Enter to finish input):\n";
 
     std::unordered_map<int, JointParams> joint_params;
     if (!ReadJointParams(&joint_params)) {
@@ -217,7 +219,8 @@ void RunControlLoop(ghand::GHand& hand) {
     }
 
     if (joint_params.empty()) {
-      std::cout << "\nNo joints set, all joints maintain their current position\n";
+      std::cout
+          << "\nNo joints set, all joints maintain their current position\n";
     } else {
       std::cout << "\nSending joint commands...\n";
       const std::vector<ghand::JointCommand> joints =
@@ -281,7 +284,8 @@ int main() {
               << "  Device Name: " << info.value.device_name << '\n'
               << "  Software Version: " << info.value.software_version << '\n'
               << "  Serial Number: " << info.value.serial_number << '\n'
-              << "  Hand Type: " << ghand::ToString(hand->GetHandType()) << '\n';
+              << "  Hand Type: " << ghand::ToString(hand->GetHandType())
+              << '\n';
   }
 
   std::cout << "\nInteractive control mode started\n"

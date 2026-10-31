@@ -54,7 +54,8 @@ int main() {
   for (ghand::GHand* hand : connected.value) {
     const uint16_t index = hand->GetSlaveIndex();
     hand->SetHandStateCallback([index](const ghand::HandData& state) {
-      std::cout << "Slave " << index << ": " << ghand::ToString(state.joints_state) << '\n';
+      std::cout << "Slave " << index << ": "
+                << ghand::ToString(state.joints_state) << '\n';
     });
     hand->SetJointsCallback(
         [index](const std::vector<ghand::JointData>& joints) {
@@ -62,8 +63,7 @@ int main() {
             std::cout << "Slave " << index << ": " << ghand::ToString(joint.id)
                       << ": state=" << ghand::ToString(joint.state)
                       << ", error=" << ghand::ToString(joint.error)
-                      << ", angle=" << joint.angle
-                      << '\n';
+                      << ", angle=" << joint.angle << '\n';
           }
         });
 

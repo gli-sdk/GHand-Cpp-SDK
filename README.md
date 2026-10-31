@@ -371,6 +371,10 @@ canfd_master->Connect("/dev/ttyACM0:0");
 `Connect()` accepts optional RS485/CANFD slave ID and typed baud-rate or bit
 timing parameters:
 
+Without a rate parameter, RS485 defaults to **1,000,000 bps**
+(`RS485BaudRate::RATE_1000000`); CAN-FD defaults to **1 Mbit/s arbitration /
+5 Mbit/s data** (`CANFDBitTiming::TIMING_1M_5M`, both sample points at 75%).
+
 ```cpp
 // RS485: slave_id = 0 scans the default IDs 0x31 and 0x32.
 master->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
@@ -381,11 +385,26 @@ master->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
 
 `SetSlaveId()` writes a new RS485/CANFD slave ID to holding register `0x0003`.
 `SetBaudrateConfig()` writes the enum-mapped protocol gear to holding register
-`0x0004`; the device stores it and applies it after the next power-up.
+`0x0004`; the device stores it and requires a **power cycle** to apply it.
+A successful call does not immediately change the link rate. After success,
+call `Disconnect()`, power-cycle the device, then pass the new rate or timing
+explicitly to the three-argument `Connect()`. Omitting it still uses the defaults
+above; the new rate is not automatically detected. Changes from `SetSlaveId()`
+are not persistent, so reconnect using the restored default ID (or `0` to scan
+the default IDs).
 
 ```cpp
-hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_1000000);
-hand->SetBaudrateConfig(ghand::CANFDBitTiming::TIMING_1M_5M);
+// RS485 example (choose this OR the CAN-FD example below): verify success first.
+hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_115200);
+master->Disconnect();
+// Manually power-cycle the device here.
+master->Connect("auto", 0, ghand::RS485BaudRate::RATE_115200);
+
+// CAN-FD example: verify success before continuing.
+hand->SetBaudrateConfig(ghand::CANFDBitTiming::TIMING_1M_2M);
+master->Disconnect();
+// Manually power-cycle the device here.
+master->Connect("COM17:0", 0, ghand::CANFDBitTiming::TIMING_1M_2M);
 ```
 
 RS485 baud-rate gears:

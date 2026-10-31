@@ -12,9 +12,9 @@ namespace ghand {
 
 // Hand type definitions
 enum class HandType : uint8_t {
-  NONE,
-  LEFT_HAND,
-  RIGHT_HAND,
+  NONE,        // Unspecified or undetermined hand side.
+  LEFT_HAND,   // Left hand.
+  RIGHT_HAND,  // Right hand.
 };
 
 /**
@@ -23,22 +23,24 @@ enum class HandType : uint8_t {
  */
 GHAND_API const char* ToString(HandType type);  // NOLINT(runtime/string)
 
+// Overall joint enable state reported in HandData.
 enum class HandControlState : uint16_t {
-  DISABLED = 0,
-  ENABLED = 1,
+  DISABLED = 0,  // Joints disabled.
+  ENABLED = 1,   // Joints enabled.
 };
 
 /**
  * @brief Get string representation of state (for debug/logging)
  * @warning Do not call in real-time control loops (string processing overhead)
  */
-GHAND_API const char* ToString(HandControlState state);  // NOLINT(runtime/string)
+GHAND_API const char* ToString(
+    HandControlState state);  // NOLINT(runtime/string)
 
 enum class JointState : uint8_t {
-  DISABLED = 0,
-  RUNNING = 1,
-  STOPPED = 2,
-  FAULT = 3,
+  DISABLED = 0,  // Drive force released.
+  RUNNING = 1,   // Joint running.
+  STOPPED = 2,   // Motion stopped; holds the current position.
+  FAULT = 3,     // Joint fault.
 };
 
 GHAND_API const char* ToString(JointState state);  // NOLINT(runtime/string)
@@ -53,6 +55,8 @@ GHAND_API const char* ToString(CommType type);  // NOLINT(runtime/string)
  *
  * Each value maps directly to the baud-rate gear defined by the GHand device
  * protocol.
+ * The default is RATE_1000000 (1,000,000 bps). SetBaudrateConfig saves a new
+ * gear; power-cycle the device, then reconnect with that gear explicitly.
  */
 enum class RS485BaudRate : uint8_t {
   RATE_57600 = 0x00,
@@ -60,7 +64,7 @@ enum class RS485BaudRate : uint8_t {
   RATE_230400 = 0x02,
   RATE_460800 = 0x03,
   RATE_921600 = 0x04,
-  RATE_1000000 = 0x05,
+  RATE_1000000 = 0x05,  // Default: 1,000,000 bps.
 };
 
 /**
@@ -68,6 +72,8 @@ enum class RS485BaudRate : uint8_t {
  *
  * Naming format: TIMING_<arbitration bitrate>_<data bitrate>.
  * Sample points are fixed by the GHand device protocol for each profile.
+ * The default is TIMING_1M_5M. SetBaudrateConfig saves a new profile;
+ * power-cycle the device, then reconnect with that profile explicitly.
  */
 enum class CANFDBitTiming : uint8_t {
   // Arbitration: 500 Kbps @ 80%; data: 800 Kbps @ 80%.
@@ -84,12 +90,12 @@ enum class CANFDBitTiming : uint8_t {
   TIMING_1M_2M = 0x05,
   // Arbitration: 1 Mbps @ 75%; data: 4 Mbps @ 80%.
   TIMING_1M_4M = 0x06,
-  // Arbitration: 1 Mbps @ 75%; data: 5 Mbps @ 75%.
+  // Default. Arbitration: 1 Mbps @ 75%; data: 5 Mbps @ 75%.
   TIMING_1M_5M = 0x07,
 };
 
 // Product type definitions
-enum class ProductType : uint8_t {AUTO, GHand5,  GHandLite1 };
+enum class ProductType : uint8_t { AUTO, GHand5, GHandLite1 };
 
 /**
  * @brief Get string representation of product type (for debug/logging)
@@ -97,26 +103,27 @@ enum class ProductType : uint8_t {AUTO, GHand5,  GHandLite1 };
  */
 GHAND_API const char* ToString(ProductType type);  // NOLINT(runtime/string)
 
+// Protocol joint IDs; available joints depend on the product configuration.
 enum class JointId : uint8_t {
-  THUMB_IP,
-  THUMB_MCP,
-  THUMB_TMC_FE,
-  THUMB_TMC_AA,
-  THUMB_TMC_PS,
-  FF_DIP,
-  FF_PIP,
-  FF_MCP,
-  FF_MCP_AA,
-  MF_DIP,
-  MF_PIP,
-  MF_MCP,
-  RF_DIP,
-  RF_PIP,
-  RF_MCP,
-  LF_DIP,
-  LF_PIP,
-  LF_MCP,
-  NUM_JOINTS
+  THUMB_IP,      // 0: Thumb interphalangeal joint.
+  THUMB_MCP,     // 1: Thumb metacarpophalangeal joint.
+  THUMB_TMC_FE,  // 2: Thumb trapeziometacarpal flexion and extension.
+  THUMB_TMC_AA,  // 3: Thumb trapeziometacarpal abduction and adduction.
+  THUMB_TMC_PS,  // 4: Thumb trapeziometacarpal pronation and supination.
+  FF_DIP,        // 5: Index finger distal interphalangeal joint.
+  FF_PIP,        // 6: Index finger proximal interphalangeal joint.
+  FF_MCP,        // 7: Index finger metacarpophalangeal flexion and extension.
+  FF_MCP_AA,     // 8: Index finger metacarpophalangeal abduction and adduction.
+  MF_DIP,        // 9: Middle finger distal interphalangeal joint.
+  MF_PIP,        // 10: Middle finger proximal interphalangeal joint.
+  MF_MCP,        // 11: Middle finger metacarpophalangeal joint.
+  RF_DIP,        // 12: Ring finger distal interphalangeal joint.
+  RF_PIP,        // 13: Ring finger proximal interphalangeal joint.
+  RF_MCP,        // 14: Ring finger metacarpophalangeal joint.
+  LF_DIP,        // 15: Little finger distal interphalangeal joint.
+  LF_PIP,        // 16: Little finger proximal interphalangeal joint.
+  LF_MCP,        // 17: Little finger metacarpophalangeal joint.
+  NUM_JOINTS     // 18: Number of joint IDs; not a commandable joint.
 };
 
 /**
@@ -125,29 +132,51 @@ enum class JointId : uint8_t {
  */
 GHAND_API const char* ToString(JointId id);  // NOLINT(runtime/string)
 
-// Control mode definitions
+// Whole-hand mode passed to GHand::MoveJoints.
 enum class HandControlMode : uint8_t {
-  POSITION = 0,
-  VELOCITY = 1,
-  CURRENT = 2,
-  MIT = 3,
-  CUSTOM = 0x0F,
+  POSITION = 0,   // Target joint angles, with velocity/current limits.
+  VELOCITY = 1,   // Target joint velocities (%).
+  CURRENT = 2,    // Target motor currents (%).
+  MIT = 3,        // Target angles, velocities, currents and kp/kd gains.
+  CUSTOM = 0x0F,  // Per-joint modes and feedback loops from JointCommand.
 };
 
+// Whole-hand runtime state returned by GHand::GetHandStateMachine.
 enum class HandRuntimeState : uint8_t {
-  INITIALIZED = 0, POWER_ON_SELF_TEST = 1, IDLE = 2, MOVING = 3,
-  FAULT = 4, LOW_POWER = 5, FIRMWARE_UPGRADE = 6
+  INITIALIZED = 0,         // Initialization.
+  POWER_ON_SELF_TEST = 1,  // Power-on self-test.
+  IDLE = 2,                // Idle.
+  MOVING = 3,              // Motion in progress.
+  FAULT = 4,               // Fault state.
+  LOW_POWER = 5,           // Low-power state.
+  FIRMWARE_UPGRADE = 6     // Firmware upgrade in progress.
 };
 
+// Per-joint mode in JointCommand; CUSTOM is only available at hand level.
 enum class JointControlMode : uint8_t {
-  POSITION = 0, VELOCITY = 1, CURRENT = 2, MIT = 3
+  POSITION = 0,  // Target angle, with velocity/current limits.
+  VELOCITY = 1,  // Target velocity (%).
+  CURRENT = 2,   // Target motor current (%).
+  MIT = 3        // Target angle, velocity, current and kp/kd gains.
 };
 
+// Only selectable in hand CUSTOM mode; other modes use CLOSED_LOOP.
 enum class JointLoopType : uint8_t { SEMI_CLOSED_LOOP = 0, CLOSED_LOOP = 1 };
-enum class TactileSensorId : uint8_t { THUMB = 0, FF = 1, MF = 2, RF = 3, LF = 4 };
+enum class TactileSensorId : uint8_t {
+  THUMB = 0,  // Thumb.
+  FF = 1,     // Index finger.
+  MF = 2,     // Middle finger.
+  RF = 3,     // Ring finger.
+  LF = 4      // Little finger.
+};
 enum class GestureType : uint8_t { OPEN_HAND, FIST, OK, THUMBS_UP, SIX_SIGN };
 
-enum class JointControlState : uint8_t { DISABLED = 0, RUNNING = 1, STOPPED = 2 };
+// Requested state in JointCommand; JointState reports the measured state.
+enum class JointControlState : uint8_t {
+  DISABLED = 0,  // Release drive force.
+  RUNNING = 1,   // Run the joint.
+  STOPPED = 2    // Stop moving and hold the current position.
+};
 
 }  // namespace ghand
 

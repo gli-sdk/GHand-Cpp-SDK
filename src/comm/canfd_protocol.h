@@ -83,9 +83,7 @@ struct ArbitrationId {
   FrameType frame_type() const {
     return static_cast<FrameType>((raw >> 25) & 0xF);
   }
-  uint8_t device_id() const {
-    return static_cast<uint8_t>((raw >> 17) & 0xFF);
-  }
+  uint8_t device_id() const { return static_cast<uint8_t>((raw >> 17) & 0xFF); }
   uint8_t seq() const { return static_cast<uint8_t>((raw >> 13) & 0xF); }
   uint8_t total() const { return static_cast<uint8_t>((raw >> 9) & 0xF); }
 };

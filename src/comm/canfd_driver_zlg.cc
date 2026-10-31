@@ -10,10 +10,10 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#include <devguid.h>
+#include <setupapi.h>
 #include <windows.h>
 #include <winioctl.h>
-#include <setupapi.h>
-#include <devguid.h>
 #if defined(__MINGW32__) && !defined(_PHYSICAL_ADDRESS)
 typedef LARGE_INTEGER PHYSICAL_ADDRESS;
 #endif
@@ -62,8 +62,8 @@ const int kBitrateApplySettleMs = 50;
 
 std::string HexByte(uint8_t value) {
   std::ostringstream oss;
-  oss << "0x" << std::hex << std::uppercase << std::setw(2)
-      << std::setfill('0') << static_cast<int>(value);
+  oss << "0x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
+      << static_cast<int>(value);
   return oss.str();
 }
 
@@ -98,8 +98,8 @@ std::map<uint32_t, uint8_t> CommonDataBitrateCodes() {
 }
 
 uint8_t DlcLength(uint8_t len) {
-  static const uint8_t kLengths[] = {0,  1,  2,  3,  4,  5,  6,  7,
-                                     8,  12, 16, 20, 24, 32, 48, 64};
+  static const uint8_t kLengths[] = {0, 1,  2,  3,  4,  5,  6,  7,
+                                     8, 12, 16, 20, 24, 32, 48, 64};
   for (uint8_t value : kLengths) {
     if (value >= len) return value;
   }
@@ -131,8 +131,7 @@ void AddUnique(std::vector<std::string>* values, const std::string& value) {
 
 #ifdef _WIN32
 std::string NormalizeWindowsComPort(const std::string& name) {
-  if (name.size() > 3 &&
-      (name[0] == 'C' || name[0] == 'c') &&
+  if (name.size() > 3 && (name[0] == 'C' || name[0] == 'c') &&
       (name[1] == 'O' || name[1] == 'o') &&
       (name[2] == 'M' || name[2] == 'm')) {
     int port_number = std::atoi(name.c_str() + 3);
@@ -247,18 +246,12 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
       return -2;
     }
     port_name_ = port_name;
-    GHAND_LOG_INFO("ZQWL CANFD serial opened: " << port_name
-                                               << " channel=" << can_index_
-                                               << " bitrate=" << bitrate
-                                               << "/"
-                                               << static_cast<int>(
-                                                      bitrate_sample_point)
-                                               << "%"
-                                               << " dbitrate=" << dbitrate
-                                               << "/"
-                                               << static_cast<int>(
-                                                      dbitrate_sample_point)
-                                               << "%");
+    GHAND_LOG_INFO("ZQWL CANFD serial opened: "
+                   << port_name << " channel=" << can_index_
+                   << " bitrate=" << bitrate << "/"
+                   << static_cast<int>(bitrate_sample_point) << "%"
+                   << " dbitrate=" << dbitrate << "/"
+                   << static_cast<int>(dbitrate_sample_point) << "%");
     return 0;
   }
 
@@ -358,17 +351,17 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
         BYTE hardware[256] = {};
         DWORD dataType = 0, reqSize = 0;
         if (!SetupDiGetDeviceRegistryPropertyA(
-                hDevInfo, &devInfoData, SPDRP_HARDWAREID, &dataType,
-                hardware, sizeof(hardware), &reqSize)) {
+                hDevInfo, &devInfoData, SPDRP_HARDWAREID, &dataType, hardware,
+                sizeof(hardware), &reqSize)) {
           continue;
         }
         if (!IsZqwlVidPid(ByteArrayString(hardware, sizeof(hardware)))) {
           continue;
         }
         BYTE friendly[256] = {};
-        SetupDiGetDeviceRegistryPropertyA(
-            hDevInfo, &devInfoData, SPDRP_FRIENDLYNAME, &dataType,
-            friendly, sizeof(friendly), &reqSize);
+        SetupDiGetDeviceRegistryPropertyA(hDevInfo, &devInfoData,
+                                          SPDRP_FRIENDLYNAME, &dataType,
+                                          friendly, sizeof(friendly), &reqSize);
         std::string text = ByteArrayString(friendly, sizeof(friendly));
         size_t lp = text.find('(');
         size_t rp = text.find(')', lp);
@@ -402,9 +395,9 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
   bool OpenSerial(const std::string& port_name) {
 #ifdef _WIN32
     std::string normalized = NormalizeWindowsComPort(port_name);
-    handle_ = CreateFileA(normalized.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
-                          nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
-                          nullptr);
+    handle_ =
+        CreateFileA(normalized.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+                    nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (handle_ == INVALID_HANDLE_VALUE) {
       GHAND_LOG_ERROR("Failed to open CANFD serial port: " << port_name);
       return false;
@@ -431,8 +424,8 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
 #else
     fd_ = open(port_name.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd_ < 0) {
-      GHAND_LOG_ERROR("Failed to open CANFD serial port "
-                      << port_name << ": " << strerror(errno));
+      GHAND_LOG_ERROR("Failed to open CANFD serial port " << port_name << ": "
+                                                          << strerror(errno));
       return false;
     }
     termios tio;
@@ -470,8 +463,7 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
     params[1] = 0x00;
     params[2] = bitrate_code;
     GHAND_LOG_DEBUG("ZQWL CANFD common bitrate config: bitrate="
-                    << bitrate << "/"
-                    << static_cast<int>(bitrate_sample_point)
+                    << bitrate << "/" << static_cast<int>(bitrate_sample_point)
                     << "% dbitrate=" << dbitrate << "/"
                     << static_cast<int>(dbitrate_sample_point) << "%");
     if (!WriteConfig(0x42, params, sizeof(params))) return false;
@@ -480,11 +472,12 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
     uint8_t probe[16] = {0};
     probe[0] = static_cast<uint8_t>(can_index_ & 0xFF);
     uint8_t readback[22] = {0};
-    size_t readback_size = ReadConfigProbe(0x42, probe, sizeof(probe), readback,
-                                           sizeof(readback));
+    size_t readback_size =
+        ReadConfigProbe(0x42, probe, sizeof(probe), readback, sizeof(readback));
     if (readback_size == 0) {
-      GHAND_LOG_DEBUG("ZQWL bitrate read-back not supported (no answer to "
-                      "func=0x42 read); continuing without verification");
+      GHAND_LOG_DEBUG(
+          "ZQWL bitrate read-back not supported (no answer to "
+          "func=0x42 read); continuing without verification");
     } else if (!LooksLikeConfigAck(readback, readback_size) ||
                readback_size < 7) {
       GHAND_LOG_WARNING("ZQWL bitrate read-back unparsable: "
@@ -495,9 +488,9 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
       uint8_t actual_code = readback[6];
       if (actual_code != bitrate_code) {
         GHAND_LOG_WARNING("ZQWL bitrate read-back mismatch: requested="
-                          << HexByte(bitrate_code) << " adapter reports="
-                          << HexByte(actual_code) << " (raw ["
-                          << FormatHex(readback, readback_size)
+                          << HexByte(bitrate_code)
+                          << " adapter reports=" << HexByte(actual_code)
+                          << " (raw [" << FormatHex(readback, readback_size)
                           << "]); re-issuing bitrate config");
         if (!WriteConfig(0x42, params, sizeof(params))) return false;
         std::this_thread::sleep_for(
@@ -571,8 +564,8 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
 
       GHAND_LOG_WARNING(
           "ZQWL config ack not confirmed: func="
-          << HexByte(func_code) << " attempt=" << attempt << "/"
-          << max_attempts << " got=" << response_size << " bytes"
+          << HexByte(func_code) << " attempt=" << attempt << "/" << max_attempts
+          << " got=" << response_size << " bytes"
           << (response_size > 0
                   ? " [" + FormatHex(response, response_size) + "]"
                   : " (无应答字节)"));
@@ -581,14 +574,15 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
     }
 
     if (response_size == 0) {
-      GHAND_LOG_WARNING("ZQWL adapter returned no bytes for config frame func="
-                        << HexByte(func_code)
-                        << "; treating adapter as write-only (ack not validated)");
+      GHAND_LOG_WARNING(
+          "ZQWL adapter returned no bytes for config frame func="
+          << HexByte(func_code)
+          << "; treating adapter as write-only (ack not validated)");
       return true;
     }
-    GHAND_LOG_ERROR("ZQWL config frame func="
-                    << HexByte(func_code) << " not acknowledged after "
-                    << max_attempts << " attempts");
+    GHAND_LOG_ERROR("ZQWL config frame func=" << HexByte(func_code)
+                                              << " not acknowledged after "
+                                              << max_attempts << " attempts");
     return false;
   }
 
@@ -601,9 +595,8 @@ class ZqwlSerialCanfdDriver : public CANFDDriver {
                       deadline - std::chrono::steady_clock::now())
                       .count();
       if (left <= 0) break;
-      int slice = static_cast<int>(left < kConfigAckReadSliceMs
-                                       ? left
-                                       : kConfigAckReadSliceMs);
+      int slice = static_cast<int>(
+          left < kConfigAckReadSliceMs ? left : kConfigAckReadSliceMs);
       uint8_t byte = 0;
       if (!ReadByte(&byte, slice)) break;
       out[total++] = byte;

@@ -41,7 +41,8 @@ void PrintTactileHeader() {
   std::cout << "+--------------------------------------------------+" << '\n';
 }
 
-void PrintTactileRegion(ghand::TactileSensorId id, const ghand::TactileData& region) {
+void PrintTactileRegion(ghand::TactileSensorId id,
+                        const ghand::TactileData& region) {
   std::cout << "| " << std::setw(6) << static_cast<int>(id) << ": "
             << "state=" << std::setw(6) << (region.state ? "OK" : "FAIL")
             << ", "
@@ -53,7 +54,9 @@ void PrintTactileRegion(ghand::TactileSensorId id, const ghand::TactileData& reg
             << region.resultant_force.at(2) << " N |" << '\n';
 }
 
-void PrintTactileData(const std::map<ghand::TactileSensorId, ghand::TactileData>& data, bool* first_print) {
+void PrintTactileData(
+    const std::map<ghand::TactileSensorId, ghand::TactileData>& data,
+    bool* first_print) {
   if (*first_print) {
     PrintTactileHeader();
     *first_print = false;
@@ -110,9 +113,11 @@ int main() {
   // The callback is registered on one hand, so it only ever receives that
   // hand's data.
   bool first_print = true;
-  hand->SetTactileDataCallback([&first_print](const std::map<ghand::TactileSensorId, ghand::TactileData>& data) {
-    PrintTactileData(data, &first_print);
-  });
+  hand->SetTactileDataCallback(
+      [&first_print](
+          const std::map<ghand::TactileSensorId, ghand::TactileData>& data) {
+        PrintTactileData(data, &first_print);
+      });
 
   std::this_thread::sleep_for(std::chrono::seconds(30));
 

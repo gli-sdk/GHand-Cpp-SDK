@@ -57,7 +57,8 @@ class CANFDComm : public IComm {
   bool DisableHand(uint16_t slave) override;
   bool GetHandStateMachine(uint16_t slave, HandRuntimeState* state) override;
   bool GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) override;
-  bool SetPidParameters(uint16_t slave, const std::vector<uint16_t>& values) override;
+  bool SetPidParameters(uint16_t slave,
+                        const std::vector<uint16_t>& values) override;
 
   bool ClearFault(uint16_t slave) override;
 
@@ -69,11 +70,9 @@ class CANFDComm : public IComm {
   void SetHandStateCallback(HandStateCallback cb) override;
   void SetTactileDataCallback(TactileDataCallback cb) override;
 
-  FirmwareUpdateError BootUpdate(
-      const std::string& filename,
-      std::function<void(int)> progress) override;
+  FirmwareUpdateError BootUpdate(const std::string& filename,
+                                 std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
-
 
  private:
   friend struct ProtocolTestAccess;
@@ -87,15 +86,16 @@ class CANFDComm : public IComm {
 
   // Modbus-over-CANFD transport
   bool SendFrame(uint32_t can_id, const uint8_t* data, uint8_t len);
-  bool RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len,
-                 int timeout_ms);
+  bool RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len, int timeout_ms);
 
-  bool ReadRegisters(uint16_t slave, int addr, int count, std::vector<uint8_t>* out_bytes,
-                     int func_code = 0x04, int timeout_ms = 100);
-  bool WriteRegisters(uint16_t slave, int addr, const std::vector<uint8_t>& data,
-                      int timeout_ms = 100);
+  bool ReadRegisters(uint16_t slave, int addr, int count,
+                     std::vector<uint8_t>* out_bytes, int func_code = 0x04,
+                     int timeout_ms = 100);
+  bool WriteRegisters(uint16_t slave, int addr,
+                      const std::vector<uint8_t>& data, int timeout_ms = 100);
 
-  bool WriteSingleRegister(uint16_t slave, int addr, uint16_t value, int timeout_ms = 100);
+  bool WriteSingleRegister(uint16_t slave, int addr, uint16_t value,
+                           int timeout_ms = 100);
   bool WaitInputResult(uint16_t slave, int addr, int baseline = -1);
   bool AccessParameters(uint16_t slave, int command_addr, int parameter_addr,
                         std::vector<uint16_t>* values, bool write);
@@ -105,7 +105,8 @@ class CANFDComm : public IComm {
   bool EstablishConnectionLite1(uint8_t slave_id, int timeout_ms = 200);
   void DeleteConnection(uint16_t slave);
 
-  bool ReadInputBytes(uint16_t slave, int addr, int count, std::vector<uint8_t>* bytes);
+  bool ReadInputBytes(uint16_t slave, int addr, int count,
+                      std::vector<uint8_t>* bytes);
   std::vector<JointData> GetJoints(uint16_t slave);
   HandData GetHandInfo(uint16_t slave, bool* ok = nullptr);
   std::map<TactileSensorId, TactileData> GetTactileData(uint16_t slave);

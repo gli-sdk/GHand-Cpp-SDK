@@ -354,6 +354,10 @@ canfd_master->Connect("/dev/ttyACM0:0");
 
 `Connect()` 支持可选的 RS485/CANFD 从站 ID 与波特率（或位时序）参数：
 
+未传入波特率参数时，RS485 默认使用 **1,000,000 bps**
+（`RS485BaudRate::RATE_1000000`）；CAN-FD 默认使用**仲裁段 1 Mbit/s、数据段
+5 Mbit/s**（`CANFDBitTiming::TIMING_1M_5M`，两段采样点均为 75%）。
+
 ```cpp
 // RS485：slave_id = 0 时扫描默认 ID 0x31 和 0x32。
 master->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
@@ -364,11 +368,23 @@ master->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
 
 `SetSlaveId()` 将新的 RS485/CANFD 从站 ID 写入保持寄存器 `0x0003`。
 `SetBaudrateConfig()` 将枚举映射的协议挡位写入保持寄存器
-`0x0004`；设备保存该值并在下次上电后生效。
+`0x0004`；设备保存该值，必须**断电后重新上电**才会生效，调用成功不会立即切换链路速率。
+修改成功后，先调用 `Disconnect()`，再对设备断电重启，最后通过三参数 `Connect()`
+显式指定新波特率或位时序进行连接；不传该参数仍使用上述默认值，不会自动探测新速率。
+`SetSlaveId()` 修改的 ID 不掉电保存，重启后连接应使用恢复后的默认 ID（或用 `0` 扫描默认 ID）。
 
 ```cpp
-hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_1000000);
-hand->SetBaudrateConfig(ghand::CANFDBitTiming::TIMING_1M_5M);
+// RS485 示例（与下方 CAN-FD 示例二选一）：确认设置成功后再继续。
+hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_115200);
+master->Disconnect();
+// 此处手动对设备断电并重新上电。
+master->Connect("auto", 0, ghand::RS485BaudRate::RATE_115200);
+
+// CAN-FD 示例：确认设置成功后再继续。
+hand->SetBaudrateConfig(ghand::CANFDBitTiming::TIMING_1M_2M);
+master->Disconnect();
+// 此处手动对设备断电并重新上电。
+master->Connect("COM17:0", 0, ghand::CANFDBitTiming::TIMING_1M_2M);
 ```
 
 RS485 波特率挡位：

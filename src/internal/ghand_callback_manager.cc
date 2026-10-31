@@ -15,7 +15,8 @@ namespace ghand {
 namespace internal {
 
 namespace {
-const JointData* FindJointById(const std::vector<JointData>& joints, JointId id) {
+const JointData* FindJointById(const std::vector<JointData>& joints,
+                               JointId id) {
   for (const auto& j : joints) {
     if (j.id == id) return &j;
   }
@@ -106,8 +107,8 @@ void GHandCallbackManager::UpdateTemperature(uint16_t slave,
   }
 }
 
-void GHandCallbackManager::UpdateTactileData(uint16_t slave,
-                                             const std::map<TactileSensorId, TactileData>& data) {
+void GHandCallbackManager::UpdateTactileData(
+    uint16_t slave, const std::map<TactileSensorId, TactileData>& data) {
   TactileDataCallback callback;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
@@ -132,31 +133,36 @@ ResultOf<HandData> GHandCallbackManager::GetHandData(uint16_t slave) const {
     return HandData{};
   }
   if (it->second.machine == HandRuntimeState::POWER_ON_SELF_TEST) {
-    return {SdkError::DEVICE_REJECTED, "device is performing power-on self-test"};
+    return {SdkError::DEVICE_REJECTED,
+            "device is performing power-on self-test"};
   }
   return it->second.state;
 }
 
-ResultOf<std::vector<JointData>> GHandCallbackManager::GetJointsData(uint16_t slave) const {
+ResultOf<std::vector<JointData>> GHandCallbackManager::GetJointsData(
+    uint16_t slave) const {
   std::lock_guard<std::mutex> lock(data_mutex_);
   const auto it = caches_.find(slave);
   if (it == caches_.end()) {
     return std::vector<JointData>{};
   }
   if (it->second.machine == HandRuntimeState::POWER_ON_SELF_TEST) {
-    return {SdkError::DEVICE_REJECTED, "device is performing power-on self-test"};
+    return {SdkError::DEVICE_REJECTED,
+            "device is performing power-on self-test"};
   }
   return it->second.joints;
 }
 
-ResultOf<std::map<TactileSensorId, TactileData>> GHandCallbackManager::GetTactileData(uint16_t slave) const {
+ResultOf<std::map<TactileSensorId, TactileData>>
+GHandCallbackManager::GetTactileData(uint16_t slave) const {
   std::lock_guard<std::mutex> lock(data_mutex_);
   const auto it = caches_.find(slave);
   if (it == caches_.end()) {
     return std::map<TactileSensorId, TactileData>{};
   }
   if (it->second.machine == HandRuntimeState::POWER_ON_SELF_TEST) {
-    return {SdkError::DEVICE_REJECTED, "device is performing power-on self-test"};
+    return {SdkError::DEVICE_REJECTED,
+            "device is performing power-on self-test"};
   }
   return it->second.tactile;
 }
@@ -173,7 +179,9 @@ bool GHandCallbackManager::HasJointDataChanged(
     if (previous == nullptr) {
       return true;
     }
-    if (joint.state != previous->state || joint.error != previous->error || joint.control_mode != previous->control_mode || joint.loop_type != previous->loop_type) {
+    if (joint.state != previous->state || joint.error != previous->error ||
+        joint.control_mode != previous->control_mode ||
+        joint.loop_type != previous->loop_type) {
       return true;
     }
   }
@@ -198,15 +206,15 @@ bool GHandCallbackManager::HasJointDataChanged(
   return false;
 }
 
-bool GHandCallbackManager::HasTemperatureChanged(
-    const SlaveCache& cache, const HandData& temperature) {
+bool GHandCallbackManager::HasTemperatureChanged(const SlaveCache& cache,
+                                                 const HandData& temperature) {
   // 1. State or error changes trigger immediately
   if (temperature.joints_state != cache.state.joints_state ||
       temperature.error_warn != cache.state.error_warn ||
       temperature.error_fault != cache.state.error_fault ||
       temperature.error_critical != cache.state.error_critical) {
-    GHAND_LOG_DEBUG(
-        "Hand state change detected: " << ghand::ToString(temperature.joints_state));
+    GHAND_LOG_DEBUG("Hand state change detected: "
+                    << ghand::ToString(temperature.joints_state));
     return true;
   }
 
@@ -229,14 +237,26 @@ bool GHandCallbackManager::HasTemperatureChanged(
 
 void GHandCallbackManager::Clear() {
   std::lock_guard<std::mutex> lock(data_mutex_);
-  joints_callbacks_.clear(); hand_state_callbacks_.clear(); tactile_data_callbacks_.clear(); caches_.clear();
+  joints_callbacks_.clear();
+  hand_state_callbacks_.clear();
+  tactile_data_callbacks_.clear();
+  caches_.clear();
 }
 void GHandCallbackManager::RenameHand(uint16_t from, uint16_t to) {
   if (from == to) return;
   std::lock_guard<std::mutex> lock(data_mutex_);
-  if (joints_callbacks_.count(from)) { joints_callbacks_[to] = joints_callbacks_[from]; joints_callbacks_.erase(from); }
-  if (hand_state_callbacks_.count(from)) { hand_state_callbacks_[to] = hand_state_callbacks_[from]; hand_state_callbacks_.erase(from); }
-  if (tactile_data_callbacks_.count(from)) { tactile_data_callbacks_[to] = tactile_data_callbacks_[from]; tactile_data_callbacks_.erase(from); }
+  if (joints_callbacks_.count(from)) {
+    joints_callbacks_[to] = joints_callbacks_[from];
+    joints_callbacks_.erase(from);
+  }
+  if (hand_state_callbacks_.count(from)) {
+    hand_state_callbacks_[to] = hand_state_callbacks_[from];
+    hand_state_callbacks_.erase(from);
+  }
+  if (tactile_data_callbacks_.count(from)) {
+    tactile_data_callbacks_[to] = tactile_data_callbacks_[from];
+    tactile_data_callbacks_.erase(from);
+  }
   if (caches_.count(from)) {
     if (!caches_.count(to)) caches_[to] = std::move(caches_[from]);
     caches_.erase(from);

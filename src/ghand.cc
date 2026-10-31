@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2025-2026 GLITech
 // SPDX-License-Identifier: GPL-3.0-only
 
+#include "ghand/ghand.h"
+
 #include <map>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
-
-#include "ghand/ghand.h"
 
 #include "internal/ghand_impl.h"
 
@@ -20,8 +20,7 @@ namespace internal {
 struct HandFactory {
   static std::unique_ptr<GHand> Make(GHandImpl* impl, uint16_t slave_index,
                                      HandType hand_type) {
-    return std::unique_ptr<GHand>(
-        new GHand(impl, slave_index, hand_type));
+    return std::unique_ptr<GHand>(new GHand(impl, slave_index, hand_type));
   }
 };
 
@@ -39,8 +38,8 @@ ResultOf<std::vector<GHand*>> AdoptHands(
   std::vector<GHand*> hands;
   hands.reserve(connected.value.size());
   for (const auto& hand : connected.value) {
-    storage->push_back(internal::HandFactory::Make(
-        impl, hand.slave_index, hand.hand_type));
+    storage->push_back(
+        internal::HandFactory::Make(impl, hand.slave_index, hand.hand_type));
     hands.push_back(storage->back().get());
   }
   return hands;
@@ -54,9 +53,7 @@ ResultOf<std::vector<GHand*>> AdoptHands(
 
 GHand::GHand(internal::GHandImpl* impl, uint16_t slave_index,
              HandType hand_type)
-    : impl_(impl),
-      slave_index_(slave_index),
-      hand_type_(hand_type) {}
+    : impl_(impl), slave_index_(slave_index), hand_type_(hand_type) {}
 
 GHand::~GHand() {}
 
@@ -119,19 +116,28 @@ ResultOf<std::map<TactileSensorId, TactileData>> GHand::GetTactileData() {
 
 Result GHand::DisableHand() { return impl_->DisableHand(slave_index_); }
 
-ResultOf<HandRuntimeState> GHand::GetHandStateMachine() { return impl_->GetHandStateMachine(slave_index_); }
+ResultOf<HandRuntimeState> GHand::GetHandStateMachine() {
+  return impl_->GetHandStateMachine(slave_index_);
+}
 
-ResultOf<std::map<JointId, uint8_t>> GHand::GetStallTolerances() { return impl_->GetStallTolerances(slave_index_); }
+ResultOf<std::map<JointId, uint8_t>> GHand::GetStallTolerances() {
+  return impl_->GetStallTolerances(slave_index_);
+}
 
-Result GHand::SetStallTolerances(const std::map<JointId, uint8_t>& values) { return impl_->SetStallTolerances(slave_index_, values); }
+Result GHand::SetStallTolerances(const std::map<JointId, uint8_t>& values) {
+  return impl_->SetStallTolerances(slave_index_, values);
+}
 
-ResultOf<std::vector<uint16_t>> GHand::GetPidParameters() { return impl_->GetPidParameters(slave_index_); }
+ResultOf<std::vector<uint16_t>> GHand::GetPidParameters() {
+  return impl_->GetPidParameters(slave_index_);
+}
 
-Result GHand::SetPidParameters(const std::vector<uint16_t>& values) { return impl_->SetPidParameters(slave_index_, values); }
+Result GHand::SetPidParameters(const std::vector<uint16_t>& values) {
+  return impl_->SetPidParameters(slave_index_, values);
+}
 
 FirmwareUpdateError GHand::BootUpdate(
-    const std::string& filename,
-    std::function<void(int)> progress_callback) {
+    const std::string& filename, std::function<void(int)> progress_callback) {
   return impl_->BootUpdate(slave_index_, filename, progress_callback);
 }
 
@@ -150,13 +156,17 @@ std::unique_ptr<Master> Master::Create(ProductType pt, CommType ct) {
 Master::Master(ProductType pt, CommType ct)
     : impl_(new internal::GHandImpl(pt, ct)) {}
 
-Master::~Master() { impl_->Disconnect(); hands_.clear(); }
+Master::~Master() {
+  impl_->Disconnect();
+  hands_.clear();
+}
 
 ResultOf<std::vector<GHand*>> Master::Connect(const std::string& device_name,
                                               uint8_t slave_id) {
   impl_->Disconnect();
   hands_.clear();
-  return AdoptHands(impl_.get(), &hands_, impl_->Connect(device_name, slave_id));
+  return AdoptHands(impl_.get(), &hands_,
+                    impl_->Connect(device_name, slave_id));
 }
 
 ResultOf<std::vector<GHand*>> Master::Connect(const std::string& device_name,
@@ -177,7 +187,11 @@ ResultOf<std::vector<GHand*>> Master::Connect(const std::string& device_name,
                     impl_->Connect(device_name, slave_id, timing));
 }
 
-Result Master::Disconnect() { auto result = impl_->Disconnect(); hands_.clear(); return result; }
+Result Master::Disconnect() {
+  auto result = impl_->Disconnect();
+  hands_.clear();
+  return result;
+}
 
 bool Master::IsConnected() const { return impl_->IsConnected(); }
 

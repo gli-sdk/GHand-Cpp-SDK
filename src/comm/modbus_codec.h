@@ -62,11 +62,11 @@ JointData ParseJointData(const uint16_t* raw, JointId joint_id);
 // The block is assumed to start at register 0x105F and contain
 // (max_joint_id + 1) * 5 registers for GHand5.
 std::vector<JointData> ParseJoints(const uint16_t* raw, size_t count,
-                               const std::vector<JointId>& valid_joints);
+                                   const std::vector<JointId>& valid_joints);
 
 std::vector<JointData> ParseJoints(const uint16_t* raw, size_t count,
-                               const ProductConfig& config,
-                               uint16_t start_addr);
+                                   const ProductConfig& config,
+                                   uint16_t start_addr);
 
 // Parse tactile state and error from the first register (0x111A).
 // Returns (state_byte, error_byte).
@@ -80,7 +80,7 @@ std::vector<float> ParseTactileResultant(const uint16_t* raw, int region_index);
 // Parse distributed force data from raw bytes.
 // count: Number of tactile points for this region.
 std::vector<float> ParseTactileDistributed(const uint8_t* data_bytes,
-                                            size_t byte_len, int count);
+                                           size_t byte_len, int count);
 
 // Encode a JointCommand into six holding-register values.
 std::vector<uint16_t> EncodeJointCommand(const JointCommand& joint);
@@ -88,7 +88,8 @@ std::vector<uint16_t> EncodeJointCommand(const JointCommand& joint);
 // Complete Modbus hand frame, including stopped entries for omitted joints.
 std::vector<uint16_t> EncodeHandCommand(
     const std::vector<JointCommand>& joints, HandControlMode mode,
-    const ProductConfig& config, const std::map<JointId, HandControlMode>& modes);
+    const ProductConfig& config,
+    const std::map<JointId, HandControlMode>& modes);
 
 // EtherCAT RPDO: hand mode/enable followed by 12-byte joint commands.
 std::vector<uint8_t> EncodeEthercatCommand(

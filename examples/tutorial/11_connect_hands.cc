@@ -23,8 +23,10 @@ void PrintUsage(const char* program) {
       << "  " << program << " canfd COM17:0\n"
       << "  " << program << " rs485 /dev/ttyUSB0\n\n"
       << "Without a device every adapter is probed and the first bus that\n"
-      << "carries a hand is used. Every hand found is driven through the poses\n"
-      << "below by calling MoveJoints() on each hand, whatever the transport.\n\n"
+      << "carries a hand is used. Every hand found is driven through the "
+         "poses\n"
+      << "below by calling MoveJoints() on each hand, whatever the "
+         "transport.\n\n"
       << "EtherCAT topologies all handled by the same code below:\n"
       << "  no junction,   single hand : PC -> hand\n"
       << "  no junction,   dual hand   : PC -> {handA, handB}\n"
@@ -37,10 +39,18 @@ void PrintUsage(const char* program) {
 
 std::vector<ghand::JointCommand> BuildPose(float mcp, float pip) {
   return {
-      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, mcp, 80, 80},
-      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, pip, 80, 80},
-      {ghand::JointId::MF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, mcp, 80, 80},
-      {ghand::JointId::MF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, pip, 80, 80},
+      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       mcp, 80, 80},
+      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       pip, 80, 80},
+      {ghand::JointId::MF_MCP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       mcp, 80, 80},
+      {ghand::JointId::MF_PIP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       pip, 80, 80},
   };
 }
 
@@ -116,12 +126,11 @@ int main(int argc, char* argv[]) {
   std::mutex state_mutex;
   std::map<uint16_t, std::vector<ghand::JointData>> joints_by_hand;
   for (ghand::GHand* hand : hands) {
-    hand->SetJointsCallback(
-        [&state_mutex, &joints_by_hand, hand](
-            const std::vector<ghand::JointData>& joints) {
-          std::lock_guard<std::mutex> lock(state_mutex);
-          joints_by_hand[hand->GetSlaveIndex()] = joints;
-        });
+    hand->SetJointsCallback([&state_mutex, &joints_by_hand, hand](
+                                const std::vector<ghand::JointData>& joints) {
+      std::lock_guard<std::mutex> lock(state_mutex);
+      joints_by_hand[hand->GetSlaveIndex()] = joints;
+    });
   }
 
   auto print_feedback = [&]() {
@@ -129,14 +138,14 @@ int main(int argc, char* argv[]) {
     for (ghand::GHand* hand : hands) {
       const auto it = joints_by_hand.find(hand->GetSlaveIndex());
       if (it == joints_by_hand.end() || it->second.empty()) {
-        std::cout << "  slave " << hand->GetSlaveIndex() << ": no feedback yet\n";
+        std::cout << "  slave " << hand->GetSlaveIndex()
+                  << ": no feedback yet\n";
         continue;
       }
       const ghand::JointData& first = it->second.front();
       std::cout << "  slave " << hand->GetSlaveIndex() << ": "
-                << it->second.size() << " joints, "
-                << ghand::ToString(first.id) << " = " << first.angle
-                << " deg\n";
+                << it->second.size() << " joints, " << ghand::ToString(first.id)
+                << " = " << first.angle << " deg\n";
     }
   };
 
@@ -158,8 +167,8 @@ int main(int argc, char* argv[]) {
   std::cout << "Mirror the index/middle finger pose...\n";
   for (ghand::GHand* hand : hands) {
     const bool is_left = hand->GetHandType() == ghand::HandType::LEFT_HAND;
-    const auto result = hand->MoveJoints(
-        is_left ? BuildPose(45.0f, 60.0f) : BuildPose(10.0f, 15.0f));
+    const auto result = hand->MoveJoints(is_left ? BuildPose(45.0f, 60.0f)
+                                                 : BuildPose(10.0f, 15.0f));
     if (!result) {
       std::cerr << "Mirror command failed on slave 0x" << std::hex
                 << hand->GetSlaveIndex() << std::dec << ": " << result.message

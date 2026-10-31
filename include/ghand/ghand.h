@@ -28,9 +28,11 @@ class Master;
 
 // Callback type definitions. A callback is registered on one hand (see
 // GHand::SetJointsCallback) and only receives that hand's data.
-using JointsCallback = std::function<void(const std::vector<JointData>& joints)>;
+using JointsCallback =
+    std::function<void(const std::vector<JointData>& joints)>;
 using HandStateCallback = std::function<void(const HandData& state)>;
-using TactileDataCallback = std::function<void(const std::map<TactileSensorId, TactileData>& data)>;
+using TactileDataCallback =
+    std::function<void(const std::map<TactileSensorId, TactileData>& data)>;
 
 #ifdef _WIN32
 #pragma warning(push)
@@ -115,11 +117,17 @@ class GHAND_API GHand {
 
   /**
    * @brief Set this hand's RS485 baud rate (saved, effective after power-up)
+   * Power-cycle the device after success, then reconnect using
+   * Master::Connect(device_name, slave_id, baud_rate). The host rate is not
+   * changed by this call. Default: RS485BaudRate::RATE_1000000.
    */
   Result SetBaudrateConfig(RS485BaudRate baud_rate);
 
   /**
    * @brief Set this hand's CAN-FD bit timing (saved, effective after power-up)
+   * Power-cycle the device after success, then reconnect using
+   * Master::Connect(device_name, slave_id, timing). The host timing is not
+   * changed by this call. Default: CANFDBitTiming::TIMING_1M_5M.
    */
   Result SetBaudrateConfig(CANFDBitTiming timing);
 
@@ -130,7 +138,8 @@ class GHAND_API GHand {
   void SetTactileDataCallback(TactileDataCallback cb);
 
   // Data (pull): latest cached data, no hardware read triggered.
-  // All three return DEVICE_REJECTED while the internally cached runtime state is POWER_ON_SELF_TEST.
+  // All three return DEVICE_REJECTED while the internally cached runtime state
+  // is POWER_ON_SELF_TEST.
   ResultOf<HandData> GetHandData();
   ResultOf<std::vector<JointData>> GetJointsData();
   ResultOf<std::map<TactileSensorId, TactileData>> GetTactileData();
@@ -139,9 +148,8 @@ class GHAND_API GHand {
    * @brief Update this hand's firmware.
    * Currently requires EtherCAT with this hand as the only device at index 1.
    */
-  FirmwareUpdateError BootUpdate(
-      const std::string& filename,
-      std::function<void(int)> progress_callback);
+  FirmwareUpdateError BootUpdate(const std::string& filename,
+                                 std::function<void(int)> progress_callback);
 
  private:
   friend class Master;
@@ -175,6 +183,8 @@ class GHAND_API Master {
   // Connection management
   /**
    * @brief Connect to a bus and enumerate the hands on it.
+   * Uses RS485 1,000,000 bps or CAN-FD arbitration 1 Mbit/s / data 5 Mbit/s.
+   * For a device configured to another rate, use the typed overload below.
    * @param device_name Device name; "auto" probes every adapter and uses the
    *     first bus that carries a hand
    * @param slave_id RS485/CANFD slave ID used for this connection; 0 scans
@@ -187,6 +197,9 @@ class GHAND_API Master {
 
   /**
    * @brief Connect to an RS485 device using a typed baud-rate selection.
+   * @param baud_rate Must match the device's active rate. After a successful
+   *     SetBaudrateConfig, power-cycle the device before connecting at the new
+   * rate.
    */
   ResultOf<std::vector<GHand*>> Connect(const std::string& device_name,
                                         uint8_t slave_id,
@@ -194,6 +207,9 @@ class GHAND_API Master {
 
   /**
    * @brief Connect to a CAN-FD device using a typed bit-timing profile.
+   * @param timing Must match the device's active profile. After a successful
+   *     SetBaudrateConfig, power-cycle the device before connecting at the new
+   * timing.
    */
   ResultOf<std::vector<GHand*>> Connect(const std::string& device_name,
                                         uint8_t slave_id,

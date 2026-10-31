@@ -49,17 +49,17 @@ GHAND_API const char* ToString(SdkError error);  // NOLINT(runtime/string)
 // Firmware update error codes
 enum class FirmwareUpdateError : int {
   SUCCESS = 0,
-  PREPARE_COMMAND_FAILED,   // Write 0x5A pre-check failed
-  ENTER_BOOT_MODE_FAILED,   // Enter BOOT state failed
-  FOE_TRANSFER_FAILED,      // FOE transfer failed
+  PREPARE_COMMAND_FAILED,    // Write 0x5A pre-check failed
+  ENTER_BOOT_MODE_FAILED,    // Enter BOOT state failed
+  FOE_TRANSFER_FAILED,       // FOE transfer failed
   SWITCH_COMM_STATE_FAILED,  // Communication state switch failed
   NOT_RESETTABLE,            // Device reset is unavailable
   FIRMWARE_RESET_FAILED,     // Firmware reset command failed
-  MAIN_CONTROLLER_FAILED,   // Main controller MCU upgrade failed
-  POSITION_SENSOR_FAILED,   // Position sensor MCU upgrade failed
-  TACTILE_SENSOR_FAILED,    // Tactile sensor MCU upgrade failed
-  MOTOR_DRIVER_FAILED,      // Motor driver MCU upgrade failed
-  RECONNECT_FAILED,  // Reconnect after update failed
+  MAIN_CONTROLLER_FAILED,    // Main controller MCU upgrade failed
+  POSITION_SENSOR_FAILED,    // Position sensor MCU upgrade failed
+  TACTILE_SENSOR_FAILED,     // Tactile sensor MCU upgrade failed
+  MOTOR_DRIVER_FAILED,       // Motor driver MCU upgrade failed
+  RECONNECT_FAILED,          // Reconnect after update failed
   // Communication protocol does not support firmware update
   NOT_SUPPORTED,
   QUERY_FAILED,  // Failed to query upgrade results
@@ -185,8 +185,10 @@ struct GHAND_API HandCriticalError : std::array<uint8_t, 6> {
   static const HandCriticalError ZEROING_GLOBAL_TIMEOUT;
 };
 
-GHAND_API HandCriticalError operator|(const HandCriticalError& lhs, const HandCriticalError& rhs);
-GHAND_API HandCriticalError operator&(const HandCriticalError& lhs, const HandCriticalError& rhs);
+GHAND_API HandCriticalError operator|(const HandCriticalError& lhs,
+                                      const HandCriticalError& rhs);
+GHAND_API HandCriticalError operator&(const HandCriticalError& lhs,
+                                      const HandCriticalError& rhs);
 
 }  // namespace ghand
 

@@ -31,9 +31,11 @@ class GHandCallbackManager {
  public:
   // Callback type definitions. The hand is named at registration time, so the
   // payload carries no slave index.
-  using JointsCallback = std::function<void(const std::vector<JointData>& joints)>;
+  using JointsCallback =
+      std::function<void(const std::vector<JointData>& joints)>;
   using HandStateCallback = std::function<void(const HandData& state)>;
-  using TactileDataCallback = std::function<void(const std::map<TactileSensorId, TactileData>& data)>;
+  using TactileDataCallback =
+      std::function<void(const std::map<TactileSensorId, TactileData>& data)>;
 
   GHandCallbackManager() = default;
   ~GHandCallbackManager() = default;
@@ -53,14 +55,17 @@ class GHandCallbackManager {
 
   // Data update methods (called by GHand)
   void UpdateJoints(uint16_t slave, const std::vector<JointData>& joints);
-  void UpdateTemperature(uint16_t slave, const HandData& temperature,
-                         HandRuntimeState machine = HandRuntimeState::INITIALIZED);
-  void UpdateTactileData(uint16_t slave, const std::map<TactileSensorId, TactileData>& data);
+  void UpdateTemperature(
+      uint16_t slave, const HandData& temperature,
+      HandRuntimeState machine = HandRuntimeState::INITIALIZED);
+  void UpdateTactileData(uint16_t slave,
+                         const std::map<TactileSensorId, TactileData>& data);
 
   // Polled access methods (thread-safe)
   ResultOf<HandData> GetHandData(uint16_t slave) const;
   ResultOf<std::vector<JointData>> GetJointsData(uint16_t slave) const;
-  ResultOf<std::map<TactileSensorId, TactileData>> GetTactileData(uint16_t slave) const;
+  ResultOf<std::map<TactileSensorId, TactileData>> GetTactileData(
+      uint16_t slave) const;
 
  private:
   // Per-slave cache: latest data + change detection state.

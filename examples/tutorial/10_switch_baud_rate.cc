@@ -44,8 +44,8 @@ int main() {
   const auto current_timing = ghand::CANFDBitTiming::TIMING_1M_5M;
   const auto target_timing = ghand::CANFDBitTiming::TIMING_1M_4M;
 
-  auto master = ghand::Master::Create(ghand::ProductType::GHand5,
-                                      ghand::CommType::CANFD);
+  auto master =
+      ghand::Master::Create(ghand::ProductType::GHand5, ghand::CommType::CANFD);
   if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return 1;

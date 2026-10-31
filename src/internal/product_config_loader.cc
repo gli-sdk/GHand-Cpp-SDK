@@ -16,11 +16,10 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <set>
 #include <sstream>
 #include <vector>
-
-#include <nlohmann/json.hpp>
 
 #include "ghand/logging.h"
 #include "logging_macros.h"
@@ -209,9 +208,8 @@ JointId JointIdFromString(const std::string& name) {
   return JointId::NUM_JOINTS;
 }
 
-std::string FindConfigFilePath(
-    const std::string& file_name,
-    const std::vector<std::string>& search_paths) {
+std::string FindConfigFilePath(const std::string& file_name,
+                               const std::vector<std::string>& search_paths) {
   for (const auto& dir : search_paths) {
     std::string full_path = dir + file_name;
     std::ifstream test(full_path);
@@ -268,8 +266,7 @@ std::vector<std::string> JsonStringArray(const nlohmann::json& j,
 std::map<JointId, uint16_t> BuildControllableJointAddresses(
     const std::vector<JointId>& valid_joints,
     const std::map<JointId, std::pair<float, float>>& joint_limits,
-    uint16_t base_address = 0x0261,
-    uint16_t stride = 6) {
+    uint16_t base_address = 0x0261, uint16_t stride = 6) {
   std::map<JointId, uint16_t> controllable_map;
   uint16_t address_offset = 0;
 
@@ -356,8 +353,7 @@ void LoadJointConfig(const nlohmann::json& j, ProductConfig* config) {
 }
 
 void LoadTactileConfig(const nlohmann::json& j, ProductConfig* config) {
-  if (!j.contains("tactile_regions") ||
-      !j["tactile_regions"].is_array()) {
+  if (!j.contains("tactile_regions") || !j["tactile_regions"].is_array()) {
     return;
   }
 
@@ -426,8 +422,7 @@ bool ValidateProductConfig(const ProductConfig& config,
            ToString(limits.first));
     }
     if (limits.second.first > limits.second.second) {
-      fail(std::string("invalid joint limit range: ") +
-           ToString(limits.first));
+      fail(std::string("invalid joint limit range: ") + ToString(limits.first));
     }
   }
 
@@ -547,8 +542,8 @@ bool NameMatches(const std::string& device_name,
   auto ci_equal = [](char a, char b) {
     return std::tolower(a) == std::tolower(b);
   };
-  return std::equal(config_name.begin(), config_name.end(),
-                    device_name.begin(), ci_equal);
+  return std::equal(config_name.begin(), config_name.end(), device_name.begin(),
+                    ci_equal);
 }
 
 ProductConfig FindConfigByName(const std::string& device_name) {
@@ -564,8 +559,8 @@ ProductConfig FindConfigByName(const std::string& device_name) {
       if (!ValidateProductConfig(config, file_path)) {
         continue;
       }
-      GHAND_LOG_INFO("Auto-detected product config: "
-                     << config.name << " from " << file_path);
+      GHAND_LOG_INFO("Auto-detected product config: " << config.name << " from "
+                                                      << file_path);
       return config;
     }
   }

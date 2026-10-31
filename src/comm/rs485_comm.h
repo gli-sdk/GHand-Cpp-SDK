@@ -63,7 +63,8 @@ class RS485Comm : public IComm {
   bool DisableHand(uint16_t slave) override;
   bool GetHandStateMachine(uint16_t slave, HandRuntimeState* state) override;
   bool GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) override;
-  bool SetPidParameters(uint16_t slave, const std::vector<uint16_t>& values) override;
+  bool SetPidParameters(uint16_t slave,
+                        const std::vector<uint16_t>& values) override;
 
   bool ClearFault(uint16_t slave) override;
 
@@ -75,11 +76,9 @@ class RS485Comm : public IComm {
   void SetHandStateCallback(HandStateCallback cb) override;
   void SetTactileDataCallback(TactileDataCallback cb) override;
 
-  FirmwareUpdateError BootUpdate(
-      const std::string& filename,
-      std::function<void(int)> progress) override;
+  FirmwareUpdateError BootUpdate(const std::string& filename,
+                                 std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
-
 
  private:
   friend struct ProtocolTestAccess;

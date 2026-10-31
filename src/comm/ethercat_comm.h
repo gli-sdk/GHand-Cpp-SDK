@@ -4,8 +4,8 @@
 #ifndef SRC_COMM_ETHERCAT_COMM_H_
 #define SRC_COMM_ETHERCAT_COMM_H_
 
-#include <atomic>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -53,10 +53,13 @@ class EtherCATComm : public IComm {
   bool Stop(uint16_t slave) override;
   bool DisableHand(uint16_t slave) override;
   bool GetHandStateMachine(uint16_t slave, HandRuntimeState* state) override;
-  bool GetStallTolerances(uint16_t slave, std::map<JointId, uint8_t>* values) override;
-  bool SetStallTolerances(uint16_t slave, const std::map<JointId, uint8_t>& values) override;
+  bool GetStallTolerances(uint16_t slave,
+                          std::map<JointId, uint8_t>* values) override;
+  bool SetStallTolerances(uint16_t slave,
+                          const std::map<JointId, uint8_t>& values) override;
   bool GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) override;
-  bool SetPidParameters(uint16_t slave, const std::vector<uint16_t>& values) override;
+  bool SetPidParameters(uint16_t slave,
+                        const std::vector<uint16_t>& values) override;
 
   bool ClearFault(uint16_t slave) override;
 
@@ -68,11 +71,9 @@ class EtherCATComm : public IComm {
   void SetHandStateCallback(HandStateCallback cb) override;
   void SetTactileDataCallback(TactileDataCallback cb) override;
 
-  FirmwareUpdateError BootUpdate(
-      const std::string& filename,
-      std::function<void(int)> progress) override;
+  FirmwareUpdateError BootUpdate(const std::string& filename,
+                                 std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
-
 
   // Low-level EtherCAT API (retained for internal use)
   int SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,
@@ -106,7 +107,8 @@ class EtherCATComm : public IComm {
   int cycle_ = 0;
   int64_t cycletime_ = 10000000;
 
-  uint8_t rxpdo_buffer_[2 + 12 * static_cast<size_t>(JointId::NUM_JOINTS)] = {0};
+  uint8_t rxpdo_buffer_[2 + 12 * static_cast<size_t>(JointId::NUM_JOINTS)] = {
+      0};
   size_t rxpdo_size_ = 0;
 
   std::mutex context_mutex_;
@@ -135,8 +137,10 @@ class EtherCATComm : public IComm {
   std::mutex command_mutex_;
   bool ExecuteSdoCommand(uint16_t slave, uint16_t index, uint8_t command,
                          uint8_t command_subindex = 1,
-                         uint8_t state_subindex = 2, uint8_t result_subindex = 3);
-  bool WriteSdoParameters(uint16_t slave, uint16_t index, const std::vector<uint8_t>& bytes);
+                         uint8_t state_subindex = 2,
+                         uint8_t result_subindex = 3);
+  bool WriteSdoParameters(uint16_t slave, uint16_t index,
+                          const std::vector<uint8_t>& bytes);
 
   // FOE firmware update shared state
   static std::function<void(int)> progress_callback_;
@@ -169,11 +173,10 @@ class EtherCATComm : public IComm {
   void ParseHandAndJoints(const uint8_t* data, size_t size, size_t* offset,
                           std::vector<JointData>* parsed_joints,
                           HandData* parsed_temperature) const;
-  std::map<TactileSensorId, TactileData> ParseTactileData(const uint8_t* data, size_t size,
-                               size_t* offset, bool compat_thumb = false) const;
+  std::map<TactileSensorId, TactileData> ParseTactileData(
+      const uint8_t* data, size_t size, size_t* offset,
+      bool compat_thumb = false) const;
   void ParseAndNotify(const uint8_t* data, size_t size, uint16_t slave);
-
-
 };
 
 }  // namespace internal

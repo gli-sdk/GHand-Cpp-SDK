@@ -4,8 +4,8 @@
 #ifndef SRC_INTERNAL_PRODUCT_CONFIG_H_
 #define SRC_INTERNAL_PRODUCT_CONFIG_H_
 
-#include <map>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -44,7 +44,6 @@ struct ProductConfig {
   int mode_register = 0x0260;
   int stop_register = 0x0260;
   int tactile_control_register = 0x0020;
-
 };
 
 }  // namespace internal

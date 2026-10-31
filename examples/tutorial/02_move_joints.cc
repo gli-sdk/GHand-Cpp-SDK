@@ -66,8 +66,12 @@ int main() {
   // are sent as stopped entries. DIP joints are not controllable.
   const std::vector<ghand::JointCommand> joints = {
       // {id, target angle (deg), speed limit (%), current limit (%)}
-      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 30.0f, 100, 100},
-      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 45.0f, 100, 100},
+      {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       30.0f, 100, 100},
+      {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION,
+       ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+       45.0f, 100, 100},
   };
 
   std::cout << "Moving joints..." << '\n';
@@ -83,8 +87,12 @@ int main() {
 
     // Reset joint positions
     const std::vector<ghand::JointCommand> reset_joints = {
-        {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100},
-        {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION, ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING, 0.0f, 100, 100}};
+        {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION,
+         ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+         0.0f, 100, 100},
+        {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION,
+         ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
+         0.0f, 100, 100}};
 
     std::cout << "Resetting joint positions..." << '\n';
     const auto reset_result =
