@@ -52,3 +52,7 @@ install_manifest.txt
 tests/*
 reviews/
 docs/
+
+# Prebuilt Linux release runtime dependencies.
+!dist/linux/**/*.so
+!dist/linux/**/*.so.*

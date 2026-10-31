@@ -32,8 +32,9 @@ unmodified official SOEM v2.0.0 checkout.
 - Local modifications: None expected
 
 Linux:
-- libmodbus is a system dependency and is not redistributed as part of the
-  GHand C++ SDK source repository.
+- Source builds use system libmodbus. The Linux bundle includes its shared
+  runtime, with versions in `dist/linux/PACKAGES.tsv` and distribution
+  notices in `dist/linux/LICENSES/packages/`.
 - Debian/Ubuntu package: `libmodbus-dev`
 
 Windows:
@@ -85,6 +86,19 @@ See `LICENSES/WinPcap.txt`.
 
 ## OpenSSL
 
-On Linux, GHand uses the system-provided OpenSSL library for hashing support. OpenSSL is not currently bundled in the GHand SDK release archive.
+On Linux, GHand uses OpenSSL for hashing support. The Linux bundle includes
+its shared runtime and distribution notices in `dist/linux/LICENSES/packages/`.
 
-If OpenSSL binaries are bundled in a future release, the corresponding OpenSSL license and notices must also be included in the distribution.
+Exact binary/source versions are recorded in `dist/linux/PACKAGES.tsv`.
+
+
+## Linux runtime bundle
+
+`scripts/package_linux.py` deploys local Qt 6 libraries, plugins and shared
+library dependencies to `dist/linux/`. They remain dynamically linked and
+replaceable. Exact Debian/Ubuntu binary and source package versions are in
+`PACKAGES.tsv`; copyright notices, license terms and source locations are in
+`LICENSES/packages/`, with referenced license texts in `LICENSES/common-licenses/`.
+Matching distribution sources can be obtained using
+`apt-get source <source>=<source_version>` with distribution deb-src repositories.
+The host glibc and ELF loader are not bundled.

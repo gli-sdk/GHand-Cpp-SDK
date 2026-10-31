@@ -330,7 +330,7 @@ cmake --build build -j$(nproc)
 
 # Grant raw socket permissions once to all built examples
 find build/examples -maxdepth 1 -type f -executable \
-  -exec sudo setcap cap_net_raw,cap_net_admin=eip {} \;
+  -exec sudo setcap cap_net_raw=ep {} \;
 
 # Run the EtherCAT example
 ./build/examples/01_basic_connection
@@ -482,3 +482,12 @@ Third-party components remain subject to their respective licenses. See
 for details.
 
 Copyright (c) 2026 GLITech.
+
+### Linux runtime bundle
+
+Run `python3 scripts/package_linux.py` to build and bundle all examples and their
+runtime dependencies in `dist/linux/`. Run `python3 dist/linux/setup_ethercat.py`
+once after deployment to configure library paths and grant CAP_NET_RAW. Then
+launch `./dist/linux/15_tactile_display` as your normal user. Repeat setup after
+moving or replacing the bundle. See [dist/README.md](dist/README.md)
+for layout, rebuild instructions and system requirements.

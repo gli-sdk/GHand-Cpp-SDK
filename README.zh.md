@@ -314,7 +314,7 @@ cmake --build build -j$(nproc)
 
 # 为所有构建出的示例授予一次 raw socket 权限
 find build/examples -maxdepth 1 -type f -executable \
-  -exec sudo setcap cap_net_raw,cap_net_admin=eip {} \;
+  -exec sudo setcap cap_net_raw=ep {} \;
 
 # 运行 EtherCAT 示例
 ./build/examples/01_basic_connection
@@ -458,3 +458,10 @@ EtherCAT 后端使用 SOEM 2.0.0。SOEM 2.0.0 采用 GPLv3 或商业许可证双
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 与 `LICENSES/` 目录。
 
 Copyright (c) 2026 GLITech.
+
+### Linux 发布包
+
+运行 `python3 scripts/package_linux.py` 将所有示例及运行依赖打包到 `dist/linux/`。
+部署后执行 `python3 dist/linux/setup_ethercat.py`，一次性授予实际程序 `CAP_NET_RAW`，
+然后以普通用户运行 `./dist/linux/15_tactile_display`。移动或替换发布包后需重新授权。
+目录结构、重建方式和系统要求见 [dist/README.md](dist/README.md)。
