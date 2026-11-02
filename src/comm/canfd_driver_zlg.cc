@@ -10,10 +10,12 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+// clang-format off: Windows SDK headers require windows.h first.
+#include <windows.h>
 #include <devguid.h>
 #include <setupapi.h>
-#include <windows.h>
 #include <winioctl.h>
+// clang-format on
 #if defined(__MINGW32__) && !defined(_PHYSICAL_ADDRESS)
 typedef LARGE_INTEGER PHYSICAL_ADDRESS;
 #endif

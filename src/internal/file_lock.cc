@@ -8,8 +8,10 @@
 #include <io.h>
 #include <share.h>
 #include <sys/stat.h>
-#include <wincrypt.h>
+// clang-format off: Windows SDK headers require windows.h first.
 #include <windows.h>
+#include <wincrypt.h>
+// clang-format on
 
 // MinGW may not define these constants; define them manually
 #ifndef _LK_NBLCK

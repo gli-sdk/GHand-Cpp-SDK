@@ -271,7 +271,7 @@ cmake --build build --config Release --target tactile_display mit_control custom
 Linux 安装 Qt 6.2+ Widgets 开发组件，必要时通过 `CMAKE_PREFIX_PATH` 指定路径，使用 `./build/examples/15_tactile_display`。
 未安装 Qt 时 configure 会打印提示并只跳过该示例。
 缓存了已移除的随附 Qt 开发包或其他 Qt 路径的构建目录，请重新创建构建目录，或清除旧的 `Qt6*_DIR` 缓存后重新配置。
-启动后会连接 GHand5 EtherCAT（`auto`）；其他通信方式请修改教程中的创建/连接参数。
+默认连接 GHand5 EtherCAT（`auto`）；可通过 `--product`、`--comm` 和 `--device` 选择产品、通信方式和适配器，使用 `--help` 查看可用参数。
 窗口打开后使用 Tactile 开关开始采集，卸载传感器负载后点击 Zero Tactile 归零。
 界面采用 1600×1000 黑色布局：左侧显示整手图与底部五指触点图，右侧纵向排列五组 Fx/Fy/Fz 曲线。
 根据连接设备自动选择左右手图片，五指分别显示 38/31/31/31/31 个触点，支持法向力渐变与光晕、
@@ -299,7 +299,7 @@ Windows 测试所需的 Qt DLL 与离屏插件也会自动复制。
 
 Windows 下使用 `build\examples\Release\11_connect_hands.exe`，设备名可使用
 `COM17:0`（CANFD）或 `COM7`（RS485）。该示例会驱动已连接的手运动；
-使用 `--help` 查看参数和支持的拓扑。
+使用 `--help` 查看参数和默认值。
 
 ## 🔨 源码构建
 

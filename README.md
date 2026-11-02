@@ -283,8 +283,9 @@ if needed, and run `./build/examples/15_tactile_display`. Without Qt,
 the configure step prints a notice and skips only this example. Build directories
 that cached the removed bundled Qt development kit or another Qt path must be
 configured anew (or have their `Qt6*_DIR` cache entries cleared).
-On startup, the example connects GHand5 over EtherCAT (`auto`). Edit the
-connection settings for other transports. The Tactile switch starts acquisition;
+By default, the example connects GHand5 over EtherCAT (`auto`). Use `--product`,
+`--comm` and `--device` to select the product, transport and adapter; use `--help`
+to view the available options. The Tactile switch starts acquisition;
 zero with unloaded sensors. The display uses a 1600×1000 black window,
 whole-hand view and five finger maps on the left, and five XYZ plots on the right.
 Device identity selects the left/right hand image. The five fingers display
@@ -315,7 +316,7 @@ After building, run `11_connect_hands` with a transport and optional device:
 
 On Windows, use `build\examples\Release\11_connect_hands.exe` with devices such as
 `COM17:0` (CANFD) or `COM7` (RS485). The example moves the connected hands;
-use `--help` to view its arguments and supported topologies.
+use `--help` to view its arguments and default values.
 
 ## Build from Source
 
