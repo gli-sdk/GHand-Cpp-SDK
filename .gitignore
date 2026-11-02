@@ -46,6 +46,6 @@ install_manifest.txt
 *.tar
 *.tar.gz
 *.tgz
-tests/*
+/tests/
 reviews/
 docs/
