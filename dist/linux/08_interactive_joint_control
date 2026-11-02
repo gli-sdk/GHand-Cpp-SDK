@@ -1,7 +1,0 @@
-#!/bin/sh
-set -eu
-HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-export QT_PLUGIN_PATH="$HERE/plugins"
-export QT_QPA_PLATFORM_PLUGIN_PATH="$HERE/plugins/platforms"
-cd "$HERE"
-exec "$HERE/bin/08_interactive_joint_control" "$@"
