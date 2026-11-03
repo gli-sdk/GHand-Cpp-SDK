@@ -134,7 +134,7 @@ class GHAND_API GHand {
   // Data (push): the callback fires only for this hand.
   void SetJointsCallback(JointsCallback cb);
   // Data callbacks pause during power-on self-test and resume automatically.
-  void SetHandStateCallback(HandStateCallback cb);
+  void SetHandDataCallback(HandStateCallback cb);
   void SetTactileDataCallback(TactileDataCallback cb);
 
   // Data (pull): latest cached data, no hardware read triggered.

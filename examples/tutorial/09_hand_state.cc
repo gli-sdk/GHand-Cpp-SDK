@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
 
   for (ghand::GHand* hand : connected.value) {
     const uint16_t index = hand->GetSlaveIndex();
-    hand->SetHandStateCallback([index](const ghand::HandData& state) {
+    hand->SetHandDataCallback([index](const ghand::HandData& state) {
       std::cout << "Slave " << index << ": "
                 << ghand::ToString(state.joints_state) << '\n';
     });

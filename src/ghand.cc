@@ -94,7 +94,7 @@ void GHand::SetJointsCallback(JointsCallback cb) {
   impl_->SetJointsCallback(slave_index_, cb);
 }
 
-void GHand::SetHandStateCallback(HandStateCallback cb) {
+void GHand::SetHandDataCallback(HandStateCallback cb) {
   impl_->SetHandStateCallback(slave_index_, cb);
 }
 
