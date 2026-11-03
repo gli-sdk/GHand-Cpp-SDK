@@ -24,14 +24,14 @@ void PrintJointStates(const std::vector<ghand::JointData>& joints) {
               << ", error: " << ghand::ToString(joint.error)
               << ", angle: " << std::fixed << std::setprecision(2)
               << joint.angle << " deg"
-              << ", speed: " << static_cast<int>(joint.velocity)
+              << ", velocity: " << static_cast<int>(joint.velocity)
               << ", current: " << static_cast<int>(joint.current) << '\n';
   }
 }
 
 int main(int argc, char** argv) {
   example::Options options{
-      ghand::ProductType::GHand5,
+      ghand::ProductType::GHandLite1,
       ghand::CommType::ETHERCAT,
       "auto",
   };

@@ -178,9 +178,9 @@ JointData ParseJointData(const uint16_t* raw, JointId joint_id) {
   int16_t angle_raw = static_cast<int16_t>(raw[2]);
   joint.angle = angle_raw / 10.0f;
 
-  int16_t speed = static_cast<int16_t>(raw[3]);
+  int16_t velocity = static_cast<int16_t>(raw[3]);
   int16_t current = static_cast<int16_t>(raw[4]);
-  joint.velocity = speed;
+  joint.velocity = velocity;
   joint.current = current;
 
   return joint;

@@ -217,7 +217,7 @@ RS485 保留 `RATE_*` 命名，避免与 Windows 的 `BAUD_*` 宏冲突。
 | --- | --- | --- |
 | [01_basic_connection.cc](examples/tutorial/01_basic_connection.cc) | `01_basic_connection` | 连接与设备信息查询 |
 | [02_move_joints.cc](examples/tutorial/02_move_joints.cc) | `02_move_joints` | 位置指令、参数单位、控制模式与关节反馈 |
-| [03_speed_control.cc](examples/tutorial/03_speed_control.cc) | `03_speed_control` | 速度控制 |
+| [03_velocity_control.cc](examples/tutorial/03_velocity_control.cc) | `03_velocity_control` | 速度控制 |
 | [04_current_control.cc](examples/tutorial/04_current_control.cc) | `04_current_control` | 电流控制 |
 | [05_tactile_callback.cc](examples/tutorial/05_tactile_callback.cc) | `05_tactile_callback` | 触觉反馈回调 |
 | [06_multi_hand.cc](examples/tutorial/06_multi_hand.cc) | `06_multi_hand` | 多手控制 |

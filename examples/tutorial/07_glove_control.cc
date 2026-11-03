@@ -237,53 +237,53 @@ void ConfigureReceiveTimeout(SOCKET sock) {
 }
 
 std::vector<ghand::JointCommand> BuildJointCommands(const HandData& hand) {
-  const int speed = 100;
+  const int velocity = 100;
   const int current = 100;
   return {
       {ghand::JointId::THUMB_MCP, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(hand.thumb.pip_bend, 0, 75), speed, current},
+       ClipAngle(hand.thumb.pip_bend, 0, 75), velocity, current},
       {ghand::JointId::THUMB_TMC_FE, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(hand.thumb.mcp_bend - 40, 0, 55), speed, current},
+       ClipAngle(hand.thumb.mcp_bend - 40, 0, 55), velocity, current},
       {ghand::JointId::THUMB_TMC_AA, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
        ClipAngle(
            -(hand.thumb.mcp_roll + hand.thumb.pip_roll + hand.thumb.dip_roll) -
                85,
            0, 90),
-       speed, current},
+       velocity, current},
       {ghand::JointId::THUMB_TMC_PS, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(-hand.thumb.dip_sway, -30, 60), speed, current},
+       ClipAngle(-hand.thumb.dip_sway, -30, 60), velocity, current},
       {ghand::JointId::FF_PIP, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(hand.index.pip_bend, 0, 75), speed, current},
+       ClipAngle(hand.index.pip_bend, 0, 75), velocity, current},
       {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(hand.index.mcp_bend, 0, 70), speed, current},
+       ClipAngle(hand.index.mcp_bend, 0, 70), velocity, current},
       {ghand::JointId::FF_MCP_AA, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(hand.index.mcp_sway + hand.index.pip_sway, -15, 15), speed,
+       ClipAngle(hand.index.mcp_sway + hand.index.pip_sway, -15, 15), velocity,
        current},
       {ghand::JointId::MF_PIP, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(hand.middle.pip_bend, 0, 75), speed, current},
+       ClipAngle(hand.middle.pip_bend, 0, 75), velocity, current},
       {ghand::JointId::MF_MCP, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(hand.middle.mcp_bend, 0, 70), speed, current},
+       ClipAngle(hand.middle.mcp_bend, 0, 70), velocity, current},
       {ghand::JointId::RF_PIP, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(hand.ring.pip_bend, 0, 75), speed, current},
+       ClipAngle(hand.ring.pip_bend, 0, 75), velocity, current},
       {ghand::JointId::RF_MCP, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(hand.ring.mcp_bend, 0, 70), speed, current},
+       ClipAngle(hand.ring.mcp_bend, 0, 70), velocity, current},
       {ghand::JointId::LF_PIP, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(hand.pinky.pip_bend, 0, 75), speed, current},
+       ClipAngle(hand.pinky.pip_bend, 0, 75), velocity, current},
       {ghand::JointId::LF_MCP, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
-       ClipAngle(hand.pinky.mcp_bend, 0, 70), speed, current},
+       ClipAngle(hand.pinky.mcp_bend, 0, 70), velocity, current},
   };
 }
 

@@ -24,14 +24,14 @@ void PrintJointStates(const std::vector<ghand::JointData>& joints) {
               << ", error: " << ghand::ToString(joint.error)
               << ", angle: " << std::fixed << std::setprecision(2)
               << joint.angle << " deg"
-              << ", speed: " << static_cast<int>(joint.velocity)
+              << ", velocity: " << static_cast<int>(joint.velocity)
               << ", current: " << static_cast<int>(joint.current) << '\n';
   }
 }
 
 int main(int argc, char** argv) {
   example::Options options{
-      ghand::ProductType::GHand5,
+      ghand::ProductType::GHandLite1,
       ghand::CommType::ETHERCAT,
       "auto",
   };
@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
   }
   ghand::GHand* hand = connected.value.front();
 
-  // SPEED mode only uses `velocity`; `angle` is ignored. Positive velocity
+  // VELOCITY mode only uses `velocity`; `angle` is ignored. Positive velocity
   // closes the fingers and negative opens them. This demo drives the thumb
   // and the PIP/MCP joints of the four fingers.
   std::vector<ghand::JointCommand> joints = {
@@ -93,11 +93,11 @@ int main(int argc, char** argv) {
   for (auto& joint : joints)
     joint.control_mode = ghand::JointControlMode::VELOCITY;
 
-  std::cout << "Closing fingers (speed=10)..." << '\n';
+  std::cout << "Closing fingers (velocity=10)..." << '\n';
   const auto close_result =
       hand->MoveJoints(joints, ghand::HandControlMode::VELOCITY);
   if (!close_result) {
-    std::cerr << "Failed to send speed command: " << close_result.message
+    std::cerr << "Failed to send velocity command: " << close_result.message
               << '\n';
     master->Disconnect();
     return 1;
@@ -115,11 +115,11 @@ int main(int argc, char** argv) {
     joint.velocity = -10;
   }
 
-  std::cout << "Opening fingers (speed=-10)..." << '\n';
+  std::cout << "Opening fingers (velocity=-10)..." << '\n';
   const auto open_result =
       hand->MoveJoints(joints, ghand::HandControlMode::VELOCITY);
   if (!open_result) {
-    std::cerr << "Failed to send speed command: " << open_result.message
+    std::cerr << "Failed to send velocity command: " << open_result.message
               << '\n';
     master->Disconnect();
     return 1;

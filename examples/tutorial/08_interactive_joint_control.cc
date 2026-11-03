@@ -20,7 +20,7 @@ namespace {
 
 struct JointParams {
   float angle = 0.0f;
-  int speed = 0;
+  int velocity = 0;
   int current = 0;
 };
 
@@ -77,7 +77,7 @@ void DisplaySetJoints(
 
   std::cout << "\nSet Joints:\n";
   std::cout << std::left << std::setw(20) << "JointData Name" << std::setw(10)
-            << "Angle(deg)" << std::setw(10) << "Speed(%)" << std::setw(10)
+            << "Angle(deg)" << std::setw(10) << "Velocity(%)" << std::setw(10)
             << "Current(%)" << '\n';
   std::cout << std::string(50, '-') << '\n';
 
@@ -87,7 +87,7 @@ void DisplaySetJoints(
     std::cout << std::left << std::setw(20)
               << ghand::ToString(static_cast<ghand::JointId>(joint_id))
               << std::fixed << std::setprecision(1) << std::setw(10)
-              << params.angle << std::setw(10) << params.speed << std::setw(10)
+              << params.angle << std::setw(10) << params.velocity << std::setw(10)
               << params.current << '\n';
   }
 }
@@ -171,7 +171,7 @@ bool ReadJointParams(std::unordered_map<int, JointParams>* joint_params) {
               << ghand::ToString(static_cast<ghand::JointId>(joint_id))
               << ":\n";
     params.angle = ReadFloatWithDefault("Angle value (degrees)", params.angle);
-    params.speed = ReadIntInRange("Speed value (0-100)", params.speed, 0, 100);
+    params.velocity = ReadIntInRange("Velocity value (0-100)", params.velocity, 0, 100);
     params.current =
         ReadIntInRange("Current value (0-100)", params.current, 0, 100);
     std::cout << "  OK Set successfully\n";
@@ -188,7 +188,7 @@ std::vector<ghand::JointCommand> BuildJointCommands(
                       ghand::JointControlMode::POSITION,
                       ghand::JointLoopType::CLOSED_LOOP,
                       ghand::JointControlState::RUNNING, params.angle,
-                      static_cast<int16_t>(params.speed),
+                      static_cast<int16_t>(params.velocity),
                       static_cast<int16_t>(params.current)});
   }
   return joints;

@@ -37,7 +37,7 @@ endfunction()
 # Tutorials, numbered in the same order as their filenames.
 add_ghand_example(basic_connection tutorial/01_basic_connection.cc)
 add_ghand_example(move_joints tutorial/02_move_joints.cc)
-add_ghand_example(speed_control tutorial/03_speed_control.cc)
+add_ghand_example(velocity_control tutorial/03_velocity_control.cc)
 add_ghand_example(current_control tutorial/04_current_control.cc)
 add_ghand_example(tactile_callback tutorial/05_tactile_callback.cc)
 add_ghand_example(multi_hand tutorial/06_multi_hand.cc)

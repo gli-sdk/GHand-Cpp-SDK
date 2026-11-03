@@ -224,7 +224,7 @@ written to `build/examples/`; multi-config generators on Windows place them in
 | --- | --- | --- |
 | [01_basic_connection.cc](examples/tutorial/01_basic_connection.cc) | `01_basic_connection` | Connect and query device information |
 | [02_move_joints.cc](examples/tutorial/02_move_joints.cc) | `02_move_joints` | Position commands, parameter units, control modes and joint feedback |
-| [03_speed_control.cc](examples/tutorial/03_speed_control.cc) | `03_speed_control` | Velocity control |
+| [03_velocity_control.cc](examples/tutorial/03_velocity_control.cc) | `03_velocity_control` | Velocity control |
 | [04_current_control.cc](examples/tutorial/04_current_control.cc) | `04_current_control` | Current control |
 | [05_tactile_callback.cc](examples/tutorial/05_tactile_callback.cc) | `05_tactile_callback` | Tactile feedback callbacks |
 | [06_multi_hand.cc](examples/tutorial/06_multi_hand.cc) | `06_multi_hand` | Multi-hand control |

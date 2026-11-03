@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
   // their previous command on EtherCAT; on Modbus transports omitted joints
   // are sent as stopped entries. DIP joints are not controllable.
   const std::vector<ghand::JointCommand> joints = {
-      // {id, target angle (deg), speed limit (%), current limit (%)}
+      // {id, target angle (deg), velocity limit (%), current limit (%)}
       {ghand::JointId::FF_MCP, ghand::JointControlMode::POSITION,
        ghand::JointLoopType::CLOSED_LOOP, ghand::JointControlState::RUNNING,
        30.0f, 100, 100},

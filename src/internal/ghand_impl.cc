@@ -426,15 +426,15 @@ Result GHandImpl::MoveJoints(uint16_t slave_index,
         if (effective == HandControlMode::CUSTOM)
           effective = static_cast<HandControlMode>(mode_value & 0x0F);
         ClampJointAngle(limited);
-        const int speed = limited.velocity;
+        const int velocity = limited.velocity;
         const int current = limited.current;
         if (effective == HandControlMode::VELOCITY ||
             effective == HandControlMode::MIT) {
           limited.velocity =
-              static_cast<int16_t>(std::max(-100, std::min(100, speed)));
+              static_cast<int16_t>(std::max(-100, std::min(100, velocity)));
         } else if (effective != HandControlMode::CURRENT) {
           limited.velocity =
-              static_cast<int16_t>(std::min(100, std::abs(speed)));
+              static_cast<int16_t>(std::min(100, std::abs(velocity)));
         }
         if (effective == HandControlMode::CURRENT ||
             effective == HandControlMode::MIT) {
