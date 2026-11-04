@@ -33,6 +33,7 @@ struct ConnectedHand {
   DeviceInfo device_info;
 };
 
+// Raw protocol results: 1 success, 2 failure, 4 no result, 5 no upgrade needed.
 struct FirmwareUpdateResults {
   uint8_t main = 0;
   uint8_t position_sensor = 0;

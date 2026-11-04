@@ -477,9 +477,9 @@ DeviceInfo RS485Comm::GetDeviceInfo(uint16_t slave) {
                       info.device_name == "GHand Lite 1");
   if (lite1) {
     info.software_version = version(0x1019);
-    info.tactile_sensor_version = version(0x101A);
-    info.motor_driver_version = version(0x101B);
-    info.firmware_package_version = version(0x101C);
+    info.tactile_sensor_version = version(0x101B);
+    info.motor_driver_version = version(0x101C);
+    info.firmware_package_version = version(0x101D);
   } else {
     info.software_version = version(0x1019);
     info.position_sensor_version = version(0x101A);

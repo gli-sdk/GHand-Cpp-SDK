@@ -102,7 +102,6 @@ class CANFDComm : public IComm {
 
   bool DetectNode(uint8_t slave_id, int timeout_ms = 500);
   bool EstablishConnection(uint8_t slave_id, int timeout_ms = 100);
-  bool EstablishConnectionLite1(uint8_t slave_id, int timeout_ms = 200);
   void DeleteConnection(uint16_t slave);
 
   bool ReadInputBytes(uint16_t slave, int addr, int count,
@@ -121,9 +120,6 @@ class CANFDComm : public IComm {
   uint8_t src_id_ = 0x0A;
   std::atomic<bool> connected_{false};
 
-  std::thread keepalive_thread_;
-  std::atomic<bool> keepalive_stop_{true};
-  void KeepaliveLoop();
   std::thread poll_thread_;
   std::atomic<bool> poll_running_{false};
   std::atomic<bool> poll_stop_{false};

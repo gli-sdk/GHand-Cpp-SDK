@@ -942,8 +942,8 @@ DeviceInfo EtherCATComm::GetDeviceInfo(uint16_t slave) {
   }
   info.tactile_sensor_version = ReadFirmwareVersion(slave, 3);
   info.motor_driver_version = ReadFirmwareVersion(slave, 4);
+  info.firmware_package_version = ReadFirmwareVersion(slave, 5);
   if (!UsesLite1Layout(config_)) {
-    info.firmware_package_version = ReadFirmwareVersion(slave, 5);
     info.thumb_tactile_sensor_version = ReadFirmwareVersion(slave, 6);
     info.finger_tactile_sensor_version = ReadFirmwareVersion(slave, 7);
   }
@@ -1291,8 +1291,7 @@ std::string EtherCATComm::ReadFirmwareVersion(uint16_t slave,
 
 bool EtherCATComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
   if (results == nullptr) return false;
-  auto read_result = [this](uint8_t cmd, uint8_t* out,
-                            bool allow_no_result) -> bool {
+  auto read_result = [this](uint8_t cmd, uint8_t* out) -> bool {
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::milliseconds(kFirmwareQueryTimeoutMs);
     int size = sizeof(cmd);
@@ -1312,8 +1311,9 @@ bool EtherCATComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
       const int result_read =
           SDORead(1, kSdoFirmwareUpdate, 0x03, &size, &result, EC_TIMEOUTRXM);
       if (state_read > 0 && result_read > 0 && state == 0) {
-        if (result == 1 || result == 2) {
-          *out = result == 1 ? 1 : 0;
+        if (result == 1 || result == 2 ||
+            (!UsesLite1Layout(config_) && (result == 4 || result == 5))) {
+          *out = result;
           return true;
         }
         if (result != 0) {
@@ -1327,26 +1327,21 @@ bool EtherCATComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
           std::chrono::milliseconds(kFirmwareQueryPollMs));
     }
 
-    if (allow_no_result) {
-      GHAND_LOG_WARNING("Firmware main result still 0 after "
-                        << kFirmwareQueryTimeoutMs
-                        << " ms, reporting as failed/no result");
-      *out = 0;
-      return true;
-    }
     GHAND_LOG_ERROR(
         "Timed out waiting for firmware update result query (command 0x"
         << std::hex << static_cast<int>(cmd) << ")");
     return false;
   };
 
+  *results = FirmwareUpdateResults{};
+  const bool lite1 = UsesLite1Layout(config_);
   bool ok = true;
-  ok = read_result(0xA1, &results->main, /*settle_on_zero=*/true) && ok;
-  ok = read_result(0xA2, &results->position_sensor, false) && ok;
-  ok = read_result(0xA3, &results->tactile_board, false) && ok;
-  ok = read_result(0xA4, &results->motor_driver, false) && ok;
-  ok = read_result(0xA5, &results->thumb_tactile, false) && ok;
-  ok = read_result(0xA6, &results->finger_tactile, false) && ok;
+  ok = read_result(0xA1, &results->main) && ok;
+  if (!lite1) ok = read_result(0xA2, &results->position_sensor) && ok;
+  ok = read_result(0xA3, &results->tactile_board) && ok;
+  ok = read_result(0xA4, &results->motor_driver) && ok;
+  if (!lite1) ok = read_result(0xA5, &results->thumb_tactile) && ok;
+  if (!lite1) ok = read_result(0xA6, &results->finger_tactile) && ok;
   return ok;
 }
 

@@ -80,8 +80,11 @@ struct JointData {
   JointState state = JointState::DISABLED;  // Reported joint operating state.
   JointErrorCode error = JointErrorCode::NORMAL;  // Reported joint error code.
   JointControlMode control_mode = JointControlMode::POSITION;  // Reported control mode.
-  JointLoopType loop_type = JointLoopType::CLOSED_LOOP;  // Reported feedback loop type.
-  float angle = 0.0f;              // Measured angle (deg).
+  JointLoopType loop_type = JointLoopType::CLOSED_LOOP;  // Whole-hand mode: 0; CUSTOM: joint loop type.
+  // Measured angle (deg), normally from the position sensor. Falls back to
+  // motor-encoder FK when the sensor is not ready, faulty, or inconsistent.
+  // The commanded loop type does not determine the reported angle source.
+  float angle = 0.0f;
   int16_t velocity = 0;            // Reported velocity (%).
   int16_t current = 0;             // Reported motor current (%).
 };

@@ -287,6 +287,8 @@ std::vector<uint16_t> EncodeHandCommand(
     auto command = commands.find(entry.second);
     if (command != commands.end()) joint = command->second;
     auto encoded = EncodeJointCommand(joint);
+    if (config.product_type == ProductType::GHandLite1)
+      encoded[0] &= 0xFF0F;  // Lite1 reserves the loop-type bits.
     const size_t register_count =
         static_cast<size_t>(config.joint_control_register_count > 0
                                 ? config.joint_control_register_count
@@ -312,6 +314,8 @@ std::vector<uint8_t> EncodeEthercatCommand(
     auto it = commands.find(id);
     if (it != commands.end()) joint = it->second;
     auto encoded = EncodeJointCommand(joint);
+    if (config.product_type == ProductType::GHandLite1)
+      encoded[0] &= 0xFF0F;  // Lite1 reserves the loop-type bits.
     bytes.push_back(static_cast<uint8_t>(encoded[0]));
     bytes.push_back(static_cast<uint8_t>(encoded[0] >> 8));
     if (lite1) {

@@ -60,20 +60,29 @@ bool IsVersionNewer(const std::string& old_ver, const std::string& new_ver) {
   return false;
 }
 
-// Check per-MCU firmware upgrade results. Returns SUCCESS only when every
-// MCU reports success (result == 1); otherwise the first failing MCU maps
-// to its corresponding FirmwareUpdateError.
+// Every supported MCU must report success (or no upgrade needed on GHand5).
+// Missing results are
+// query failures; explicit upgrade failures map to the corresponding MCU.
 ghand::FirmwareUpdateError CheckFirmwareUpdateResults(
-    const ghand::internal::FirmwareUpdateResults& results) {
-  if (results.main == 0)
+    const ghand::internal::FirmwareUpdateResults& results, bool lite1 = false) {
+  const uint8_t values[] = {results.main, results.position_sensor,
+                           results.tactile_board, results.motor_driver,
+                           results.thumb_tactile, results.finger_tactile};
+  for (size_t i = 0; i < 6; ++i) {
+    if (lite1 && (i == 1 || i == 4 || i == 5)) continue;
+    const uint8_t value = values[i];
+    if (value != 1 && value != 2 && (lite1 || value != 5))
+      return ghand::FirmwareUpdateError::QUERY_FAILED;
+  }
+  if (results.main == 2)
     return ghand::FirmwareUpdateError::MAIN_CONTROLLER_FAILED;
-  if (results.position_sensor == 0)
+  if (!lite1 && results.position_sensor == 2)
     return ghand::FirmwareUpdateError::POSITION_SENSOR_FAILED;
-  if (results.tactile_board == 0)
+  if (results.tactile_board == 2)
     return ghand::FirmwareUpdateError::TACTILE_SENSOR_FAILED;
-  if (results.motor_driver == 0)
+  if (results.motor_driver == 2)
     return ghand::FirmwareUpdateError::MOTOR_DRIVER_FAILED;
-  if (results.thumb_tactile == 0 || results.finger_tactile == 0)
+  if (!lite1 && (results.thumb_tactile == 2 || results.finger_tactile == 2))
     return ghand::FirmwareUpdateError::TACTILE_SENSOR_FAILED;
   return ghand::FirmwareUpdateError::SUCCESS;
 }
@@ -400,6 +409,18 @@ Result GHandImpl::MoveJoints(uint16_t slave_index,
     return {SdkError::INVALID_ARGUMENT, "joint command list is empty"};
   }
 
+  if (config_.product_type == ProductType::GHandLite1) {
+    if (mode == HandControlMode::MIT)
+      return {SdkError::NOT_SUPPORTED, "Lite1 does not support MIT mode"};
+    for (const auto& joint : joints) {
+      if (joint.control_mode == JointControlMode::MIT ||
+          joint.loop_type != JointLoopType::CLOSED_LOOP ||
+          joint.kp != 0 || joint.kd != 0)
+        return {SdkError::NOT_SUPPORTED,
+                "Lite1 supports closed-loop position, velocity and current control without MIT gains"};
+    }
+  }
+
   GHAND_LOG_DEBUG("Moving " << joints.size() << " joints");
 
   // Sort by valid_joints order, include only controllable joints from user
@@ -596,7 +617,8 @@ FirmwareUpdateError GHandImpl::BootUpdate(
             << ", finger_tactile: "
             << static_cast<int>(results.finger_tactile));
 
-        FirmwareUpdateError check = CheckFirmwareUpdateResults(results);
+        FirmwareUpdateError check = CheckFirmwareUpdateResults(
+            results, config_.product_type == ProductType::GHandLite1);
         if (check != FirmwareUpdateError::SUCCESS) return check;
 
         if (!IsVersionNewer(
@@ -667,6 +689,8 @@ ResultOf<std::map<JointId, uint8_t>> GHandImpl::GetStallTolerances(
     uint16_t slave_index) {
   if (!IsConnected())
     return {SdkError::NOT_CONNECTED, "device is not connected"};
+  if (config_.product_type == ProductType::GHandLite1)
+    return {SdkError::NOT_SUPPORTED, "parameter access is not supported on Lite1"};
   if (slave_index == 0)
     return {SdkError::INVALID_ARGUMENT, "one hand must be selected"};
   if (comm_type_ != CommType::ETHERCAT)
@@ -681,6 +705,8 @@ Result GHandImpl::SetStallTolerances(uint16_t slave_index,
                                      const std::map<JointId, uint8_t>& values) {
   if (!IsConnected())
     return {SdkError::NOT_CONNECTED, "device is not connected"};
+  if (config_.product_type == ProductType::GHandLite1)
+    return {SdkError::NOT_SUPPORTED, "parameter access is not supported on Lite1"};
   if (slave_index == 0)
     return {SdkError::INVALID_ARGUMENT, "one hand must be selected"};
   if (comm_type_ != CommType::ETHERCAT)
@@ -694,6 +720,8 @@ ResultOf<std::vector<uint16_t>> GHandImpl::GetPidParameters(
     uint16_t slave_index) {
   if (!IsConnected())
     return {SdkError::NOT_CONNECTED, "device is not connected"};
+  if (config_.product_type == ProductType::GHandLite1)
+    return {SdkError::NOT_SUPPORTED, "parameter access is not supported on Lite1"};
   if (slave_index == 0)
     return {SdkError::INVALID_ARGUMENT, "one hand must be selected"};
   if (comm_type_ != CommType::ETHERCAT &&
@@ -710,6 +738,8 @@ Result GHandImpl::SetPidParameters(uint16_t slave_index,
                                    const std::vector<uint16_t>& values) {
   if (!IsConnected())
     return {SdkError::NOT_CONNECTED, "device is not connected"};
+  if (config_.product_type == ProductType::GHandLite1)
+    return {SdkError::NOT_SUPPORTED, "parameter access is not supported on Lite1"};
   if (slave_index == 0)
     return {SdkError::INVALID_ARGUMENT, "one hand must be selected"};
   if (comm_type_ != CommType::ETHERCAT &&

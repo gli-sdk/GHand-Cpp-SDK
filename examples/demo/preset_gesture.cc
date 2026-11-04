@@ -242,7 +242,7 @@ std::unique_ptr<ghand::Master> CreateConnectedHand(const example::Options& optio
   // Data callbacks belong to one hand, so register on the hand itself.
   ghand::GHand* hand = connected.value.front();
   hand->SetJointsCallback(OnJointsUpdate);
-  hand->SetHandStateCallback(OnHandStateUpdate);
+  hand->SetHandDataCallback(OnHandStateUpdate);
   return master;
 }
 
