@@ -145,6 +145,8 @@ class EtherCATComm : public IComm {
   // FOE firmware update shared state
   static std::function<void(int)> progress_callback_;
   static EtherCATComm* foe_instance_;
+  int32_t foe_last_packet_ = -1;
+  void LogSoemErrors(const char* phase);
 
   // Methods
   void ResetContext();

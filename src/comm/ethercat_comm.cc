@@ -771,6 +771,21 @@ FirmwareUpdateError EtherCATComm::CompleteFirmwareResetHandshake(
   return FirmwareUpdateError::SUCCESS;
 }
 
+void EtherCATComm::LogSoemErrors(const char* phase) {
+  std::lock_guard<std::mutex> lock(rt_context_mutex_);
+  ec_errort error{};
+  bool found = false;
+  while (ecx_poperror(&soem_->ctx, &error)) {
+    found = true;
+    GHAND_LOG_ERROR("SOEM error phase=" << phase << " slave=" << error.Slave
+                    << " type=" << static_cast<int>(error.Etype)
+                    << " code=0x" << std::hex
+                    << static_cast<uint32_t>(error.AbortCode) << std::dec
+                    << " detail=" << ecx_err2string(error));
+  }
+  if (!found) GHAND_LOG_DEBUG("SOEM error queue empty phase=" << phase);
+}
+
 FirmwareUpdateError EtherCATComm::BootUpdate(
     const std::string& file_path, std::function<void(int)> progress_callback) {
   auto hands = GetConnectedHands();
@@ -803,14 +818,19 @@ FirmwareUpdateError EtherCATComm::BootUpdate(
         std::chrono::milliseconds(kFirmwareMailboxPollMs));
   }
   if (!authorized) {
+    GHAND_LOG_ERROR("Firmware authorization command=0x5A write_wkc=" << ret
+                    << " (State/Result may retain initial 255 when unread)");
     GHAND_LOG_ERROR("Firmware FoE authorization failed or timed out (State="
                     << static_cast<int>(state)
                     << ", Result=" << static_cast<int>(result) << ")");
+    LogSoemErrors("firmware_authorization");
     return FirmwareUpdateError::PREPARE_COMMAND_FAILED;
   }
 
   int filesize = 0;
   int slave = 1;
+  // Normal communication stays unavailable until the post-update reconnect.
+  is_connected_ = false;
   inOP_ = 0;
   dorun_ = 0;
   StopThreads();
@@ -839,9 +859,21 @@ FirmwareUpdateError EtherCATComm::BootUpdate(
       EC_STATE_BOOT) {
     if (InputBin(file_path.c_str(), &filesize)) {
       char file_name[] = "ECATFW__firmware";
+      LogSoemErrors("before_foe_transfer_existing_errors");
+      foe_last_packet_ = -1;
       int update_result =
           ecx_FOEwrite(&soem_->ctx, slave, file_name, 0, filesize,
                        &file_buffer_, EC_TIMEOUTSTATE * 1000);
+      if (update_result <= 0) {
+        GHAND_LOG_ERROR("Firmware FoE transfer failed slave=" << slave
+                        << " file=" << file_path << " bytes=" << filesize
+                        << " return=" << update_result
+                        << " last_hook_packet=" << foe_last_packet_
+                        << " (-1 means no progress hook observed)"
+                        << " mailbox_write_bytes="
+                        << soem_->ctx.slavelist[slave].mbx_l);
+        LogSoemErrors("foe_transfer_failed");
+      }
 
       FirmwareUpdateError reset_handshake_result =
           FirmwareUpdateError::FOE_TRANSFER_FAILED;
@@ -878,6 +910,7 @@ FirmwareUpdateError EtherCATComm::BootUpdate(
 
 void EtherCATComm::FoeProgressHook(uint16 slave, int32 packetnumber,
                                    int32 totalsize) {
+  if (foe_instance_) foe_instance_->foe_last_packet_ = packetnumber;
   static int32 last_packet = -1;
 
   if (packetnumber != last_packet) {
@@ -1311,8 +1344,7 @@ bool EtherCATComm::QueryFirmwareUpdateResults(FirmwareUpdateResults* results) {
       const int result_read =
           SDORead(1, kSdoFirmwareUpdate, 0x03, &size, &result, EC_TIMEOUTRXM);
       if (state_read > 0 && result_read > 0 && state == 0) {
-        if (result == 1 || result == 2 ||
-            (!UsesLite1Layout(config_) && (result == 4 || result == 5))) {
+        if (result == 1 || result == 2 || result == 4 || result == 5) {
           *out = result;
           return true;
         }

@@ -60,7 +60,7 @@ bool IsVersionNewer(const std::string& old_ver, const std::string& new_ver) {
   return false;
 }
 
-// Every supported MCU must report success (or no upgrade needed on GHand5).
+// Every supported MCU must report success or no upgrade needed.
 // Missing results are
 // query failures; explicit upgrade failures map to the corresponding MCU.
 ghand::FirmwareUpdateError CheckFirmwareUpdateResults(
@@ -71,7 +71,7 @@ ghand::FirmwareUpdateError CheckFirmwareUpdateResults(
   for (size_t i = 0; i < 6; ++i) {
     if (lite1 && (i == 1 || i == 4 || i == 5)) continue;
     const uint8_t value = values[i];
-    if (value != 1 && value != 2 && (lite1 || value != 5))
+    if (value != 1 && value != 2 && value != 5)
       return ghand::FirmwareUpdateError::QUERY_FAILED;
   }
   if (results.main == 2)
@@ -637,7 +637,9 @@ FirmwareUpdateError GHandImpl::BootUpdate(
     return FirmwareUpdateError::RECONNECT_FAILED;
   }
   if (comm_type_ == CommType::ETHERCAT &&
-      (ret == FirmwareUpdateError::ENTER_BOOT_MODE_FAILED ||
+      (!comm_->IsConnected() ||
+       ret == FirmwareUpdateError::FOE_TRANSFER_FAILED ||
+       ret == FirmwareUpdateError::ENTER_BOOT_MODE_FAILED ||
        ret == FirmwareUpdateError::SWITCH_COMM_STATE_FAILED)) {
     comm_->Disconnect();
   }
