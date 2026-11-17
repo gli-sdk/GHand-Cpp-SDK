@@ -8,15 +8,15 @@
 
 [中文](README.zh.md)
 
-C++ SDK for GHand dexterous hands, supporting EtherCAT, CANFD, and RS485 communication with joint control, tactile sensing, and real-time state feedback.
+C++ SDK for GHand dexterous hands, supporting EtherCAT, CANFD, and RS485 communication with joint control and real-time state feedback; GHand5 also supports tactile sensing.
 
 ## Features
 
 - EtherCAT, CANFD, and RS485 communication
-- Independent per-joint control for all 5 fingers (position, velocity, current, MIT and CUSTOM)
+- Independent per-joint control for all 5 fingers (position, velocity, current and CUSTOM; GHand5 also supports MIT)
 - MIT and CUSTOM control tutorials with command feedback and explicit hand disabling
-- Optional Qt 6 tactile display with whole-hand view, finger maps and 60-second XYZ force plots
-- Real-time data callbacks for joint states and tactile data
+- Optional Qt 6 tactile display for GHand5 with whole-hand view, finger maps and 60-second XYZ force plots
+- Real-time joint-state callbacks and GHand5 tactile-data callbacks
 - Left and right hand device support
 - Automatic product detection via device name matching
 - Same-product left and right hands sharing a bus with independent control and feedback
@@ -28,15 +28,13 @@ see [CHANGELOG.md](CHANGELOG.md) for API and protocol migration details.
 
 ## Product Support Matrix
 
-The capabilities below apply to GHand5 with the current V3.1.0 release.
-**For GHandLite1, use SDK 2.xx (2.x)** and follow that version's README, API and protocol documentation.
+Both GHand5 and GHandLite1 are supported in V3.1.0.
+GHandLite1 does not support MIT or closed-loop control; its default is semi-closed-loop control.
 
 | Product | SDK version | Transports | Control modes | Tactile capabilities |
 | --- | --- | --- | --- | --- |
-| GHand5 | Current V3.1.0 | EtherCAT, CANFD, RS485 | Position, velocity, current, MIT, CUSTOM | Five-finger three-axis force feedback, tactile callbacks, acquisition on/off and zeroing; optional Qt display |
-| GHandLite1 | Use 2.xx (2.x) | See the corresponding 2.x documentation | See the corresponding 2.x documentation | See the corresponding 2.x documentation |
-
-The GHandLite1 types and configuration files retained in this repository do not indicate support for connecting that product with V3.1.0.
+| GHand5 | Current V3.1.0 | EtherCAT, CANFD, RS485 | Position, velocity, current, MIT, CUSTOM; closed-loop and semi-closed-loop | Five-finger three-axis force feedback, tactile callbacks, acquisition on/off and zeroing; optional Qt display |
+| GHandLite1 | Current V3.1.0 | EtherCAT, CANFD, RS485 | Position, velocity, current, CUSTOM; semi-closed-loop by default; no MIT or closed-loop | Not supported yet |
 
 ## Official Documentation
 
@@ -100,7 +98,7 @@ dependency set.
 | [libmodbus](https://github.com/stephane/libmodbus) | 3.1.12 | Modbus RTU/RS485 support | LGPL-2.1-or-later | Dynamically linked |
 | [nlohmann/json](https://github.com/nlohmann/json) | bundled header | JSON parsing | MIT | Header-only |
 | WinPcap | Developer Pack components | Packet capture (Windows EtherCAT) | WinPcap BSD-style license and incorporated notices | Headers and import libraries |
-| Qt | 6.2+ | Optional tactile display | Upstream component terms | Dynamically linked; runtime dependencies ship with the program in `dist/`, builds use local Qt |
+| Qt | 6.2+ | Optional tactile display | Upstream component terms | Dynamically linked; builds use local Qt, and deployment must provide Qt runtime dependencies |
 
 Building the GUI requires a local Qt 6.2+ Widgets development installation;
 Windows builds use MSVC 2022 x64. The project requires CMake 3.16 or newer;
@@ -116,18 +114,6 @@ The tactile display requires C++17; the core SDK uses C++11.
 - pthreads
 
 ## Installation
-
-### Prebuilt Library
-
-Copy the following artifacts into your project:
-
-| Artifact | Description |
-|----------|-------------|
-| `include/ghand/` | Public headers |
-| `ghand.dll` / `libghand.so` | Shared library |
-| `config/ghand5.json`, `config/ghandlite1.json` | Product configuration |
-
-Link against `ghand` and ensure the JSON config is accessible at runtime.
 
 ### CMake Install
 
@@ -202,7 +188,7 @@ if (connected) {
 
 ### Public type migration
 
-Public types follow the Python SDK: `HandData`, `JointData`, `HandControlMode`,
+Public types include: `HandData`, `JointData`, `HandControlMode`,
 `JointControlMode`, `JointLoopType`, `HandRuntimeState`, and `JointState`.
 Use `HandType::LEFT_HAND` / `RIGHT_HAND` and `HandControlMode::VELOCITY`.
 `JointCommand` uses `control_mode`, `loop_type`, and `control_state`; its defaults
@@ -237,8 +223,8 @@ written to `build/examples/`; multi-config generators on Windows place them in
 | [14_custom_control.cc](examples/tutorial/14_custom_control.cc) | `14_custom_control` | Per-finger position/current modes and feedback |
 | [15_tactile_display.cc](examples/tutorial/15_tactile_display.cc) | `15_tactile_display` | Qt 6 tactile maps, force arrows and XYZ history (requires Qt to build) |
 
-The new tutorials retain the Python SDK's 13/14/15 numbering. MIT uses degrees and
-velocity/current percentages, `kp=10..2000`, `kd=0..50`, `kp>kd`; current is feed-forward.
+MIT uses degrees and
+velocity/current percentages; recommended settings are `kp=10..2000`, `kd=0..50`, `kp>kd`; current is feed-forward.
 CUSTOM requires consistent mode/loop selection within each finger arbitration group,
 including disabled joints. Check feedback after sending and disable the hand before disconnecting.
 
@@ -260,13 +246,10 @@ All examples accept these options. With no arguments, they use `GHand5 + ETHERCA
 ### Qt tactile display
 
 `15_tactile_display` is built only when CMake finds Qt 6.2+ Widgets during
-configuration; the SDK and all other examples build without Qt. Release
-packages ship a prebuilt binary, so users without Qt can still run it.
+configuration; the SDK and all other examples build without Qt.
 
 On Windows, install Qt 6.2+ (6.9.1 recommended) Widgets development components and
 set `CMAKE_PREFIX_PATH` if Qt is not on the default search path.
-The release package's `dist/` directory includes executables, runtime libraries
-and platform plugins, so the programs can run without Qt installed.
 The following commands build from source; CMake does not deploy Qt runtime dependencies:
 
 ```powershell
@@ -299,9 +282,6 @@ The caller owns the connection and must keep the hand alive until the widget is
 destroyed. The widget exclusively uses its tactile callback slot and closes tactile
 acquisition and joins its worker on shutdown. It sends no motion commands.
 Qt is required only for `15_tactile_display`; every other target builds without it.
-Enable `GHAND_BUILD_TESTS` for hardware-free
-checks using `ctest --test-dir build -C Release --output-on-failure`; on Windows,
-the required Qt DLLs and offscreen plugin are copied automatically.
 
 Action demos, including `preset_gesture`, `gesture_dance` and `clap_pose`, are in
 [`examples/demo/`](examples/demo/).
@@ -332,7 +312,6 @@ cmake --build build --config Release
 .\build\examples\Release\01_basic_connection.exe
 ```
 
-> **Windows RS485:** `modbus.dll` from `deps/lib/windows` is copied next to `ghand.dll` during the build when present.
 
 ### Linux
 
@@ -346,7 +325,7 @@ cmake --build build -j$(nproc)
 
 # Grant raw socket permissions once to all built examples
 find build/examples -maxdepth 1 -type f -executable \
-  -exec sudo setcap cap_net_raw=ep {} \;
+  -exec sudo setcap cap_net_raw,cap_net_admin=ep {} \;
 
 # Run the EtherCAT example
 ./build/examples/01_basic_connection
@@ -498,12 +477,3 @@ Third-party components remain subject to their respective licenses. See
 for details.
 
 Copyright (c) 2026 GLITech.
-
-### Linux runtime bundle
-
-Run `python3 scripts/package_linux.py` to build and bundle all examples and their
-runtime dependencies in `dist/linux/`. Run `python3 dist/linux/setup_ethercat.py`
-once after deployment to configure library paths and grant CAP_NET_RAW. Then
-launch `./dist/linux/15_tactile_display` as your normal user. Repeat setup after
-moving or replacing the bundle. See [dist/README.md](dist/README.md)
-for layout, rebuild instructions and system requirements.

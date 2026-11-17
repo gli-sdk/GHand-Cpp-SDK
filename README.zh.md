@@ -9,15 +9,15 @@
 
 [English](README.md)
 
-GHand C++ SDK 用于控制 GHand 灵巧手，支持 EtherCAT、CANFD 和 RS485 通信，提供关节控制、触觉感知与实时状态反馈。
+GHand C++ SDK 用于控制 GHand 灵巧手，支持 EtherCAT、CANFD 和 RS485 通信，提供关节控制与实时状态反馈；GHand5 还支持触觉感知。
 
 ## ✨ 主要功能
 
 - EtherCAT、CANFD 和 RS485 通信
-- 全部 5 根手指支持逐关节独立控制（位置、速度、电流、MIT、自定义模式）
+- 全部 5 根手指支持逐关节独立控制（位置、速度、电流和自定义模式；GHand5 还支持 MIT）
 - MIT 与自定义模式教程，包含状态反馈与退出前显式禁用驱动
-- 可选 Qt 6 触觉显示界面，包含整手视图、触点图和 60 秒三轴力曲线
-- 关节状态与触觉数据的实时数据回调
+- GHand5 可选 Qt 6 触觉显示界面，包含整手视图、触点图和 60 秒三轴力曲线
+- 关节状态实时回调，以及 GHand5 触觉数据回调
 - 支持左手和右手设备
 - 通过设备名称匹配自动识别产品
 - 支持同款左右手共用一条总线，控制与反馈按手隔离
@@ -28,15 +28,13 @@ V3.1.0 使用 `Master` / `GHand` 所有权模型与新协议命令类型。
 
 ## 产品支持矩阵
 
-以下能力说明适用于当前 V3.1.0 版本的 GHand5。
-**GHandLite1 请使用 SDK 2.xx（2.x）版本**，并遵循对应版本的 README、API 和协议说明。
+当前 V3.1.0 同时支持 GHand5 和 GHandLite1。
+GHandLite1 不支持 MIT 和闭环控制，默认使用半闭环控制。
 
 | 产品 | SDK 版本 | 通信方式 | 控制模式 | 触觉能力 |
 | --- | --- | --- | --- | --- |
-| GHand5 | 当前 V3.1.0 | EtherCAT、CANFD、RS485 | 位置、速度、电流、MIT、自定义（CUSTOM） | 五指三轴力反馈、触觉回调、开启/关闭采集及归零；可选 Qt 显示 |
-| GHandLite1 | 请使用 2.xx（2.x） | 以对应 2.x 版本说明为准 | 以对应 2.x 版本说明为准 | 以对应 2.x 版本说明为准 |
-
-仓库中保留的 GHandLite1 类型与配置文件不代表当前 V3.1.0 提供该产品的接入支持。
+| GHand5 | 当前 V3.1.0 | EtherCAT、CANFD、RS485 | 位置、速度、电流、MIT、自定义（CUSTOM）；支持闭环和半闭环 | 五指三轴力反馈、触觉回调、开启/关闭采集及归零；可选 Qt 显示 |
+| GHandLite1 | 当前 V3.1.0 | EtherCAT、CANFD、RS485 | 位置、速度、电流、自定义（CUSTOM）；默认半闭环，不支持 MIT 和闭环 | 暂不支持 |
 
 ## 📖 官方文档
 
@@ -98,7 +96,7 @@ Linux 构建通过 pkg-config 使用系统 `libmodbus` 开发包。Windows
 | [libmodbus](https://github.com/stephane/libmodbus) | 3.1.12 | Modbus RTU/RS485 支持 | LGPL-2.1-or-later | 动态链接 |
 | [nlohmann/json](https://github.com/nlohmann/json) | 随附头文件 | JSON 解析 | MIT | Header-only |
 | WinPcap | Developer Pack 组件 | 数据包捕获（Windows EtherCAT） | WinPcap BSD 风格许可证及附带声明 | 头文件与导入库 |
-| Qt | 6.2+ | 可选触觉显示界面 | 按所用组件保留上游许可 | 动态链接；运行依赖随程序放在 `dist/`，构建使用本机 Qt |
+| Qt | 6.2+ | 可选触觉显示界面 | 按所用组件保留上游许可 | 动态链接；构建使用本机 Qt，部署时需提供 Qt 运行依赖 |
 
 构建界面需要本机安装 Qt 6.2+ Widgets 开发组件；Windows 使用 MSVC 2022 x64。
 项目最低要求 CMake 3.16；构建界面时还需满足所用 Qt 版本的要求（Qt 6.9 在多数目标平台要求 CMake 3.22）。
@@ -112,18 +110,6 @@ CMake 未找到 Qt 时，通过 `CMAKE_PREFIX_PATH` 指定本机 Qt 套件目录
 - pthreads
 
 ## 📦 安装
-
-### 预构建库
-
-将以下构件复制到你的项目中：
-
-| 构件 | 说明 |
-|----------|-------------|
-| `include/ghand/` | 公共头文件 |
-| `ghand.dll` / `libghand.so` | 共享库 |
-| `config/ghand5.json`、`config/ghandlite1.json` | 产品配置 |
-
-链接 `ghand`，并确保运行时可以访问 JSON 配置。
 
 ### CMake 安装
 
@@ -198,7 +184,7 @@ if (connected) {
 
 ### 公共类型迁移
 
-公共类型参考 Python SDK：`HandData`、`JointData`、`HandControlMode`、
+公共类型包括：`HandData`、`JointData`、`HandControlMode`、
 `JointControlMode`、`JointLoopType`、`HandRuntimeState` 和 `JointState`。
 左右手使用 `HandType::LEFT_HAND` / `RIGHT_HAND`，速度模式使用 `HandControlMode::VELOCITY`。
 `JointCommand` 使用 `control_mode`、`loop_type`、`control_state`，默认分别为
@@ -230,8 +216,8 @@ RS485 保留 `RATE_*` 命名，避免与 Windows 的 `BAUD_*` 宏冲突。
 | [14_custom_control.cc](examples/tutorial/14_custom_control.cc) | `14_custom_control` | 分指选择位置/电流模式、组内模式一致性和状态反馈 |
 | [15_tactile_display.cc](examples/tutorial/15_tactile_display.cc) | `15_tactile_display` | Qt 6 五指触觉点图、切向力箭头与三轴力曲线（编译需要 Qt） |
 
-新增教程沿用 Python SDK 的 13/14/15 编号。MIT 的角度单位为度，速度/电流为百分比；
-`kp=10..2000`、`kd=0..50` 且 `kp>kd`。MIT 电流是前馈目标。
+MIT 的角度单位为度，速度/电流为百分比；
+建议设置 `kp=10..2000`、`kd=0..50` 且 `kp>kd`。MIT 电流是前馈目标。
 CUSTOM 同一手指仲裁组内的控制模式和反馈环必须一致，禁用关节也应显式选择同组模式。
 发送成功后应检查状态反馈；断开通信前显式调用 `DisableHand()` 释放驱动力。
 
@@ -252,11 +238,9 @@ CUSTOM 同一手指仲裁组内的控制模式和反馈环必须一致，禁用�
 
 ### Qt 触觉显示
 
-`15_tactile_display` 仅在 configure 阶段检测到 Qt 6.2+ Widgets 时才会编译，SDK 与其他示例不依赖 Qt；
-发布包中附带预编译程序，未安装 Qt 的用户也可以直接运行。
+`15_tactile_display` 仅在 configure 阶段检测到 Qt 6.2+ Widgets 时才会编译，SDK 与其他示例不依赖 Qt。
 
 Windows 需安装 Qt 6.2+（推荐 6.9.1）Widgets 开发组件，Qt 不在默认搜索路径时通过 `CMAKE_PREFIX_PATH` 指定。
-发布包的 `dist/` 目录包含 exe 及所需运行库和平台插件，未安装 Qt 的机器可直接运行其中的程序。
 以下命令用于从源码构建；CMake 不自动部署 Qt 运行依赖：
 
 ```powershell
@@ -283,8 +267,6 @@ Linux 安装 Qt 6.2+ Widgets 开发组件，必要时通过 `CMAKE_PREFIX_PATH` 
 调用方拥有连接并保证 `GHand` 比窗口存活更久；窗口独占该手的触觉回调槽，关闭窗口会注销回调、
 关闭触觉并回收工作线程，连接由调用方断开。界面不会发送运动指令。
 Qt 仅为 `15_tactile_display` 编译所需，其余目标无需 Qt。
-无硬件验证可启用 `GHAND_BUILD_TESTS` 后运行 `ctest --test-dir build -C Release --output-on-failure`；
-Windows 测试所需的 Qt DLL 与离屏插件也会自动复制。
 
 `preset_gesture`、`gesture_dance`、`clap_pose` 等动作示例位于
 [`examples/demo/`](examples/demo/)。
@@ -315,7 +297,6 @@ cmake --build build --config Release
 .\build\examples\Release\01_basic_connection.exe
 ```
 
-> **Windows RS485：** 构建时若存在 `deps/lib/windows` 下的 `modbus.dll`，会将其复制到 `ghand.dll` 旁边。
 
 ### Linux
 
@@ -329,7 +310,7 @@ cmake --build build -j$(nproc)
 
 # 为所有构建出的示例授予一次 raw socket 权限
 find build/examples -maxdepth 1 -type f -executable \
-  -exec sudo setcap cap_net_raw=ep {} \;
+  -exec sudo setcap cap_net_raw,cap_net_admin=ep {} \;
 
 # 运行 EtherCAT 示例
 ./build/examples/01_basic_connection
@@ -473,10 +454,3 @@ EtherCAT 后端使用 SOEM 2.0.0。SOEM 2.0.0 采用 GPLv3 或商业许可证双
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 与 `LICENSES/` 目录。
 
 Copyright (c) 2026 GLITech.
-
-### Linux 发布包
-
-运行 `python3 scripts/package_linux.py` 将所有示例及运行依赖打包到 `dist/linux/`。
-部署后执行 `python3 dist/linux/setup_ethercat.py`，一次性授予实际程序 `CAP_NET_RAW`，
-然后以普通用户运行 `./dist/linux/15_tactile_display`。移动或替换发布包后需重新授权。
-目录结构、重建方式和系统要求见 [dist/README.md](dist/README.md)。

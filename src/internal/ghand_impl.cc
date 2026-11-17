@@ -467,9 +467,9 @@ Result GHandImpl::MoveJoints(uint16_t slave_index,
         }
         if (effective == HandControlMode::MIT) {
           const int kp =
-              std::max(10, std::min(2000, static_cast<int>(limited.kp)));
-          const int kd = std::max(
-              0, std::min(50, std::min(kp - 1, static_cast<int>(limited.kd))));
+              std::max(0, std::min(32767, static_cast<int>(limited.kp)));
+          const int kd =
+              std::max(0, std::min(32767, static_cast<int>(limited.kd)));
           if (kp != limited.kp || kd != limited.kd) {
             GHAND_LOG_WARNING("[Joint] " << ToString(limited.id)
                                          << " MIT gains adjusted from kp="
