@@ -7,13 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Moved the Windows Qt runtime distribution to `dist/windows/` and removed the redundant `deps/qt/` bundle. GUI builds use a local Qt development installation; release runtime dependencies are deployed with windeployqt.
-
 ## [3.1.0] - 2026-10-30
 
 ### Added
-- Bundled the Release-only Qt 6.9.1 Windows x64/MSVC 2022 runtime subset under `deps/qt/`: Core/Gui/Widgets DLLs, window/offscreen/style plugins and upstream license texts. Building the GUI examples uses a local Qt installation; CMake deploys the found runtime DLLs and plugins automatically.
 - Added MIT and CUSTOM tutorials (`13_mit_control.cc`, `14_custom_control.cc`) covering compliant grasping, tactile contact detection, per-finger mode consistency, feedback and explicit drive disabling.
 - Added the optional Qt 6 tactile display and tutorial (`15_tactile_display.cc`), with Python-aligned hand images, left/right hand detection, five finger maps, force markers, Fz bars, point tooltips, tactile switching and zeroing.
 - Added 60-second timestamped XYZ force history with 50 Hz callback coalescing, missing-data gaps, stale-subscription rejection and embedded Qt image resources. GUI targets use C++17; the core SDK remains C++11.
@@ -24,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added hardware-free shared-bus regression coverage for independent commands and feedback, ID changes, offline-hand isolation, slow-callback keepalive, and reconnect invalidation.
 
 ### Changed
+- Moved the Windows Qt runtime distribution to `dist/windows/` and removed the redundant `deps/qt/` bundle. GUI builds use a local Qt development installation; release runtime dependencies are deployed with windeployqt.
 - Standardized tutorial filenames as `01_basic_connection.cc` through `11_connect_hands.cc`; executable targets keep unnumbered names. Renamed the clap demo to `clap_pose`.
 - Clarified `JointCommand` units, defaults and mode-dependent fields in `02_move_joints.cc`, with explicit position mode and command failure messages.
 - **BREAKING ABI (relative to 2.x):** Set the SDK version to 3.1.0 and SOVERSION to 3. Applications must rebuild against matching headers and libraries. Existing library base names, CMake package/target names and `SameMajorVersion` package compatibility are retained.
