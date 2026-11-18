@@ -1,24 +1,23 @@
-﻿#include <chrono>
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <mutex>
 #include <sstream>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 
 #include "ghand/ghand.h"
+#include "../example_options.h"
 
 // Gesture type definitions.
 
-enum class GestureType {
-  OPEN_HAND,
-  FIST,
-  OK,
-  THUMBS_UP,
-  SIX_SIGN
-};
+enum class GestureType { OPEN_HAND, FIST, OK, THUMBS_UP, SIX_SIGN };
 
 std::string GetGestureName(GestureType gesture) {
   switch (gesture) {
@@ -39,8 +38,7 @@ std::string GetGestureName(GestureType gesture) {
 
 // Gesture definitions.
 
-const std::unordered_map<GestureType,
-                         std::unordered_map<ghand::JointId, float>>
+const std::unordered_map<GestureType, std::unordered_map<ghand::JointId, float>>
     GESTURE_DEFINITIONS = {
         {GestureType::OPEN_HAND,
          {
@@ -126,31 +124,49 @@ const std::unordered_map<GestureType,
 
 // Global state for error handling.
 
-ghand::HandState g_hand_state;
-std::vector<ghand::Joint> g_joints;
+ghand::HandData g_hand_state;
+std::vector<ghand::JointData> g_joints;
 std::mutex g_state_mutex;
 
-void OnHandStateUpdate(const ghand::HandState& state) {
+void OnHandStateUpdate(const ghand::HandData& state) {
   std::lock_guard<std::mutex> lock(g_state_mutex);
   g_hand_state = state;
 }
 
-void OnJointsUpdate(const std::vector<ghand::Joint>& joints) {
+void OnJointsUpdate(const std::vector<ghand::JointData>& joints) {
   std::lock_guard<std::mutex> lock(g_state_mutex);
   g_joints = joints;
+}
+
+bool HandHasError(const ghand::HandData& hand) {
+  for (uint8_t code : hand.error_warn)
+    if (code) return true;
+  for (uint8_t code : hand.error_fault)
+    if (code) return true;
+  for (uint8_t code : hand.error_critical)
+    if (code) return true;
+  return hand.joints_state != ghand::HandControlState::DISABLED &&
+         hand.joints_state != ghand::HandControlState::ENABLED;
+}
+
+bool JointHasError(const ghand::JointData& joint) {
+  return joint.error != ghand::JointErrorCode::NORMAL ||
+         (joint.state != ghand::JointState::DISABLED &&
+          joint.state != ghand::JointState::RUNNING &&
+          joint.state != ghand::JointState::STOPPED);
 }
 
 bool HasError() {
   std::lock_guard<std::mutex> lock(g_state_mutex);
 
   // Check hand state first (priority 1)
-  if (ghand::HasError(g_hand_state)) {
+  if (HandHasError(g_hand_state)) {
     return true;
   }
 
   // Check joints (priority 2)
   for (const auto& joint : g_joints) {
-    if (ghand::HasError(joint)) {
+    if (JointHasError(joint)) {
       return true;
     }
   }
@@ -162,18 +178,17 @@ void PrintError() {
   std::lock_guard<std::mutex> lock(g_state_mutex);
 
   // Print hand state errors
-  if (ghand::HasError(g_hand_state)) {
+  if (HandHasError(g_hand_state)) {
     std::cerr << "\n[ERROR] Hand state error detected!" << '\n';
-    std::cerr << "Error: " << ghand::ToString(g_hand_state.error) << '\n';
-    std::cerr << "State: " << ghand::ToString(g_hand_state.state) << '\n';
-    std::cerr << "Temperature: " << g_hand_state.temperature << " degC"
-              << '\n';
+    std::cerr << "HandControlState: "
+              << ghand::ToString(g_hand_state.joints_state) << '\n';
+    std::cerr << "Temperature: " << g_hand_state.temperature << " degC" << '\n';
   }
 
   // Print joint errors
   std::vector<std::string> faulty_joints;
   for (const auto& joint : g_joints) {
-    if (ghand::HasError(joint)) {
+    if (JointHasError(joint)) {
       std::stringstream ss;
       ss << "  - " << ghand::ToString(joint.id)
          << ": state=" << ghand::ToString(joint.state)
@@ -183,7 +198,7 @@ void PrintError() {
   }
 
   if (!faulty_joints.empty()) {
-    if (ghand::HasError(g_hand_state)) {
+    if (HandHasError(g_hand_state)) {
       std::cerr << '\n';
     }
     std::cerr << "[ERROR] Detected " << faulty_joints.size()
@@ -201,37 +216,40 @@ std::vector<ghand::JointCommand> CreateJointsFromGesture(
     const std::unordered_map<ghand::JointId, float>& gesture_def) {
   std::vector<ghand::JointCommand> joints;
   for (const auto& pair : gesture_def) {
-    joints.push_back({pair.first, pair.second, 100, 100});
+    joints.push_back({pair.first, ghand::JointControlMode::POSITION,
+                      ghand::JointLoopType::CLOSED_LOOP,
+                      ghand::JointControlState::RUNNING, pair.second, 100,
+                      100});
   }
   return joints;
 }
 
-std::unique_ptr<ghand::GHand> CreateConnectedHand() {
-  auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                     ghand::CommType::ETHERCAT);
-  if (!hand) {
+std::unique_ptr<ghand::Master> CreateConnectedHand(const example::Options& options) {
+  auto master = ghand::Master::Create(options.product, options.comm);
+  if (!master) {
     std::cerr << "Failed to create GHand" << '\n';
     return nullptr;
   }
 
   std::cout << "\nConnecting to dexterous hand..." << '\n';
-  if (!hand->AutoConnect()) {
-    std::cerr << "Failed to connect!" << '\n';
+  const auto connected = master->Connect(options.device);
+  if (!connected) {
+    std::cerr << "Failed to connect: " << connected.message << '\n';
     return nullptr;
   }
 
   std::cout << "Connected successfully" << '\n';
-  hand->SetControlMode(ghand::ControlMode::POSITION);
+  // Data callbacks belong to one hand, so register on the hand itself.
+  ghand::GHand* hand = connected.value.front();
   hand->SetJointsCallback(OnJointsUpdate);
-  hand->SetHandStateCallback(OnHandStateUpdate);
-  return hand;
+  hand->SetHandDataCallback(OnHandStateUpdate);
+  return master;
 }
 
 bool WaitWithErrorCheck(int wait_ms, int check_interval_ms) {
   int elapsed = 0;
   while (elapsed < wait_ms) {
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(check_interval_ms));
+    std::this_thread::sleep_for(std::chrono::milliseconds(check_interval_ms));
     elapsed += check_interval_ms;
     if (HasError()) return true;
   }
@@ -252,10 +270,8 @@ bool ExecuteGesture(ghand::GHand& hand, GestureType gesture,
 }
 
 bool RunGestureCycle(ghand::GHand& hand,
-                     const std::vector<GestureType>& gestures,
-                     int cycle,
-                     int gesture_wait_ms,
-                     int cycle_delay_ms,
+                     const std::vector<GestureType>& gestures, int cycle,
+                     int gesture_wait_ms, int cycle_delay_ms,
                      int check_interval_ms) {
   std::cout << "\n========== Cycle " << cycle << " ==========" << '\n';
 
@@ -267,8 +283,7 @@ bool RunGestureCycle(ghand::GHand& hand,
 
   std::cout << "\n========== Cycle " << cycle
             << " completed ==========" << '\n';
-  std::cout << "Press Ctrl+C to stop, or continue to next cycle...\n"
-            << '\n';
+  std::cout << "Press Ctrl+C to stop, or continue to next cycle...\n" << '\n';
   return WaitWithErrorCheck(cycle_delay_ms, check_interval_ms);
 }
 
@@ -287,8 +302,8 @@ bool RunGestureDemo(ghand::GHand& hand) {
   int cycle = 0;
   while (true) {
     cycle++;
-    if (RunGestureCycle(hand, gestures, cycle, kGestureWaitMs,
-                        kCycleDelayMs, kErrorCheckIntervalMs)) {
+    if (RunGestureCycle(hand, gestures, cycle, kGestureWaitMs, kCycleDelayMs,
+                        kErrorCheckIntervalMs)) {
       return true;
     }
   }
@@ -302,13 +317,23 @@ void HandleDetectedError(ghand::GHand& hand) {
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 }
 
-int main() {
+int main(int argc, char** argv) {
+  example::Options options{
+      ghand::ProductType::GHand5,
+      ghand::CommType::ETHERCAT,
+      "auto",
+  };
+  const auto parsed = example::ParseOptions(argc, argv, options);
+  if (parsed != example::ParseResult::Run)
+    return parsed == example::ParseResult::Help ? 0 : 1;
+
   std::cout << "========================================" << '\n';
   std::cout << "  GHand Dexterous Hand SDK - Preset Gesture Demo" << '\n';
   std::cout << "========================================" << '\n';
 
-  auto hand = CreateConnectedHand();
-  if (!hand) return 1;
+  auto master = CreateConnectedHand(options);
+  if (!master) return 1;
+  auto* hand = master->hands().front();
 
   bool has_error = RunGestureDemo(*hand);
   if (has_error) {
@@ -316,7 +341,11 @@ int main() {
   }
 
   std::cout << "\nDisconnecting..." << '\n';
-  hand->Disconnect();
+  const auto disconnected = master->Disconnect();
+  if (!disconnected) {
+    std::cerr << "Disconnect failed: " << disconnected.message << '\n';
+    return 1;
+  }
   std::cout << "Disconnected. Thank you!" << '\n';
 
   return has_error ? 1 : 0;

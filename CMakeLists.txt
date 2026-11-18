@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(GHandSDK VERSION 2.2.2 LANGUAGES C CXX)
+project(GHandSDK VERSION 3.1.0 LANGUAGES C CXX)
 include(CMakePackageConfigHelpers)
 
 # Set C++ standard
@@ -120,7 +120,6 @@ set(SOURCES
     src/comm/ethercat_comm.cc
     src/comm/modbus_codec.cc
     src/comm/rs485_comm.cc
-    src/comm/self_test_workflow.cc
     src/internal/ghand_impl.cc
     src/internal/ghand_callback_manager.cc
     src/internal/file_lock.cc
@@ -167,7 +166,7 @@ target_link_libraries(ghand PRIVATE
 set_target_properties(ghand PROPERTIES
     OUTPUT_NAME ghand
     VERSION ${PROJECT_VERSION}
-    SOVERSION 1
+    SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 
 if(MSVC)

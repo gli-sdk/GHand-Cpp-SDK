@@ -1,0 +1,92 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+//
+// CAN-FD bit-timing configuration demo: writes a new profile while connected
+// at the current profile, then asks the user to power-cycle. For RS485, connect
+// with the RS485BaudRate overload and write SetBaudrateConfig(RS485BaudRate).
+
+#include <chrono>
+#include <iostream>
+#include <string>
+#include <thread>
+
+#include "ghand/ghand.h"
+#include "../example_options.h"
+
+namespace {
+
+constexpr uint8_t kSlaveId = 0x31;
+
+std::string CanfdTimingName(ghand::CANFDBitTiming timing) {
+  switch (timing) {
+    case ghand::CANFDBitTiming::TIMING_500K_800K:
+      return "TIMING_500K_800K";
+    case ghand::CANFDBitTiming::TIMING_500K_1M:
+      return "TIMING_500K_1M";
+    case ghand::CANFDBitTiming::TIMING_500K_2M:
+      return "TIMING_500K_2M";
+    case ghand::CANFDBitTiming::TIMING_500K_4M:
+      return "TIMING_500K_4M";
+    case ghand::CANFDBitTiming::TIMING_1M_1M:
+      return "TIMING_1M_1M";
+    case ghand::CANFDBitTiming::TIMING_1M_2M:
+      return "TIMING_1M_2M";
+    case ghand::CANFDBitTiming::TIMING_1M_4M:
+      return "TIMING_1M_4M";
+    case ghand::CANFDBitTiming::TIMING_1M_5M:
+      return "TIMING_1M_5M";
+  }
+  return "UNKNOWN";
+}
+}  // namespace
+
+int main(int argc, char** argv) {
+  example::Options options{
+      ghand::ProductType::GHand5,
+      ghand::CommType::CANFD,
+      "auto",
+  };
+  const auto parsed = example::ParseOptions(argc, argv, options, true);
+  if (parsed != example::ParseResult::Run)
+    return parsed == example::ParseResult::Help ? 0 : 1;
+
+  const auto current_timing = ghand::CANFDBitTiming::TIMING_1M_5M;
+  const auto target_timing = ghand::CANFDBitTiming::TIMING_1M_4M;
+
+  auto master =
+      ghand::Master::Create(options.product, options.comm);
+  if (!master) {
+    std::cerr << "Failed to create GHand" << '\n';
+    return 1;
+  }
+
+  std::cout << "Connecting with current CANFD timing "
+            << CanfdTimingName(current_timing) << "..." << '\n';
+  const auto connected = master->Connect(options.device, kSlaveId, current_timing);
+  if (!connected) {
+    std::cerr << "Connection failed: " << connected.message << '\n';
+    return 1;
+  }
+  ghand::GHand* hand = connected.value.front();
+
+  std::cout << "Writing new CANFD timing " << CanfdTimingName(target_timing)
+            << "..." << '\n';
+  const auto write_result = hand->SetBaudrateConfig(target_timing);
+  if (!write_result) {
+    std::cerr << "Failed to write baud-rate configuration: "
+              << write_result.message << '\n';
+    master->Disconnect();
+    return 1;
+  }
+
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+  master->Disconnect();
+
+  std::cout << "Baud-rate configuration written successfully." << '\n';
+  std::cout << "Power-cycle the device, then reconnect with:" << '\n';
+  std::cout << "  master->Connect(\"" << options.device << "\", 0x" << std::hex
+            << static_cast<int>(kSlaveId) << std::dec << ", "
+            << "ghand::CANFDBitTiming::" << CanfdTimingName(target_timing)
+            << ")" << '\n';
+  return 0;
+}

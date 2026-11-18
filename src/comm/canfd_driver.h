@@ -38,8 +38,8 @@ class CANFDDriver {
    * @param dbitrate_sample_point Data segment sample point percentage
    * @return 0 on success, negative value on failure
    */
-  virtual int Open(const std::string& name, uint32_t bitrate,
-                   uint32_t dbitrate, uint8_t bitrate_sample_point,
+  virtual int Open(const std::string& name, uint32_t bitrate, uint32_t dbitrate,
+                   uint8_t bitrate_sample_point,
                    uint8_t dbitrate_sample_point) = 0;
 
   /**

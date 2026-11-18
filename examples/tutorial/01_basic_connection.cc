@@ -1,0 +1,73 @@
+// SPDX-FileCopyrightText: 2025-2026 GLITech
+// SPDX-License-Identifier: GPL-3.0-only
+
+#include <iostream>
+
+#include "ghand/ghand.h"
+#include "../example_options.h"
+
+int main(int argc, char** argv) {
+  example::Options options{
+      ghand::ProductType::GHand5,
+      ghand::CommType::ETHERCAT,
+      "auto",
+  };
+  const auto parsed = example::ParseOptions(argc, argv, options);
+  if (parsed != example::ParseResult::Run)
+    return parsed == example::ParseResult::Help ? 0 : 1;
+
+  auto master = ghand::Master::Create(options.product, options.comm);
+  if (!master) {
+    std::cerr << "Failed to create GHand" << '\n';
+    return -1;
+  }
+
+  // Try to auto-connect to the dexterous hand
+  std::cout << "Connecting to dexterous hand..." << '\n';
+  const auto connected = master->Connect(options.device);
+  if (!connected) {
+    std::cerr << "Failed to connect to the dexterous hand: "
+              << connected.message << '\n';
+    return 1;
+  }
+
+  std::cout << "Successfully connected to the dexterous hand!" << '\n';
+
+  // The hand carries what Connect() found, so no extra bus round-trip is
+  // needed. The pointer stays valid until the next Connect()/Disconnect().
+  ghand::GHand* hand = connected.value.front();
+  std::cout << "Hand type: " << ghand::ToString(hand->GetHandType()) << '\n';
+
+  const auto result = hand->GetDeviceInfo();
+  if (!result) {
+    std::cerr << "Failed to read device info: " << result.message << '\n';
+    return 1;
+  }
+  const ghand::DeviceInfo& device_info = result.value;
+
+  std::cout << "Device name: " << device_info.device_name << '\n';
+  std::cout << "Software version: " << device_info.software_version << '\n';
+  std::cout << "Motor driver version: " << device_info.motor_driver_version
+            << '\n';
+  std::cout << "Position sensor version: "
+            << device_info.position_sensor_version << '\n';
+  std::cout << "Tactile sensor version: " << device_info.tactile_sensor_version
+            << '\n';
+  std::cout << "Thumb tactile sensor version: "
+            << device_info.thumb_tactile_sensor_version << '\n';
+  std::cout << "Finger tactile sensor version: "
+            << device_info.finger_tactile_sensor_version << '\n';
+  std::cout << "Firmware package version: "
+            << device_info.firmware_package_version << '\n';
+  std::cout << "Serial number: " << device_info.serial_number << '\n';
+
+  // Disconnect
+  const auto disconnected = master->Disconnect();
+  if (!disconnected) {
+    std::cerr << "Failed to disconnect: " << disconnected.message << '\n';
+    return 1;
+  }
+  std::cout << "Connection closed." << '\n';
+
+  return 0;
+}

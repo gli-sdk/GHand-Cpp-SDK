@@ -1,5 +1,5 @@
 # GHand SDK C++
-[![Version](https://img.shields.io/badge/version-v2.2.2-blue.svg)](include/ghand/version.h)
+[![Version](https://img.shields.io/badge/version-V3.1.0-blue.svg)](include/ghand/version.h)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 [![C++](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
@@ -8,37 +8,56 @@
 
 [中文](README.zh.md)
 
-C++ SDK for GHand dexterous hands, supporting EtherCAT, CANFD, and RS485 communication with joint control, tactile sensing, and real-time state feedback.
+C++ SDK for GHand dexterous hands, supporting EtherCAT, CANFD, and RS485 communication with joint control and real-time state feedback; GHand5 also supports tactile sensing.
 
-## ✨ Features
+## Features
 
 - EtherCAT, CANFD, and RS485 communication
-- Independent per-joint control for all 5 fingers (position, velocity, torque)
-- Real-time data callbacks for joint states and tactile data
+- Independent per-joint control for all 5 fingers (position, velocity, current and CUSTOM; GHand5 also supports MIT)
+- MIT and CUSTOM control tutorials with command feedback and explicit hand disabling
+- Optional Qt 6 tactile display for GHand5 with whole-hand view, finger maps and 60-second XYZ force plots
+- Real-time joint-state callbacks and GHand5 tactile-data callbacks
 - Left and right hand device support
 - Automatic product detection via device name matching
-- Provided as Windows dynamic-link library (DLL)
+- Same-product left and right hands sharing a bus with independent control and feedback
+- Windows DLL and Linux shared-library builds
 
-## 📖 Official Documentation
+V3.1.0 uses the `Master` / `GHand` ownership model and new-protocol command types.
+Applications upgrading from 2.x must rebuild against matching headers and libraries;
+see [CHANGELOG.md](CHANGELOG.md) for API and protocol migration details.
+
+## Product Support Matrix
+
+Both GHand5 and GHandLite1 are supported in V3.1.0.
+GHandLite1 does not support MIT or closed-loop control; its default is semi-closed-loop control.
+
+| Product | SDK version | Transports | Control modes | Tactile capabilities |
+| --- | --- | --- | --- | --- |
+| GHand5 | Current V3.1.0 | EtherCAT, CANFD, RS485 | Position, velocity, current, MIT, CUSTOM; closed-loop and semi-closed-loop | Five-finger three-axis force feedback, tactile callbacks, acquisition on/off and zeroing; optional Qt display |
+| GHandLite1 | Current V3.1.0 | EtherCAT, CANFD, RS485 | Position, velocity, current, CUSTOM; semi-closed-loop by default; no MIT or closed-loop | Not supported yet |
+
+## Official Documentation
 
 For detailed technical specifications and API references, visit: [C++ SDK Developer Documentation](https://fcnzogxju7xr.feishu.cn/docx/Ex2Gd2i5RoJZzcxtIyPcSAW8nVg)
 
-## 📑 Table of Contents
+## Table of Contents
 
-- [Features](#-features)
-- [Official Documentation](#-official-documentation)
-- [System Requirements](#-system-requirements)
-- [Dependencies](#-dependencies)
-- [Installation](#-installation)
-- [Quick Start](#-quick-start)
-- [Build from Source](#-build-from-source)
-- [Directory Structure](#-directory-structure)
-- [Open Source & Ecosystem Resources](#-open-source--ecosystem-resources)
-- [Changelog](#-changelog)
-- [Support & Feedback](#-support--feedback)
-- [License](#-license)
+- [Features](#features)
+- [Product Support Matrix](#product-support-matrix)
+- [Official Documentation](#official-documentation)
+- [System Requirements](#system-requirements)
+- [Dependencies](#dependencies)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Examples](#examples)
+- [Build from Source](#build-from-source)
+- [Directory Structure](#directory-structure)
+- [Open Source & Ecosystem Resources](#open-source--ecosystem-resources)
+- [Changelog](#changelog)
+- [Support & Feedback](#support--feedback)
+- [License](#license)
 
-## 💻 System Requirements
+## System Requirements
 
 ### Supported Platforms
 
@@ -59,7 +78,7 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 - libssl-dev
 - libmodbus-dev
 
-## 🔧 Dependencies
+## Dependencies
 
 ### Required Tools
 - CMake 3.16 or higher
@@ -69,7 +88,7 @@ For detailed technical specifications and API references, visit: [C++ SDK Develo
 
 Source builds use the bundled SOEM and header-only dependencies under `deps/`.
 Linux builds use the system `libmodbus` development package discovered through
-pkg-config; `libmodbus.so*` is not bundled in the source repository. Windows
+pkg-config. Windows
 builds use the libmodbus import library/DLL supplied in the Windows release
 dependency set.
 
@@ -79,6 +98,14 @@ dependency set.
 | [libmodbus](https://github.com/stephane/libmodbus) | 3.1.12 | Modbus RTU/RS485 support | LGPL-2.1-or-later | Dynamically linked |
 | [nlohmann/json](https://github.com/nlohmann/json) | bundled header | JSON parsing | MIT | Header-only |
 | WinPcap | Developer Pack components | Packet capture (Windows EtherCAT) | WinPcap BSD-style license and incorporated notices | Headers and import libraries |
+| Qt | 6.2+ | Optional tactile display | Upstream component terms | Dynamically linked; builds use local Qt, and deployment must provide Qt runtime dependencies |
+
+Building the GUI requires a local Qt 6.2+ Widgets development installation;
+Windows builds use MSVC 2022 x64. The project requires CMake 3.16 or newer;
+GUI builds must also meet the selected Qt version's requirements
+(Qt 6.9 requires CMake 3.22 on most target platforms).
+If CMake cannot find Qt, set `CMAKE_PREFIX_PATH` to the local Qt kit directory.
+The tactile display requires C++17; the core SDK uses C++11.
 
 ### System Libraries (Linux only)
 - libssl-dev
@@ -86,19 +113,7 @@ dependency set.
 - pkg-config
 - pthreads
 
-## 📦 Installation
-
-### Prebuilt Library
-
-Copy the following artifacts into your project:
-
-| Artifact | Description |
-|----------|-------------|
-| `include/ghand/` | Public headers |
-| `ghand.dll` / `libghand.so` | Shared library |
-| `config/ghand5.json`, `config/ghandlite1.json` | Product configuration |
-
-Link against `ghand` and ensure the JSON config is accessible at runtime.
+## Installation
 
 ### CMake Install
 
@@ -119,66 +134,171 @@ target_include_directories(your_target PRIVATE /path/to/install/include)
 The install also exports a CMake package target:
 
 ```cmake
-find_package(GHandSDK CONFIG REQUIRED)
+find_package(GHandSDK 3 CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE GHand::ghand)
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ```cpp
+#include <iostream>
 #include "ghand/ghand.h"
 
 int main() {
-    // Explicit product type
-    auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                       ghand::CommType::ETHERCAT);
-
-    // Or auto-detect (matches config by device name after connection)
-    // auto hand = ghand::GHand::Create(ghand::ProductType::AUTO,
-    //                                    ghand::CommType::ETHERCAT);
-
-    if (!hand || !hand->Connect("auto")) {
-        printf("Connection failed\n");
-        return -1;
+    auto master = ghand::Master::Create(ghand::ProductType::GHand5,
+                                      ghand::CommType::ETHERCAT);
+    if (!master) return 1;
+    auto connected = master->Connect("auto");
+    if (!connected) { std::cerr << connected.message; return 1; }
+    for (ghand::GHand* hand : connected.value) {
+        auto id = hand->GetSlaveIndex();
+        hand->SetJointsCallback([id](const std::vector<ghand::JointData>& joints) {
+            std::cout << "Slave " << id << ": " << joints.size() << " joints\n";
+        });
+        auto state = hand->GetHandStateMachine();
+        if (!state) std::cerr << state.message << '\n';
     }
-
-    // Pull mode: query latest cached data
-    auto state   = hand->GetHandData();     // Hand state
-    auto joints  = hand->GetJointsData();   // Joint data
-    auto tactile = hand->GetTactileData();  // Tactile data
-
-    // Push mode: register callbacks
-    hand->SetJointsCallback([](const std::vector<ghand::Joint>& joints) {
-        for (const auto& j : joints) {
-            printf("Joint %d: %.1f deg\n", static_cast<int>(j.id), j.angle);
-        }
-    });
-
-    // Control joints
-    std::vector<ghand::JointCommand> cmds = {
-        {ghand::JointId::FF_PIP, 45.0f, 50, 50},
-        {ghand::JointId::FF_MCP,    30.0f, 50, 50},
-    };
-    hand->MoveJoints(cmds);
-
-    hand->Disconnect();
+    for (auto* hand : connected.value) {
+        auto stopped = hand->Stop();
+        if (!stopped) std::cerr << stopped.message << '\n';
+    }
+    return master->Disconnect() ? 0 : 1;
 }
 ```
+
+### Public Object Lifetime
+
+`Master` owns each `GHand` object. The pointers returned by `Connect()`, `hands()`, and `hand()` are borrowed; callers must not delete them.
+Calling `Disconnect()`, calling any `Connect()` overload again (even if the connection fails), or destroying `Master` invalidates all previously obtained `GHand*` pointers. Do not use them afterward.
+After reconnecting successfully, obtain new pointers from the new connection result or from `Master`.
 
 ### RS485 Example
 
 ```cpp
-auto hand = ghand::GHand::Create(ghand::ProductType::GHand5,
-                                   ghand::CommType::RS485);
-auto adapters = hand->SearchAdapters();
-if (!adapters.empty() && hand->Connect(adapters.begin()->first)) {
-    auto info = hand->GetDeviceInfo();
-    printf("Device: %s\n", info.device_name.c_str());
-    hand->Disconnect();
+auto master = ghand::Master::Create(ghand::ProductType::GHand5, ghand::CommType::RS485);
+auto connected = master->Connect("COM7", 0);
+if (connected) {
+    if (auto left = master->hand(ghand::HandType::LEFT)) {
+        auto info = left->GetDeviceInfo();
+        if (info) std::cout << info.value.device_name << '\n';
+    }
+    master->Disconnect();
 }
 ```
 
-## 🔨 Build from Source
+### Public type migration
+
+Public types include: `HandData`, `JointData`, `HandControlMode`,
+`JointControlMode`, `JointLoopType`, `HandRuntimeState`, and `JointState`.
+Use `HandType::LEFT_HAND` / `RIGHT_HAND` and `HandControlMode::VELOCITY`.
+`JointCommand` uses `control_mode`, `loop_type`, and `control_state`; its defaults
+are POSITION, CLOSED_LOOP, and DISABLED. Explicitly select RUNNING to move.
+`HandData::joints_state` replaces `state`. Tactile callbacks receive a
+`std::map<TactileSensorId, TactileData>` map keyed by `TactileSensorId`; each `TactileData` contains flattened
+force triples in Newtons, with empty vectors indicating unavailable readings.
+Hand error flags support `|` and `&`, including fault bits above 63.
+RS485 retains `RATE_*` names because Windows defines conflicting `BAUD_*` macros.
+
+## Examples
+
+Tutorial sources are numbered in learning order under `examples/tutorial/`.
+Executables keep the numeric prefix (for example `01_basic_connection`) and are
+written to `build/examples/`; multi-config generators on Windows place them in
+`build/examples/Release/` (or `Debug/` for debug builds).
+
+| Source | Executable | Purpose |
+| --- | --- | --- |
+| [01_basic_connection.cc](examples/tutorial/01_basic_connection.cc) | `01_basic_connection` | Connect and query device information |
+| [02_move_joints.cc](examples/tutorial/02_move_joints.cc) | `02_move_joints` | Position commands, parameter units, control modes and joint feedback |
+| [03_velocity_control.cc](examples/tutorial/03_velocity_control.cc) | `03_velocity_control` | Velocity control |
+| [04_current_control.cc](examples/tutorial/04_current_control.cc) | `04_current_control` | Current control |
+| [05_tactile_callback.cc](examples/tutorial/05_tactile_callback.cc) | `05_tactile_callback` | Tactile feedback callbacks |
+| [06_multi_hand.cc](examples/tutorial/06_multi_hand.cc) | `06_multi_hand` | Multi-hand control |
+| [07_glove_control.cc](examples/tutorial/07_glove_control.cc) | `07_glove_control` | Glove control |
+| [08_interactive_joint_control.cc](examples/tutorial/08_interactive_joint_control.cc) | `08_interactive_joint_control` | Interactive joint commands and feedback |
+| [09_hand_state.cc](examples/tutorial/09_hand_state.cc) | `09_hand_state` | Hand state and joint feedback |
+| [10_switch_baud_rate.cc](examples/tutorial/10_switch_baud_rate.cc) | `10_switch_baud_rate` | CANFD bit-timing configuration |
+| [11_connect_hands.cc](examples/tutorial/11_connect_hands.cc) | `11_connect_hands` | Shared-bus discovery, bus-wide and per-hand commands |
+| [13_mit_control.cc](examples/tutorial/13_mit_control.cc) | `13_mit_control` | MIT compliant grasp with tactile contact, hold and release |
+| [14_custom_control.cc](examples/tutorial/14_custom_control.cc) | `14_custom_control` | Per-finger position/current modes and feedback |
+| [15_tactile_display.cc](examples/tutorial/15_tactile_display.cc) | `15_tactile_display` | Qt 6 tactile maps, force arrows and XYZ history (requires Qt to build) |
+
+MIT uses degrees and
+velocity/current percentages; recommended settings are `kp=10..2000`, `kd=0..50`, `kp>kd`; current is feed-forward.
+CUSTOM requires consistent mode/loop selection within each finger arbitration group,
+including disabled joints. Check feedback after sending and disable the hand before disconnecting.
+
+### Example command-line options
+
+All examples accept these options. With no arguments, they use `GHand5 + ETHERCAT` and device `auto`:
+
+```bash
+./01_basic_connection
+./01_basic_connection --comm canfd
+./01_basic_connection --product ghand5 --comm rs485 --device /dev/ttyUSB0
+./01_basic_connection --help
+```
+
+`--product` accepts `ghand5`, `ghandlite1`, or `auto`; `--comm` accepts `ethercat` (or `ethcat`), `canfd`, or `rs485`. Available features still depend on the product and transport. `--device` selects an adapter; `06_multi_hand` scans all adapters by default and uses only the selected adapter when specified.
+
+`10_switch_baud_rate` defaults to and only supports CAN-FD. `11_connect_hands` also retains its original `[ethcat|canfd|rs485] [device]` syntax. `--help` does not connect to hardware. Rebuild after changing the source; existing prebuilt bundles are not updated automatically.
+
+### Qt tactile display
+
+`15_tactile_display` is built only when CMake finds Qt 6.2+ Widgets during
+configuration; the SDK and all other examples build without Qt.
+
+On Windows, install Qt 6.2+ (6.9.1 recommended) Widgets development components and
+set `CMAKE_PREFIX_PATH` if Qt is not on the default search path.
+The following commands build from source; CMake does not deploy Qt runtime dependencies:
+
+```powershell
+cmake -S . -B build -A x64 -DCMAKE_PREFIX_PATH="<Qt installation prefix>"
+cmake --build build --config Release --target tactile_display mit_control custom_control
+./build/examples/Release/15_tactile_display.exe
+```
+
+Replace `<Qt installation prefix>` with your local Qt MSVC 2022 x64 kit directory;
+omit `-DCMAKE_PREFIX_PATH` if CMake can already find Qt.
+
+On Linux, install Qt 6.2+ Widgets development components, specify `CMAKE_PREFIX_PATH`
+if needed, and run `./build/examples/15_tactile_display`. Without Qt,
+the configure step prints a notice and skips only this example. Build directories
+that cached the removed bundled Qt development kit or another Qt path must be
+configured anew (or have their `Qt6*_DIR` cache entries cleared).
+By default, the example connects GHand5 over EtherCAT (`auto`). Use `--product`,
+`--comm` and `--device` to select the product, transport and adapter; use `--help`
+to view the available options. The Tactile switch starts acquisition;
+zero with unloaded sensors. The display uses a 1600×1000 black window,
+whole-hand view and five finger maps on the left, and five XYZ plots on the right.
+Device identity selects the left/right hand image. The five fingers display
+38/31/31/31/31 points with normal-force colors/glow, tangential arrows and Fz bars.
+Hover over a point to view its three-axis force values. Plots retain 60 seconds of timestamped history,
+coalesce callbacks into 50 Hz buckets and insert gaps after 0.5 seconds without data.
+Images are embedded with Qt resources, so no separate image files need to be copied.
+
+The reusable [display widget](src/tactile_display/) links as `ghand_tactile_display`.
+The caller owns the connection and must keep the hand alive until the widget is
+destroyed. The widget exclusively uses its tactile callback slot and closes tactile
+acquisition and joins its worker on shutdown. It sends no motion commands.
+Qt is required only for `15_tactile_display`; every other target builds without it.
+
+Action demos, including `preset_gesture`, `gesture_dance` and `clap_pose`, are in
+[`examples/demo/`](examples/demo/).
+
+After building, run `11_connect_hands` with a transport and optional device:
+
+```bash
+./build/examples/11_connect_hands ethcat auto
+./build/examples/11_connect_hands canfd /dev/ttyACM0:0
+./build/examples/11_connect_hands rs485 /dev/ttyUSB0
+```
+
+On Windows, use `build\examples\Release\11_connect_hands.exe` with devices such as
+`COM17:0` (CANFD) or `COM7` (RS485). The example moves the connected hands;
+use `--help` to view its arguments and default values.
+
+## Build from Source
 
 Build from the repository or release package root that contains `deps/`.
 
@@ -189,10 +309,9 @@ cmake -S . -B build
 cmake --build build --config Release
 
 # Run example
-.\build\examples\Release\basic_connection.exe
+.\build\examples\Release\01_basic_connection.exe
 ```
 
-> **Windows RS485:** `modbus.dll` from `deps/lib/windows` is copied next to `ghand.dll` during the build when present.
 
 ### Linux
 
@@ -206,10 +325,10 @@ cmake --build build -j$(nproc)
 
 # Grant raw socket permissions once to all built examples
 find build/examples -maxdepth 1 -type f -executable \
-  -exec sudo setcap cap_net_raw,cap_net_admin=eip {} \;
+  -exec sudo setcap cap_net_raw,cap_net_admin=ep {} \;
 
 # Run the EtherCAT example
-./build/examples/basic_connection
+./build/examples/01_basic_connection
 ```
 
 ### Linux RS485 / CANFD
@@ -231,37 +350,56 @@ newgrp dialout
 For RS485 debugging, specify the USB-RS485 adapter explicitly. Common device names are `/dev/ttyUSB0` or `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`:
 
 ```cpp
-auto rs485_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+auto rs485_master = ghand::Master::Create(ghand::ProductType::GHand5,
                                          ghand::CommType::RS485);
-rs485_hand->Connect("/dev/ttyUSB0");
+rs485_master->Connect("/dev/ttyUSB0");
 ```
 
 For CANFD, use the ZQWL USB-CDC adapter and append the channel number to the device name, for example `:0`:
 
 ```cpp
-auto canfd_hand = ghand::GHand::Create(ghand::ProductType::GHand5,
+auto canfd_master = ghand::Master::Create(ghand::ProductType::GHand5,
                                          ghand::CommType::CANFD);
-canfd_hand->Connect("/dev/ttyACM0:0");
+canfd_master->Connect("/dev/ttyACM0:0");
 ```
 
 `Connect()` accepts optional RS485/CANFD slave ID and typed baud-rate or bit
 timing parameters:
 
+Without a rate parameter, RS485 defaults to **1,000,000 bps**
+(`RS485BaudRate::RATE_1000000`); CAN-FD defaults to **1 Mbit/s arbitration /
+5 Mbit/s data** (`CANFDBitTiming::TIMING_1M_5M`, both sample points at 75%).
+
 ```cpp
 // RS485: slave_id = 0 scans the default IDs 0x31 and 0x32.
-hand->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
+master->Connect("auto", 0, ghand::RS485BaudRate::RATE_1000000);
 
 // CAN-FD: use a predefined bit timing profile.
-hand->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
+master->Connect("COM17:0", 0x31, ghand::CANFDBitTiming::TIMING_1M_5M);
 ```
 
-`SetSlaveId()` writes a new RS485/CANFD slave ID to holding register `0x0000`.
+`SetSlaveId()` writes a new RS485/CANFD slave ID to holding register `0x0003`.
 `SetBaudrateConfig()` writes the enum-mapped protocol gear to holding register
-`0x002C`; the device stores it and applies it after the next power-up.
+`0x0004`; the device stores it and requires a **power cycle** to apply it.
+A successful call does not immediately change the link rate. After success,
+call `Disconnect()`, power-cycle the device, then pass the new rate or timing
+explicitly to the three-argument `Connect()`. Omitting it still uses the defaults
+above; the new rate is not automatically detected. Changes from `SetSlaveId()`
+are not persistent, so reconnect using the restored default ID (or `0` to scan
+the default IDs).
 
 ```cpp
-hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_1000000);
-hand->SetBaudrateConfig(ghand::CANFDBitTiming::TIMING_1M_5M);
+// RS485 example (choose this OR the CAN-FD example below): verify success first.
+hand->SetBaudrateConfig(ghand::RS485BaudRate::RATE_115200);
+master->Disconnect();
+// Manually power-cycle the device here.
+master->Connect("auto", 0, ghand::RS485BaudRate::RATE_115200);
+
+// CAN-FD example: verify success before continuing.
+hand->SetBaudrateConfig(ghand::CANFDBitTiming::TIMING_1M_2M);
+master->Disconnect();
+// Manually power-cycle the device here.
+master->Connect("COM17:0", 0, ghand::CANFDBitTiming::TIMING_1M_2M);
 ```
 
 RS485 baud-rate gears:
@@ -279,42 +417,53 @@ CANFD baud-rate gears:
 
 | Gear | Arbitration phase | Data phase |
 | --- | --- | --- |
-| `0x00` | 500 Kbps, 80% sample point | 1 Mbps, 75% sample point |
-| `0x01` | 500 Kbps, 80% sample point | 2 Mbps, 80% sample point |
-| `0x02` | 500 Kbps, 80% sample point | 4 Mbps, 80% sample point |
-| `0x03` | 500 Kbps, 80% sample point | 5 Mbps, 75% sample point |
-| `0x04` | 1 Mbps, 75% sample point | 4 Mbps, 80% sample point |
-| `0x05` | 1 Mbps, 75% sample point | 5 Mbps, 75% sample point |
+| `0x00` | 500 Kbps, 80% sample point | 800 Kbps, 80% sample point |
+| `0x01` | 500 Kbps, 80% sample point | 1 Mbps, 75% sample point |
+| `0x02` | 500 Kbps, 80% sample point | 2 Mbps, 80% sample point |
+| `0x03` | 500 Kbps, 80% sample point | 4 Mbps, 80% sample point |
+| `0x04` | 1 Mbps, 75% sample point | 1 Mbps, 75% sample point |
+| `0x05` | 1 Mbps, 75% sample point | 2 Mbps, 80% sample point |
+| `0x06` | 1 Mbps, 75% sample point | 4 Mbps, 80% sample point |
+| `0x07` | 1 Mbps, 75% sample point | 5 Mbps, 75% sample point |
 
-## 📁 Directory Structure
+## Directory Structure
 
 ```
-ghand-sdk-cpp/
-├── include/ghand/    # Public API headers
-├── src/              # Source implementation
-│   ├── comm/         # Communication layer (EtherCAT, CANFD)
-│   └── internal/     # Internal state machine & config
-├── config/           # Product configuration (JSON)
-├── examples/         # Tutorial and demo programs
-├── deps/             # Release-package prebuilt dependencies
+GHand-Cpp-SDK/
+|-- CMakeLists.txt       # Project build and installation configuration
+|-- include/ghand/      # Public API headers
+|   `-- types/          # Public enums and data types
+|-- src/                # Source implementation
+|   |-- comm/           # Communication layer (EtherCAT, CANFD, RS485)
+|   |-- internal/       # Internal state machine and configuration
+|   `-- tactile_display/ # Qt tactile display widget and image resources
+|-- config/             # GHand5 and GHandLite1 product configuration (JSON)
+|-- cmake/              # CMake package config template
+|-- examples/
+|   |-- tutorial/       # Numbered tutorials
+|   `-- demo/           # Motion demos
+|-- deps/               # Bundled headers and prebuilt dependencies
+|-- dist/               # Release executables and runtime dependencies
+|-- docs/               # Communication protocol documentation
+`-- LICENSES/           # Third-party licenses and notices
 ```
 
-## 🌐 Open Source & Ecosystem Resources
+## Open Source & Ecosystem Resources
 
 - **GLI Open Source Hub**: [GLI GitHub Organization](https://github.com/gli-sdk)
 - **Official Documentation**: [GHand Dexterous Hand Docs](https://fcnzogxju7xr.feishu.cn/docx/AhZ6ds2iCoguaAxIzBxciYHinNo)
 - **Python SDK**: [GHand Python SDK](https://github.com/gli-sdk/GHand-Python-SDK)
 
-## 📋 Changelog
+## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes.
 
-## 📞 Support & Feedback
+## Support & Feedback
 
-- 📋 **Technical Support:** For project-specific issues, open an `Issue` in this repository.
-- 📧 **General Inquiries:** [support@glitech.com](mailto:support@glitech.com)
+- **Technical Support:** For project-specific issues, open an `Issue` in this repository.
+- **General Inquiries:** [support@glitech.com](mailto:support@glitech.com)
 
-## 📄 License
+## License
 
 GHand C++ SDK is distributed under the GNU General Public License Version 3
 (GPL-3.0-only).

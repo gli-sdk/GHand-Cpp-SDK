@@ -4,8 +4,8 @@
 #ifndef SRC_INTERNAL_PRODUCT_CONFIG_H_
 #define SRC_INTERNAL_PRODUCT_CONFIG_H_
 
-#include <map>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -40,16 +40,10 @@ struct ProductConfig {
 
   std::map<JointId, uint16_t> joint_input_registers;
   std::map<JointId, uint16_t> joint_control_registers;
-  int mode_register = 0x0010;
-  int stop_register = 0x0010;
-  int tactile_control_register = 0x002B;
-  int canfd_connection_timer_register = 0x0031;
-  int canfd_connection_timer_count = 1;
-  std::vector<uint16_t> canfd_connection_timer_values;
-  int canfd_connection_delete_register = 0x0030;
-  int canfd_connection_delete_count = 2;
-  std::vector<uint16_t> canfd_connection_delete_values;
-
+  int joint_control_register_count = 6;
+  int mode_register = 0x0260;
+  int stop_register = 0x0260;
+  int tactile_control_register = 0x0020;
 };
 
 }  // namespace internal

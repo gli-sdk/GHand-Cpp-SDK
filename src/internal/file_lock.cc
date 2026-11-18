@@ -8,8 +8,10 @@
 #include <io.h>
 #include <share.h>
 #include <sys/stat.h>
+// clang-format off: Windows SDK headers require windows.h first.
 #include <windows.h>
 #include <wincrypt.h>
+// clang-format on
 
 // MinGW may not define these constants; define them manually
 #ifndef _LK_NBLCK
@@ -80,8 +82,7 @@ std::string MD5Hash(const std::string& input) {
   }
 
   // Compute hash value
-  if (!CryptHashData(hHash,
-                     reinterpret_cast<const BYTE*>(input.data()),
+  if (!CryptHashData(hHash, reinterpret_cast<const BYTE*>(input.data()),
                      static_cast<DWORD>(input.length()), 0)) {
     CryptDestroyHash(hHash);
     CryptReleaseContext(hProv, 0);
@@ -119,10 +120,9 @@ std::string MD5Hash(const std::string& input) {
     return "";
   }
 
-  const bool ok =
-      EVP_DigestInit_ex(ctx, EVP_md5(), nullptr) == 1 &&
-      EVP_DigestUpdate(ctx, input.data(), input.length()) == 1 &&
-      EVP_DigestFinal_ex(ctx, digest, &digest_len) == 1;
+  const bool ok = EVP_DigestInit_ex(ctx, EVP_md5(), nullptr) == 1 &&
+                  EVP_DigestUpdate(ctx, input.data(), input.length()) == 1 &&
+                  EVP_DigestFinal_ex(ctx, digest, &digest_len) == 1;
   EVP_MD_CTX_free(ctx);
   if (!ok || digest_len != 16) {
     GHAND_LOG_DEBUG("Failed to generate MD5 digest");

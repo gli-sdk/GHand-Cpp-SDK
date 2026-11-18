@@ -1,0 +1,10 @@
+<RCC>
+  <qresource prefix="/ghand/tactile">
+    <file alias="thumb.png">assets/thumb.png</file>
+    <file alias="thumb1.png">assets/thumb1.png</file>
+    <file alias="four_fingers.png">assets/four_fingers.png</file>
+    <file alias="four_fingers1.png">assets/four_fingers1.png</file>
+    <file alias="left_hand_icon.png">assets/left_hand_icon.png</file>
+    <file alias="right_hand_icon.png">assets/right_hand_icon.png</file>
+  </qresource>
+</RCC>

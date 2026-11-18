@@ -4,8 +4,8 @@
 #ifndef SRC_COMM_ETHERCAT_COMM_H_
 #define SRC_COMM_ETHERCAT_COMM_H_
 
-#include <atomic>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -41,35 +41,39 @@ class EtherCATComm : public IComm {
   bool IsConnected() const override { return is_connected_; }
   std::map<std::string, std::string> SearchAdapters() override;
   void UpdateConfig(const ProductConfig& config) override;
-  bool SetSlaveId(uint8_t slave_id) override;
-  bool SetBaudrateConfig(uint8_t baudrate_gear) override;
-  Diagnostics GetDiagnostics() const override;
+  bool SetSlaveId(uint16_t slave, uint8_t slave_id) override;
+  bool SetBaudrateConfig(uint16_t slave, uint8_t baudrate_gear) override;
+  std::vector<ConnectedHand> GetConnectedHands() override;
 
-  DeviceInfo GetDeviceInfo() override;
-  HandType GetHandType() override;
+  DeviceInfo GetDeviceInfo(uint16_t slave) override;
+  HandType GetHandType(uint16_t slave) override;
 
-  bool MoveJoints(const std::vector<JointCommand>& joints,
-                  ControlMode mode) override;
-  void Stop() override;
+  bool MoveJoints(uint16_t slave, const std::vector<JointCommand>& joints,
+                  HandControlMode mode) override;
+  bool Stop(uint16_t slave) override;
+  bool DisableHand(uint16_t slave) override;
+  bool GetHandStateMachine(uint16_t slave, HandRuntimeState* state) override;
+  bool GetStallTolerances(uint16_t slave,
+                          std::map<JointId, uint8_t>* values) override;
+  bool SetStallTolerances(uint16_t slave,
+                          const std::map<JointId, uint8_t>& values) override;
+  bool GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) override;
+  bool SetPidParameters(uint16_t slave,
+                        const std::vector<uint16_t>& values) override;
 
-  bool ClearFault() override;
-  bool InitJoint() override;
+  bool ClearFault(uint16_t slave) override;
 
-  bool OpenTactile() override;
-  bool CloseTactile() override;
-  bool ZeroTactile() override;
+  bool OpenTactile(uint16_t slave) override;
+  bool CloseTactile(uint16_t slave) override;
+  bool ZeroTactile(uint16_t slave) override;
 
   void SetJointsCallback(JointsCallback cb) override;
   void SetHandStateCallback(HandStateCallback cb) override;
   void SetTactileDataCallback(TactileDataCallback cb) override;
 
-  FirmwareUpdateError BootUpdate(
-      const std::string& filename,
-      std::function<void(int)> progress) override;
+  FirmwareUpdateError BootUpdate(const std::string& filename,
+                                 std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
-
-  SelfTestErrorInfo GetSelfTestErrorInfo() override;
-  uint8_t GetSelfTestStatus() override;
 
   // Low-level EtherCAT API (retained for internal use)
   int SDORead(std::uint16_t slave, std::uint16_t index, std::uint8_t subindex,
@@ -84,11 +88,13 @@ class EtherCATComm : public IComm {
   uint8_t* ReadTxPDO(uint16_t slave);
 
  private:
+  friend struct ProtocolTestAccess;
   struct SoemState;
 
   // Instance state
   std::unique_ptr<SoemState> soem_;
   bool threads_started_ = false;
+  std::atomic<bool> firmware_reset_pending_{false};
 
   int expectedWKC_ = 0;
   int wkc_ = 0;
@@ -100,16 +106,9 @@ class EtherCATComm : public IComm {
   int currentgroup_ = 0;
   int cycle_ = 0;
   int64_t cycletime_ = 10000000;
-  std::atomic<uint64_t> tx_packets_{0};
-  std::atomic<uint64_t> rx_packets_{0};
-  std::atomic<uint64_t> tx_errors_{0};
-  std::atomic<uint64_t> rx_errors_{0};
-  std::atomic<uint64_t> reconnects_{0};
-  std::atomic<uint64_t> received_frames_{0};
-  std::atomic<uint64_t> dispatched_frames_{0};
-  std::atomic<uint64_t> callback_errors_{0};
 
-  uint8_t rxpdo_buffer_[80] = {0};
+  uint8_t rxpdo_buffer_[2 + 12 * static_cast<size_t>(JointId::NUM_JOINTS)] = {
+      0};
   size_t rxpdo_size_ = 0;
 
   std::mutex context_mutex_;
@@ -129,10 +128,25 @@ class EtherCATComm : public IComm {
   mutable std::mutex callback_mutex_;
 
   ProductConfig config_;
+  std::map<uint16_t, std::map<JointId, JointCommand>> joint_commands_;
+  std::map<uint16_t, HandControlMode> hand_modes_;
+  std::vector<ConnectedHand> hands_;
+  std::vector<uint16_t> TargetSlaves(uint16_t slave);
+  std::vector<std::vector<uint8_t>> rxpdo_buffers_;
+  std::vector<size_t> rxpdo_sizes_;
+  std::mutex command_mutex_;
+  bool ExecuteSdoCommand(uint16_t slave, uint16_t index, uint8_t command,
+                         uint8_t command_subindex = 1,
+                         uint8_t state_subindex = 2,
+                         uint8_t result_subindex = 3);
+  bool WriteSdoParameters(uint16_t slave, uint16_t index,
+                          const std::vector<uint8_t>& bytes);
 
   // FOE firmware update shared state
   static std::function<void(int)> progress_callback_;
   static EtherCATComm* foe_instance_;
+  int32_t foe_last_packet_ = -1;
+  void LogSoemErrors(const char* phase);
 
   // Methods
   void ResetContext();
@@ -150,7 +164,7 @@ class EtherCATComm : public IComm {
   static void EcatcheckWrapper(void* arg);
 
   // Firmware version helper
-  std::string ReadFirmwareVersion(uint8_t mcu_id);
+  std::string ReadFirmwareVersion(uint16_t slave, uint8_t mcu_id);
   FirmwareUpdateError CompleteFirmwareResetHandshake(uint16_t slave);
 
   // Static helper methods
@@ -159,27 +173,12 @@ class EtherCATComm : public IComm {
 
   // Parse PDO raw data and trigger structured callbacks
   void ParseHandAndJoints(const uint8_t* data, size_t size, size_t* offset,
-                          std::vector<Joint>* parsed_joints,
-                          HandState* parsed_temperature) const;
-  TactileData ParseTactileData(const uint8_t* data, size_t size,
-                               size_t* offset) const;
-  void ParseAndNotify(const uint8_t* data, size_t size);
-
-  // Self-test error helpers (object dictionary 0x2008). A1~A8 are internal.
-  bool ReadDiagnosticErrorCodes(uint8_t command,
-                                std::array<uint8_t, 13>* codes);
-  uint8_t GetSelfTestSummaryErrorCode();
-  uint8_t GetVersionCheckErrorCode();
-  std::array<uint8_t, 13> GetPositionSensorErrorCodes();
-  std::array<uint8_t, 13> GetTactileSensorErrorCodes();
-  uint8_t GetTemperatureSensorErrorCode();
-  uint8_t GetFanErrorCode();
-  std::array<uint8_t, 13> GetZeroingErrorCodes();
-  std::array<uint8_t, 13> GetMotorErrorCodes();
-
-  JointId MotorIndexToJoint(uint8_t motor_index) const;
-  std::vector<MotorDiagnosticError> CollectMotorErrors(
-      const std::array<uint8_t, 13>& codes) const;
+                          std::vector<JointData>* parsed_joints,
+                          HandData* parsed_temperature) const;
+  std::map<TactileSensorId, TactileData> ParseTactileData(
+      const uint8_t* data, size_t size, size_t* offset,
+      bool compat_thumb = false) const;
+  void ParseAndNotify(const uint8_t* data, size_t size, uint16_t slave);
 };
 
 }  // namespace internal

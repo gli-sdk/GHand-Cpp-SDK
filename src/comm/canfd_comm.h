@@ -5,7 +5,6 @@
 #define SRC_COMM_CANFD_COMM_H_
 
 #include <atomic>
-#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -45,39 +44,38 @@ class CANFDComm : public IComm {
   bool IsConnected() const override { return connected_.load(); }
   std::map<std::string, std::string> SearchAdapters() override;
   void UpdateConfig(const ProductConfig& config) override;
-  bool SetSlaveId(uint8_t slave_id) override;
-  bool SetBaudrateConfig(uint8_t baudrate_gear) override;
-  bool PrepareBaudrateListener(const std::string& device_name,
-                               uint8_t baudrate_gear) override;
-  Diagnostics GetDiagnostics() const override;
+  bool SetSlaveId(uint16_t slave, uint8_t new_slave_id) override;
+  bool SetBaudrateConfig(uint16_t slave, uint8_t baudrate_gear) override;
+  std::vector<ConnectedHand> GetConnectedHands() override;
 
-  DeviceInfo GetDeviceInfo() override;
-  HandType GetHandType() override;
+  DeviceInfo GetDeviceInfo(uint16_t slave) override;
+  HandType GetHandType(uint16_t slave) override;
 
-  bool MoveJoints(const std::vector<JointCommand>& joints,
-                  ControlMode mode) override;
-  void Stop() override;
+  bool MoveJoints(uint16_t slave, const std::vector<JointCommand>& joints,
+                  HandControlMode mode) override;
+  bool Stop(uint16_t slave) override;
+  bool DisableHand(uint16_t slave) override;
+  bool GetHandStateMachine(uint16_t slave, HandRuntimeState* state) override;
+  bool GetPidParameters(uint16_t slave, std::vector<uint16_t>* values) override;
+  bool SetPidParameters(uint16_t slave,
+                        const std::vector<uint16_t>& values) override;
 
-  bool ClearFault() override;
-  bool InitJoint() override;
+  bool ClearFault(uint16_t slave) override;
 
-  bool OpenTactile() override;
-  bool CloseTactile() override;
-  bool ZeroTactile() override;
+  bool OpenTactile(uint16_t slave) override;
+  bool CloseTactile(uint16_t slave) override;
+  bool ZeroTactile(uint16_t slave) override;
 
   void SetJointsCallback(JointsCallback cb) override;
   void SetHandStateCallback(HandStateCallback cb) override;
   void SetTactileDataCallback(TactileDataCallback cb) override;
 
-  FirmwareUpdateError BootUpdate(
-      const std::string& filename,
-      std::function<void(int)> progress) override;
+  FirmwareUpdateError BootUpdate(const std::string& filename,
+                                 std::function<void(int)> progress) override;
   bool QueryFirmwareUpdateResults(FirmwareUpdateResults* results) override;
 
-  SelfTestErrorInfo GetSelfTestErrorInfo() override;
-  uint8_t GetSelfTestStatus() override;
-
  private:
+  friend struct ProtocolTestAccess;
   // CANFD arbitration helpers (Python SDK compatible)
   static uint32_t PackArbitration(int src_id, int dst_id, int ack,
                                   int func_code, int start = 1, int end = 1,
@@ -88,61 +86,57 @@ class CANFDComm : public IComm {
 
   // Modbus-over-CANFD transport
   bool SendFrame(uint32_t can_id, const uint8_t* data, uint8_t len);
-  bool RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len,
-                 int timeout_ms);
+  bool RecvFrame(uint32_t* can_id, uint8_t* data, uint8_t* len, int timeout_ms);
 
-  bool ReadRegisters(int addr, int count, std::vector<uint8_t>* out_bytes,
-                     int func_code = 0x04, int timeout_ms = 500);
-  bool WriteRegisters(int addr, const std::vector<uint8_t>& data,
-                      int timeout_ms = 5000);
+  bool ReadRegisters(uint16_t slave, int addr, int count,
+                     std::vector<uint8_t>* out_bytes, int func_code = 0x04,
+                     int timeout_ms = 100);
+  bool WriteRegisters(uint16_t slave, int addr,
+                      const std::vector<uint8_t>& data, int timeout_ms = 100);
 
-  bool WriteSingleRegister(int addr, uint16_t value, int timeout_ms = 500);
-  bool WaitHoldingResult(int addr, int timeout_ms = 2000,
-                         int interval_ms = 50);
+  bool WriteSingleRegister(uint16_t slave, int addr, uint16_t value,
+                           int timeout_ms = 100);
+  bool WaitInputResult(uint16_t slave, int addr, int baseline = -1);
+  bool AccessParameters(uint16_t slave, int command_addr, int parameter_addr,
+                        std::vector<uint16_t>* values, bool write);
 
-  bool NodeIdDetection(int timeout_ms = 500);
-  bool EstablishConnection(uint8_t slave_id, int timeout_ms = 500);
-  bool WaitConnectionResponse(uint8_t target_id, uint8_t func_code,
-                              int timeout_ms);
-  void DeleteConnection();
+  bool DetectNode(uint8_t slave_id, int timeout_ms = 500);
+  bool EstablishConnection(uint8_t slave_id, int timeout_ms = 100);
+  void DeleteConnection(uint16_t slave);
 
-  bool ReadInputBytes(int addr, int count, std::vector<uint8_t>* bytes);
-  std::vector<Joint> GetJoints();
-  HandState GetHandInfo();
-  TactileData GetTactileData();
+  bool ReadInputBytes(uint16_t slave, int addr, int count,
+                      std::vector<uint8_t>* bytes);
+  std::vector<JointData> GetJoints(uint16_t slave);
+  HandData GetHandInfo(uint16_t slave, bool* ok = nullptr);
+  std::map<TactileSensorId, TactileData> GetTactileData(uint16_t slave);
 
-  bool WriteTactileControl(uint16_t command);
+  bool WriteTactileControl(uint16_t slave, uint16_t command);
   void EnsurePollStarted();
   void StopPoll();
   void PollLoop();
-  void WaitReopenWindow();
 
   std::unique_ptr<CANFDDriver> driver_;
   std::mutex io_mutex_;
-  std::chrono::steady_clock::time_point last_close_at_{};
   uint8_t src_id_ = 0x0A;
-  uint8_t slave_id_ = 0x31;
   std::atomic<bool> connected_{false};
 
   std::thread poll_thread_;
   std::atomic<bool> poll_running_{false};
   std::atomic<bool> poll_stop_{false};
-  std::atomic<uint64_t> tx_packets_{0};
-  std::atomic<uint64_t> rx_packets_{0};
-  std::atomic<uint64_t> tx_errors_{0};
-  std::atomic<uint64_t> rx_errors_{0};
-  std::atomic<uint64_t> timeouts_{0};
-  std::atomic<uint64_t> callback_errors_{0};
 
   ProductConfig config_;
+  std::map<uint16_t, HandControlMode> hand_modes_;
+  std::map<uint16_t, std::map<JointId, HandControlMode>> joint_modes_;
+  std::map<uint16_t, ConnectedHand> hands_;
+  std::map<uint16_t, bool> tactile_open_hands_;
+  mutable std::mutex hands_mutex_;
+  std::vector<uint16_t> TargetSlaves(uint16_t slave);
+  std::mutex command_mutex_;
 
   // Callbacks
   JointsCallback joints_cb_;
   HandStateCallback hand_state_cb_;
   TactileDataCallback tactile_cb_;
-  bool joints_poll_enabled_ = false;
-  bool hand_state_poll_enabled_ = false;
-  bool tactile_poll_enabled_ = false;
   mutable std::mutex cb_mutex_;
 };
 

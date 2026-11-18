@@ -16,11 +16,10 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <set>
 #include <sstream>
 #include <vector>
-
-#include <nlohmann/json.hpp>
 
 #include "ghand/logging.h"
 #include "logging_macros.h"
@@ -209,9 +208,8 @@ JointId JointIdFromString(const std::string& name) {
   return JointId::NUM_JOINTS;
 }
 
-std::string FindConfigFilePath(
-    const std::string& file_name,
-    const std::vector<std::string>& search_paths) {
+std::string FindConfigFilePath(const std::string& file_name,
+                               const std::vector<std::string>& search_paths) {
   for (const auto& dir : search_paths) {
     std::string full_path = dir + file_name;
     std::ifstream test(full_path);
@@ -261,78 +259,65 @@ std::vector<std::string> JsonStringArray(const nlohmann::json& j,
   return values;
 }
 
+// Build controllable joint register address mapping from config.
+// Only joints in joint_limits (active joints) are assigned control register
+// addresses. Addresses are allocated sequentially in the order joints appear
+// in valid_joints, starting from base_address with stride between each.
+std::map<JointId, uint16_t> BuildControllableJointAddresses(
+    const std::vector<JointId>& valid_joints,
+    const std::map<JointId, std::pair<float, float>>& joint_limits,
+    uint16_t base_address = 0x0261, uint16_t stride = 6) {
+  std::map<JointId, uint16_t> controllable_map;
+  uint16_t address_offset = 0;
+
+  for (const auto& joint_id : valid_joints) {
+    if (joint_limits.find(joint_id) != joint_limits.end()) {
+      controllable_map[joint_id] = base_address + address_offset;
+      address_offset += stride;
+    }
+  }
+
+  return controllable_map;
+}
+
 void ApplyGHand5ModbusProfile(ProductConfig* config) {
   config->joint_input_registers.clear();
   for (int id = 0; id < static_cast<int>(JointId::NUM_JOINTS); ++id) {
     config->joint_input_registers[static_cast<JointId>(id)] =
-        static_cast<uint16_t>(0x1023 + id * 3);
+        static_cast<uint16_t>(0x105F + id * 5);
   }
 
-  config->joint_control_registers = {
-      {JointId::THUMB_MCP, 0x0011},
-      {JointId::THUMB_TMC_FE, 0x0013},
-      {JointId::THUMB_TMC_AA, 0x0015},
-      {JointId::THUMB_TMC_PS, 0x0017},
-      {JointId::FF_PIP, 0x0019},
-      {JointId::FF_MCP, 0x001B},
-      {JointId::FF_MCP_AA, 0x001D},
-      {JointId::MF_PIP, 0x001F},
-      {JointId::MF_MCP, 0x0021},
-      {JointId::RF_PIP, 0x0023},
-      {JointId::RF_MCP, 0x0025},
-      {JointId::LF_PIP, 0x0027},
-      {JointId::LF_MCP, 0x0029},
-  };
+  // Dynamically generate control registers based on joint_limits
+  config->joint_control_registers = BuildControllableJointAddresses(
+      config->valid_joints, config->joint_limits, 0x0261, 6);
+  config->joint_control_register_count = 6;
 
-  config->mode_register = 0x0010;
-  config->stop_register = 0x0010;
-  config->tactile_control_register = 0x002B;
-  config->canfd_connection_timer_register = 0x0031;
-  config->canfd_connection_timer_count = 1;
-  config->canfd_connection_timer_values = {0x0000};
-  config->canfd_connection_delete_register = 0x0030;
-  config->canfd_connection_delete_count = 2;
-  config->canfd_connection_delete_values = {0x0000, 0x0000};
+  config->mode_register = 0x0260;
+  config->stop_register = 0x0260;
+  config->tactile_control_register = 0x0020;
 }
 
 void ApplyGHandLite1ModbusProfile(ProductConfig* config) {
-  config->joint_input_registers = {
-      {JointId::THUMB_MCP, 0x1023},
-      {JointId::THUMB_TMC_FE, 0x1026},
-      {JointId::THUMB_TMC_AA, 0x1029},
-      {JointId::FF_PIP, 0x102C},
-      {JointId::FF_MCP, 0x102F},
-      {JointId::MF_PIP, 0x1032},
-      {JointId::MF_MCP, 0x1035},
-      {JointId::RF_PIP, 0x1038},
-      {JointId::RF_MCP, 0x103B},
-      {JointId::LF_PIP, 0x103E},
-      {JointId::LF_MCP, 0x1041},
-  };
+  config->joint_input_registers.clear();
+  config->joint_input_registers[JointId::THUMB_MCP] = 0x105C;
+  config->joint_input_registers[JointId::THUMB_TMC_FE] = 0x1061;
+  config->joint_input_registers[JointId::THUMB_TMC_AA] = 0x1066;
+  config->joint_input_registers[JointId::FF_PIP] = 0x106B;
+  config->joint_input_registers[JointId::FF_MCP] = 0x1070;
+  config->joint_input_registers[JointId::MF_PIP] = 0x1075;
+  config->joint_input_registers[JointId::MF_MCP] = 0x107A;
+  config->joint_input_registers[JointId::RF_PIP] = 0x107F;
+  config->joint_input_registers[JointId::RF_MCP] = 0x1084;
+  config->joint_input_registers[JointId::LF_PIP] = 0x1089;
+  config->joint_input_registers[JointId::LF_MCP] = 0x108E;
 
-  config->joint_control_registers = {
-      {JointId::THUMB_MCP, 0x0010},
-      {JointId::THUMB_TMC_FE, 0x0013},
-      {JointId::THUMB_TMC_AA, 0x0016},
-      {JointId::FF_PIP, 0x0019},
-      {JointId::FF_MCP, 0x001C},
-      {JointId::MF_PIP, 0x001F},
-      {JointId::MF_MCP, 0x0022},
-      {JointId::RF_PIP, 0x0025},
-      {JointId::RF_MCP, 0x0028},
-      {JointId::LF_PIP, 0x002B},
-      {JointId::LF_MCP, 0x002E},
-  };
+  config->joint_control_registers = BuildControllableJointAddresses(
+      config->valid_joints, config->joint_limits, 0x0261, 4);
+  config->joint_control_register_count = 4;
 
-  config->mode_register = -1;
-  config->stop_register = -1;
-  config->tactile_control_register = 0x0031;
-  config->canfd_connection_timer_register = 0x0037;
-  config->canfd_connection_timer_count = 2;
-  config->canfd_connection_timer_values = {0x0000, 0x0000};
-  config->canfd_connection_delete_register = 0x0036;
-  config->canfd_connection_delete_count = 3;
-  config->canfd_connection_delete_values = {0x0000, 0x0000, 0x0000};
+  config->mode_register = 0x0260;
+  config->stop_register = 0x0260;
+  config->tactile_control_register = 0x0020;
 }
 
 void ApplyProtocolDefaults(ProductType product, ProductConfig* config) {
@@ -368,8 +353,7 @@ void LoadJointConfig(const nlohmann::json& j, ProductConfig* config) {
 }
 
 void LoadTactileConfig(const nlohmann::json& j, ProductConfig* config) {
-  if (!j.contains("tactile_regions") ||
-      !j["tactile_regions"].is_array()) {
+  if (!j.contains("tactile_regions") || !j["tactile_regions"].is_array()) {
     return;
   }
 
@@ -393,8 +377,8 @@ ProductConfig ParseProductConfigJson(const nlohmann::json& j,
   config.model = JsonStringOrEmpty(j, "model");
   config.name = JsonStringOrEmpty(j, "name");
   config.aliases = JsonStringArray(j, "aliases");
-  ApplyProtocolDefaults(product, &config);
   LoadJointConfig(j, &config);
+  ApplyProtocolDefaults(product, &config);
   config.has_tactile = JsonBoolOrFalse(j, "has_tactile");
   LoadTactileConfig(j, &config);
   return config;
@@ -438,8 +422,7 @@ bool ValidateProductConfig(const ProductConfig& config,
            ToString(limits.first));
     }
     if (limits.second.first > limits.second.second) {
-      fail(std::string("invalid joint limit range: ") +
-           ToString(limits.first));
+      fail(std::string("invalid joint limit range: ") + ToString(limits.first));
     }
   }
 
@@ -453,21 +436,6 @@ bool ValidateProductConfig(const ProductConfig& config,
     if (region.sensor_count <= 0) {
       fail("tactile region sensor_count must be positive");
     }
-  }
-
-  if (config.canfd_connection_timer_count < 0 ||
-      config.canfd_connection_delete_count < 0) {
-    fail("CANFD connection register counts must be non-negative");
-  }
-  if (!config.canfd_connection_timer_values.empty() &&
-      config.canfd_connection_timer_values.size() !=
-          static_cast<size_t>(config.canfd_connection_timer_count)) {
-    fail("CANFD connection timer value count mismatch");
-  }
-  if (!config.canfd_connection_delete_values.empty() &&
-      config.canfd_connection_delete_values.size() !=
-          static_cast<size_t>(config.canfd_connection_delete_count)) {
-    fail("CANFD connection delete value count mismatch");
   }
 
   return valid;
@@ -574,8 +542,8 @@ bool NameMatches(const std::string& device_name,
   auto ci_equal = [](char a, char b) {
     return std::tolower(a) == std::tolower(b);
   };
-  return std::equal(config_name.begin(), config_name.end(),
-                    device_name.begin(), ci_equal);
+  return std::equal(config_name.begin(), config_name.end(), device_name.begin(),
+                    ci_equal);
 }
 
 ProductConfig FindConfigByName(const std::string& device_name) {
@@ -591,8 +559,8 @@ ProductConfig FindConfigByName(const std::string& device_name) {
       if (!ValidateProductConfig(config, file_path)) {
         continue;
       }
-      GHAND_LOG_INFO("Auto-detected product config: "
-                     << config.name << " from " << file_path);
+      GHAND_LOG_INFO("Auto-detected product config: " << config.name << " from "
+                                                      << file_path);
       return config;
     }
   }

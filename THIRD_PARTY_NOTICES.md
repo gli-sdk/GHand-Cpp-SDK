@@ -25,22 +25,23 @@ unmodified official SOEM v2.0.0 checkout.
 ## libmodbus
 
 - Name: libmodbus
-- Version: 3.1.12
+- Version: system package on Linux; Windows binary distribution version must be verified with the shipped DLL/import library
 - Project: https://github.com/stephane/libmodbus
 - License: LGPL-2.1-or-later
 - Integration: dynamically linked
 - Local modifications: None expected
 
 Linux:
-- libmodbus is a system dependency and is not redistributed as part of the
-  GHand C++ SDK source repository.
+- Source builds use system libmodbus. The Linux bundle includes its shared
+  runtime, with versions in `dist/linux/PACKAGES.tsv` and distribution
+  notices in `dist/linux/LICENSES/packages/`.
 - Debian/Ubuntu package: `libmodbus-dev`
 
 Windows:
 - Windows release packages may include `modbus.dll` and `libmodbus.lib`.
-- If libmodbus binaries are included in a Windows binary distribution, provide
-  the applicable license notice and corresponding source information with that
-  distribution.
+- If libmodbus binaries are included in a Windows binary distribution, the
+  applicable license notice, verified version, and corresponding source
+  information must be provided with that distribution.
 
 libmodbus remains licensed under LGPL-2.1-or-later. See `LICENSES/LGPL-2.1-or-later.txt` and `LICENSES/libmodbus-NOTICE.txt`.
 
@@ -69,8 +70,35 @@ Distributed components include WinPcap-compatible headers and import libraries s
 
 See `LICENSES/WinPcap.txt`.
 
+## Qt (optional tactile display)
+
+- Version: 6.9.1, Windows x64/MSVC 2022 runtime subset.
+- Location: `dist/windows/`.
+- Integration: dynamically linked Core, Gui and Widgets, with Network and Svg
+  dependencies deployed by windeployqt; the bundled DLLs and
+  plugins retain their own upstream license terms and notices.
+- Project and licensing: https://doc.qt.io/qt-6/licensing.html
+- Corresponding upstream source: https://download.qt.io/archive/qt/6.9/6.9.1/submodules/
+- Original license texts are retained in `dist/windows/LICENSES/Qt/`;
+  deployment is documented in `dist/README.md`.
+- Runtime files are deployed from the local Qt 6.9.1 MSVC 2022 x64 installation
+  using windeployqt. Building the GUI requires a local Qt development installation.
+
 ## OpenSSL
 
-On Linux, GHand uses the system-provided OpenSSL library for hashing support. OpenSSL is not currently bundled in the GHand SDK release archive.
+On Linux, GHand uses OpenSSL for hashing support. The Linux bundle includes
+its shared runtime and distribution notices in `dist/linux/LICENSES/packages/`.
 
-If OpenSSL binaries are bundled in a future release, the corresponding OpenSSL license and notices must also be included in the distribution.
+Exact binary/source versions are recorded in `dist/linux/PACKAGES.tsv`.
+
+
+## Linux runtime bundle
+
+`scripts/package_linux.py` deploys local Qt 6 libraries, plugins and shared
+library dependencies to `dist/linux/`. They remain dynamically linked and
+replaceable. Exact Debian/Ubuntu binary and source package versions are in
+`PACKAGES.tsv`; copyright notices, license terms and source locations are in
+`LICENSES/packages/`, with referenced license texts in `LICENSES/common-licenses/`.
+Matching distribution sources can be obtained using
+`apt-get source <source>=<source_version>` with distribution deb-src repositories.
+The host glibc and ELF loader are not bundled.
